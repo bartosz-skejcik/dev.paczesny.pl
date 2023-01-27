@@ -1,0 +1,62 @@
+"use client";
+
+import Project from "@components/Project";
+import { textVariant } from "@utils/motion";
+import { motion } from "framer-motion";
+import React from "react";
+
+type Props = {};
+
+let projects = [
+    {
+        name: "Agencytech.pl",
+        description:
+            "A website for a company that provides IT services built with Next.js, TailwindCSS, Prisma and Framer Motion. It includes a dashboard panel for clients to manage their orders as well as admins for managing clients projects. The payments on the website are handled by Stripe. with a checkout form and custom webhooks.",
+        technologies: ["Next.js", "TailwindCSS", "Prisma", "Framer Motion"],
+        github: "https://github.com/agencytech/agencytech.pl",
+        website: "http://agencytech.pl",
+        image: "/images/agencytech.png",
+        direction: true,
+    },
+    {
+        name: "HouseElectronics.eu",
+        description:
+            "A website for a company that provides IT services built with Next.js, TailwindCSS, and Pramer Motion. It includes a contact form with reCAPTCHA.",
+        technologies: ["Next.js", "TailwindCSS", "Framer Motion"],
+        github: "https://github.com/bartosz-skejcik/paczesny.pl",
+        website: "https://houseelectronics.eu",
+        image: "/images/houseelectronics.png",
+    },
+    {
+        name: "Cape Looter",
+        description:
+            "a JavaScript program that allows you to download minecraft cosmetics and capes from a discord server using a proxy pass. The program is terminal based and uses inquirer to create a user-friendly interface.",
+        technologies: ["JavaScript", "Node.js", "Inquirer"],
+        github: "https://github.com/bartosz-skejcik/cape-looter",
+        website: "https://www.npmjs.com/package/cape-looter",
+        image: "/images/cape-looter.png",
+        direction: true,
+    },
+];
+
+export default function Projects({}: Props) {
+    return (
+        <section
+            id="projects"
+            className="flex flex-col items-center justify-center w-screen min-h-screen gap-20"
+        >
+            <motion.h1
+                variants={textVariant(0.2)}
+                initial="hidden"
+                whileInView={"show"}
+                className="font-medium text-neutral-100 text-3xl md:text-4xl 2xl:text-5xl"
+            >
+                A Review of my<span className="text-accent"> best </span>
+                Projects
+            </motion.h1>
+            {projects.map((project: any, index: number) => (
+                <Project key={index} project={project} />
+            ))}
+        </section>
+    );
+}
