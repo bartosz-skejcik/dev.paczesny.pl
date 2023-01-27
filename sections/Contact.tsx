@@ -2,10 +2,47 @@
 
 import { slideInVariant, textVariant } from "@utils/motion";
 import { motion } from "framer-motion";
+import { useState } from "react";
+
+import { toast } from "react-toastify";
 
 type Props = {};
 
 export default function Contact({}: Props) {
+    const [name, setName] = useState("");
+    const [email, setEmail] = useState("");
+    const [message, setMessage] = useState("");
+
+    const sendEmail = async () => {
+        if (!name || !email || !message) {
+            toast.error("Please fill all the fields");
+            return;
+        }
+
+        const res = await fetch("/api/email/send", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                name,
+                email,
+                message,
+            }),
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+            toast.success("Email sent successfully");
+            setName("");
+            setEmail("");
+            setMessage("");
+        } else {
+            toast.error("Something went wrong");
+        }
+    };
+
     return (
         <section
             id="contact"
@@ -49,6 +86,7 @@ export default function Contact({}: Props) {
                                     Name
                                 </label>
                                 <input
+                                    onChange={(e) => setName(e.target.value)}
                                     type="text"
                                     id="name"
                                     name="name"
@@ -71,6 +109,7 @@ export default function Contact({}: Props) {
                                     Email
                                 </label>
                                 <input
+                                    onChange={(e) => setEmail(e.target.value)}
                                     type="email"
                                     id="email"
                                     name="email"
@@ -93,6 +132,7 @@ export default function Contact({}: Props) {
                                     Message
                                 </label>
                                 <textarea
+                                    onChange={(e) => setMessage(e.target.value)}
                                     id="message"
                                     name="message"
                                     className="w-full bg-gray-800 bg-opacity-40 rounded-xl border border-gray-700 focus:border-accent/50 focus:bg-gray-900 focus:ring-2 focus:ring-accent h-32 text-base outline-none text-gray-100 py-1.5 px-3 resize-none leading-6 transition-colors duration-200 ease-in-out"
@@ -106,7 +146,12 @@ export default function Contact({}: Props) {
                             exit="hidden"
                             className="p-2 w-full"
                         >
-                            <button className="flex mx-auto text-accent bg-transparent border-2 border-accent hover:border-transparent hover:text-neutral-100 py-1 px-8 transition-all duration-300 hover:scale-105 hover:-translate-y-2 focus:outline-none hover:bg-accent rounded-2xl text-lg">
+                            <button
+                                onClick={() => {
+                                    sendEmail();
+                                }}
+                                className="flex mx-auto text-accent bg-transparent border-2 border-accent hover:border-transparent hover:text-neutral-100 py-1 px-8 transition-all duration-300 hover:scale-105 hover:-translate-y-2 focus:outline-none hover:bg-accent rounded-2xl text-lg"
+                            >
                                 Send
                             </button>
                         </motion.div>

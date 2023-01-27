@@ -1,4 +1,9 @@
+"use client";
+
 import "../styles/globals.css";
+import "react-toastify/dist/ReactToastify.css";
+import { ToastContainer } from "react-toastify";
+
 import { Lexend } from "@next/font/google";
 
 const lexend = Lexend({
@@ -24,6 +29,17 @@ export default function RootLayout({
                 }}
                 className={`${lexend.className} bg-no-repeat bg-center bg-cover`}
             >
+                <ToastContainer
+                    position="top-right"
+                    autoClose={5000}
+                    hideProgressBar={false}
+                    newestOnTop={false}
+                    closeOnClick
+                    rtl={false}
+                    pauseOnFocusLoss
+                    pauseOnHover
+                    theme="dark"
+                />
                 {children}
             </body>
         </html>
