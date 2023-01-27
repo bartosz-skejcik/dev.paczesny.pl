@@ -11,8 +11,14 @@ let projects = [
     {
         name: "Agencytech.pl",
         description:
-            "A website for a company that provides IT services built with Next.js, TailwindCSS, Prisma and Framer Motion. It includes a dashboard panel for clients to manage their orders as well as admins for managing clients projects. The payments on the website are handled by Stripe. with a checkout form and custom webhooks.",
-        technologies: ["Next.js", "TailwindCSS", "Prisma", "Framer Motion"],
+            "A website for a company that provides IT services built with Next.js, TailwindCSS, Prisma, Framer Motion and MySQL. It includes a dashboard panel for clients to manage their orders as well as admins for managing clients projects. The payments on the website are handled by Stripe. with a checkout form and custom webhooks.",
+        technologies: [
+            "Next.js",
+            "MySQL",
+            "TailwindCSS",
+            "Prisma",
+            "Framer Motion",
+        ],
         github: "https://github.com/agencytech/agencytech.pl",
         website: "http://agencytech.pl",
         image: "/images/agencytech.png",
@@ -21,7 +27,7 @@ let projects = [
     {
         name: "HouseElectronics.eu",
         description:
-            "A website for a company that provides IT services built with Next.js, TailwindCSS, and Pramer Motion. It includes a contact form with reCAPTCHA.",
+            "A website for a company that provides IT services built with Next.js, TailwindCSS, and Framer Motion. It includes a contact form with reCAPTCHA.",
         technologies: ["Next.js", "TailwindCSS", "Framer Motion"],
         github: "https://github.com/bartosz-skejcik/paczesny.pl",
         website: "https://houseelectronics.eu",
@@ -30,7 +36,7 @@ let projects = [
     {
         name: "Cape Looter",
         description:
-            "a JavaScript program that allows you to download minecraft cosmetics and capes from a discord server using a proxy pass. The program is terminal based and uses inquirer to create a user-friendly interface.",
+            "A JavaScript program that allows you to download minecraft cosmetics and capes from a discord server using a proxy pass. The program is terminal based and uses inquirer.js to create a user-friendly interface. You can also change the download path in a custom config.json file.",
         technologies: ["JavaScript", "Node.js", "Inquirer"],
         github: "https://github.com/bartosz-skejcik/cape-looter",
         website: "https://www.npmjs.com/package/cape-looter",
