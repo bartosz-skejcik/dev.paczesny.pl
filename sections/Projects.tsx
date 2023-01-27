@@ -37,6 +37,16 @@ let projects = [
         image: "/images/cape-looter.png",
         direction: true,
     },
+    {
+        name: "Future Tab",
+        description:
+            "A chrome extension that allows you to set a custom new tab page. It has an account system that allows you to save your settings and sync them across devices. You can also set a custom background image, customize widgets and change color theme.",
+        technologies: ["Next.js", "TailwindCSS", "Prisma", "MongoDB"],
+        github: "https://github.com/bartosz-skejcik/extension",
+        website:
+            "https://chrome.google.com/webstore/detail/future-tab/ahfigmflgemalcblplnddomjoblknipc?hl=pl&authuser=0",
+        image: "/images/extension.png",
+    },
 ];
 
 export default function Projects({}: Props) {
