@@ -6,6 +6,7 @@ import { Tab } from "@headlessui/react";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import { tabVariant, slideInVariant } from "@utils/motion";
+import Tile from "./Tile";
 
 type Props = {};
 
@@ -17,79 +18,97 @@ export default function Tabs({}: Props) {
     let [categories] = useState({
         Frontend: [
             {
-                name: "3+ years",
+                name: "React.js",
+                experience: "3+ years",
                 icon: "https://cdn.worldvectorlogo.com/logos/react-2.svg",
             },
             {
-                name: "2+ years",
+                name: "Next.js",
+                experience: "2+ years",
                 icon: "https://cdn.worldvectorlogo.com/logos/nextjs-2.svg",
             },
             {
-                name: "3+ years",
+                name: "Tailwind CSS",
+                experience: "3+ years",
                 icon: "https://cdn.worldvectorlogo.com/logos/tailwindcss.svg",
             },
             {
-                name: "6 months",
+                name: "Framer Motion",
+                experience: "6 months",
                 icon: "https://cdn.worldvectorlogo.com/logos/framer-motion.svg",
             },
             {
-                name: "1 year",
+                name: "Headless UI",
+                experience: "1 year",
                 icon: "/headless-ui.svg",
             },
             {
-                name: "1+ years",
+                name: "TypeScript",
+                experience: "1+ years",
                 icon: "https://cdn.worldvectorlogo.com/logos/typescript.svg",
             },
         ],
         Backend: [
             {
-                name: "3+ years",
+                name: "Node.js",
+                experience: "3+ years",
                 icon: "https://cdn.worldvectorlogo.com/logos/nodejs-icon.svg",
             },
             {
-                name: "1+ years",
+                name: "Express.js",
+                experience: "1+ years",
                 icon: "/express.svg",
             },
             {
-                name: "1+ years",
+                name: "MongoDB",
+                experience: "1+ years",
                 icon: "https://cdn.worldvectorlogo.com/logos/mongodb-icon-1.svg",
             },
             {
-                name: "1 year",
+                name: "Prisma",
+                experience: "1 year",
                 icon: "https://cdn.worldvectorlogo.com/logos/prisma-3.svg",
             },
             {
-                name: "2 year",
+                name: "MySQL",
+                experience: "2 year",
                 icon: "https://cdn.worldvectorlogo.com/logos/mysql-6.svg",
             },
         ],
         Tools: [
             {
-                name: "3+ years",
+                name: "Git",
+                experience: "3+ years",
                 icon: "https://cdn.worldvectorlogo.com/logos/git-icon.svg",
             },
             {
-                name: "3+ years",
+                name: "GitHub",
+                experience: "3+ years",
                 icon: "https://cdn.worldvectorlogo.com/logos/github-icon-1.svg",
             },
             {
-                name: "4 years",
+                name: "VS Code",
+                experience: "4 years",
                 icon: "https://cdn.worldvectorlogo.com/logos/visual-studio-code-1.svg",
             },
             {
-                name: "1 year",
+                name: "Figma",
+                experience: "1 year",
                 icon: "https://cdn.worldvectorlogo.com/logos/figma-1.svg",
             },
             {
-                name: "1 year",
+                name: "IntelliJ IDEA",
+                experience: "1 year",
                 icon: "https://cdn.worldvectorlogo.com/logos/intellij-idea-1.svg",
             },
             {
-                name: "1 year",
+                name: "Postman",
+                experience: "1 year",
                 icon: "https://cdn.worldvectorlogo.com/logos/postman.svg",
             },
         ],
     });
+
     return (
         <motion.div
             style={{
@@ -131,29 +150,11 @@ export default function Tabs({}: Props) {
                                 className="flex flex-wrap items-center justify-center w-full gap-4 md:gap-10"
                             >
                                 {category.map((skill, index) => (
-                                    <motion.div
-                                        variants={slideInVariant(
-                                            "bottom",
-                                            0.1 * index,
-                                            100
-                                        )}
-                                        initial="hidden"
-                                        animate="show"
-                                        exit="exit"
+                                    <Tile
                                         key={index}
-                                        className="flex flex-col items-center justify-center gap-2 w-1/3 md:w-1/4 2xl:w-1/6 py-3 rounded-2xl bg-neutral-800/70"
-                                    >
-                                        <Image
-                                            src={skill.icon}
-                                            alt={skill.name}
-                                            width={48}
-                                            height={48}
-                                            className="w-16 h-16"
-                                        />
-                                        <p className="text-sm font-medium text-center text-neutral-100">
-                                            {skill.name}
-                                        </p>
-                                    </motion.div>
+                                        skill={skill}
+                                        index={index}
+                                    />
                                 ))}
                             </motion.div>
                         </Tab.Panel>
