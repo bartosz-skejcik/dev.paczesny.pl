@@ -87,7 +87,9 @@ export default function Project({ project }: Props) {
                     alt={project.name}
                     width={500}
                     height={300}
-                    className={`bg-center bg-cover bg-no-repeat rounded-2xl opacity-90 lg:shadow-[15px_5px_50px_0px_#E94560] scale-100 lg:scale-115 lg:shadow-accent w-full h-full`}
+                    className={`bg-center bg-cover bg-no-repeat rounded-2xl opacity-90 lg:shadow-[${
+                        project.direction ? "" : "-"
+                    }20px_20px_0px_0px_#E94560] scale-100 lg:scale-115 lg:shadow-accent w-full h-full`}
                 />
             </div>
         </motion.div>
