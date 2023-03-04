@@ -20,12 +20,12 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
-      - name: Connect to remote server
-        uses: appleboy/ssh-action@master
+      - name: Connect to Remote Server
+        uses: appleboy/ssh-action@v0.1.8
         with:
           host: ${{ secrets.HOST }}
           username: ${{ secrets.USERNAME }}
-          port: 21
+          port: 22
           password: ${{ secrets.PASSWORD }}
           script: |
             cd /home/j5on/portfolio
