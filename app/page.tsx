@@ -11,7 +11,7 @@ import {
 
 export default function Home() {
     return (
-        <section className="flex flex-col items-center justify-center w-screen backdrop-blur-3xl bg-[#001120]/10">
+        <section className="flex flex-col items-center justify-center backdrop-blur-3xl bg-[#001120]/10">
             <Navbar />
             <Hero />
             <About />

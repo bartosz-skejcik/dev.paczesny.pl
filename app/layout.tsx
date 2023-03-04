@@ -24,10 +24,9 @@ export default function RootLayout({
             <head />
             <body
                 style={{
-                    backgroundImage: "url('/cover.svg')",
                     overflowX: "hidden",
                 }}
-                className={`${lexend.className} bg-no-repeat bg-center bg-cover`}
+                className={`${lexend.className} bg-no-repeat bg-center bg-cover bg-[url(/cover-mobile.svg)] md:bg-[url(/cover.svg)] w-screen`}
             >
                 <ToastContainer
                     position="top-right"

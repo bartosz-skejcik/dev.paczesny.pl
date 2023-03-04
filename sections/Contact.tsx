@@ -46,7 +46,7 @@ export default function Contact({}: Props) {
     return (
         <section
             id="contact"
-            className="h-screen w-screen flex items-center justify-evenly"
+            className="h-screen flex items-center justify-evenly overflow-hidden"
         >
             <div className="container px-5 py-24 mx-auto">
                 <div className="flex flex-col text-center w-full mb-12">
@@ -74,25 +74,23 @@ export default function Contact({}: Props) {
                         <motion.div
                             variants={slideInVariant("left", 0.2)}
                             initial="hidden"
-                            whileInView="show"
+                            whileInView={"show"}
                             exit="hidden"
                             className="p-2 w-1/2"
                         >
-                            <div className="relative">
-                                <label
-                                    htmlFor="name"
-                                    className="leading-7 text-sm text-gray-400"
-                                >
-                                    Name
-                                </label>
-                                <input
-                                    onChange={(e) => setName(e.target.value)}
-                                    type="text"
-                                    id="name"
-                                    name="name"
-                                    className="w-full bg-gray-800 bg-opacity-40 rounded-xl border border-gray-700 focus:border-accent/50 focus:bg-gray-900 focus:ring-2 focus:ring-accent text-base outline-none text-gray-100 py-1 px-3 leading-8 transition-colors duration-200 ease-in-out"
-                                />
-                            </div>
+                            <label
+                                htmlFor="name"
+                                className="leading-7 text-sm text-gray-400"
+                            >
+                                Name
+                            </label>
+                            <input
+                                onChange={(e) => setName(e.target.value)}
+                                type="text"
+                                id="name"
+                                name="name"
+                                className="w-full bg-gray-800 bg-opacity-40 rounded-xl border border-gray-700 focus:border-accent/50 focus:bg-gray-900 focus:ring-2 focus:ring-accent text-base outline-none text-gray-100 py-1 px-3 leading-8 transition-colors duration-200 ease-in-out"
+                            />
                         </motion.div>
                         <motion.div
                             variants={slideInVariant("right", 0.3)}
@@ -101,21 +99,19 @@ export default function Contact({}: Props) {
                             exit="hidden"
                             className="p-2 w-1/2"
                         >
-                            <div className="relative">
-                                <label
-                                    htmlFor="email"
-                                    className="leading-7 text-sm text-gray-400"
-                                >
-                                    Email
-                                </label>
-                                <input
-                                    onChange={(e) => setEmail(e.target.value)}
-                                    type="email"
-                                    id="email"
-                                    name="email"
-                                    className="w-full bg-gray-800 bg-opacity-40 rounded-xl border border-gray-700 focus:border-accent/50 focus:bg-gray-900 focus:ring-2 focus:ring-accent text-base outline-none text-gray-100 py-1 px-3 leading-8 transition-colors duration-200 ease-in-out"
-                                />
-                            </div>
+                            <label
+                                htmlFor="email"
+                                className="leading-7 text-sm text-gray-400"
+                            >
+                                Email
+                            </label>
+                            <input
+                                onChange={(e) => setEmail(e.target.value)}
+                                type="email"
+                                id="email"
+                                name="email"
+                                className="w-full bg-gray-800 bg-opacity-40 rounded-xl border border-gray-700 focus:border-accent/50 focus:bg-gray-900 focus:ring-2 focus:ring-accent text-base outline-none text-gray-100 py-1 px-3 leading-8 transition-colors duration-200 ease-in-out"
+                            />
                         </motion.div>
                         <motion.div
                             variants={slideInVariant("bottom", 0.2)}

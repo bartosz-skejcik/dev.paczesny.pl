@@ -16,7 +16,7 @@ export default function Project({ project }: Props) {
             exit="exit"
             className={`flex ${
                 project.direction ? "flex-row-reverse" : "flex-row"
-            } items-center justify-between lg:justify-around w-11/12 lg:w-5/6 py-12`}
+            } items-center justify-between lg:justify-around w-11/12 lg:w-5/6 py-12 overflow-hidden`}
         >
             <div
                 className={`flex flex-col ${

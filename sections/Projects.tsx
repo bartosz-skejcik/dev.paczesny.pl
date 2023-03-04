@@ -59,7 +59,7 @@ export default function Projects({}: Props) {
     return (
         <section
             id="projects"
-            className="flex flex-col items-center justify-center w-screen min-h-screen gap-20"
+            className="flex flex-col items-center justify-center w-screen min-h-screen h-fit overflow-x-hidden gap-20"
         >
             <motion.h1
                 variants={textVariant(0.2)}

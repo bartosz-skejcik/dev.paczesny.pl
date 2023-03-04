@@ -43,7 +43,7 @@ export default function Education({}: Props) {
     return (
         <section
             id="education"
-            className="flex flex-col items-center justify-center gap-8 w-11/12 h-screen"
+            className="flex flex-col items-center justify-center gap-8 w-11/12 h-fit min-h-screen"
         >
             <motion.h1
                 variants={textVariant(0.2)}
