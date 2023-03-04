@@ -23,10 +23,5 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
           password: ${{ secrets.PASSWORD }}
-          script: |
-            cd /home/j5on/portfolio
-            git pull
-            npm install
-            npm run build
-            sudo service portfolio restart
+          script: portfolio -r ${{ secrets.PASSWORD }}
             ${{ secrets.PASSWORD }}
