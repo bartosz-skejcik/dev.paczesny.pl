@@ -137,9 +137,11 @@ export default function Navbar({}: Props) {
                         <motion.div className="flex flex-col items-center justify-center h-full gap-6">
                             {links.map((link) => (
                                 <LinkBlock
-                                    href={link.href}
                                     key={link.text}
+                                    href={link.href}
                                     text={link.text}
+                                    setOpen={setOpen}
+                                    open={open}
                                 />
                             ))}
                             <Link

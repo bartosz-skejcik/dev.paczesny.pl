@@ -5,6 +5,8 @@ import { motion } from "framer-motion";
 type Props = {
     href: string;
     text: string;
+    setOpen?: (open: boolean) => void;
+    open?: boolean;
 };
 
 const underscoreMotion = {
@@ -23,9 +25,12 @@ const underscoreMotion = {
     },
 };
 
-export default function LinkBlock({ href, text }: Props) {
+export default function LinkBlock({ href, text, open, setOpen }: Props) {
     return (
         <motion.a
+            onClick={() => {
+                setOpen && setOpen(!open);
+            }}
             href={href}
             initial="rest"
             whileHover="hover"
