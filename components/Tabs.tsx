@@ -114,10 +114,10 @@ export default function Tabs({}: Props) {
             style={{
                 overflow: "hidden",
             }}
-            className="w-5/6 md:2/3 px-2 sm:px-0 flex flex-col items-center justify-center"
+            className="px-2 sm:px-0 flex flex-col items-center justify-center h-fit w-full"
         >
             <Tab.Group>
-                <Tab.List className="flex items-center justify-center gap-6 p-1 w-full md:w-2/3">
+                <Tab.List className="flex items-center justify-center gap-6 p-1 w-full md:w-11/12">
                     {Object.keys(categories).map((category, index) => (
                         <Tab
                             key={category}
@@ -139,7 +139,7 @@ export default function Tabs({}: Props) {
                         </Tab>
                     ))}
                 </Tab.List>
-                <Tab.Panels className="mt-3 w-full md:w-2/3 py-4 rounded-2xl">
+                <Tab.Panels className="mt-3 w-full md:w-11/12 py-4 rounded-2xl">
                     {Object.values(categories).map((category, i) => (
                         <Tab.Panel
                             key={i}

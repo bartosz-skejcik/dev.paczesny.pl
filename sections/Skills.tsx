@@ -10,7 +10,7 @@ export default function Skills({}: Props) {
     return (
         <section
             id="skills"
-            className="flex w-screen md:w-2/3 h-screen flex-col items-center justify-center gap-12"
+            className="flex w-screen md:w-2/3 min-h-screen h-fit flex-col items-center justify-center gap-12"
         >
             <div className="flex flex-col items-center justify-center gap-6">
                 <motion.h1
