@@ -11,7 +11,12 @@ import {
 
 export default function Home() {
     return (
-        <section className="flex flex-col items-center justify-center backdrop-blur-3xl bg-[#001120]/10">
+        <section
+            style={{
+                overflowX: "hidden",
+            }}
+            className="flex flex-col items-center justify-center backdrop-blur-3xl bg-[#001120]/10"
+        >
             <Navbar />
             <Hero />
             <About />

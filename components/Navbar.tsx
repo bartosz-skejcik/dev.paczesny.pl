@@ -29,6 +29,10 @@ const links = [
         href: "#contact",
         text: "contact",
     },
+    {
+        href: "https://drive.google.com/file/d/1MZD08s-opYpkiLaeyQJsZBh2nPO3RgH8/view?usp=share_link",
+        text: "cv",
+    },
 ];
 
 type Props = {};
@@ -53,16 +57,16 @@ export default function Navbar({}: Props) {
                     alt={"Logo"}
                     width={35}
                     height={35}
-                    className="rounded-full block md:hidden"
+                    className="block rounded-full md:hidden"
                 />
                 <Image
                     src={"/logo.svg"}
                     alt={"Logo"}
                     width={40}
                     height={40}
-                    className="rounded-full md:block hidden"
+                    className="hidden rounded-full md:block"
                 />
-                <h1 className="tex-lg md:text-2xl text-center font-semibold text-neutral-100">
+                <h1 className="font-semibold text-center tex-lg md:text-2xl text-neutral-100">
                     <span className="text-accent">dev</span>.paczesny
                 </h1>
             </motion.div>
@@ -71,7 +75,7 @@ export default function Navbar({}: Props) {
                 initial="hidden"
                 animate="show"
                 exit="exit"
-                className="hidden lg:flex items-center justify-center gap-12"
+                className="items-center justify-center hidden gap-12 lg:flex"
             >
                 {links.map((link) => (
                     <LinkBlock
@@ -89,21 +93,21 @@ export default function Navbar({}: Props) {
                 href="https://github.com/bartosz-skejcik"
                 target="_blank"
                 rel="noreferrer"
-                className="hidden lg:flex items-center justify-between py-1 px-6 gap-6 rounded-2xl border-2 border-transparent hover:border-accent hover:scale-105 transition-all duration-300"
+                className="items-center justify-between hidden gap-6 px-6 py-1 transition-all duration-300 border-2 border-transparent lg:flex rounded-2xl hover:border-accent hover:scale-105"
             >
                 <Image
                     src={"/github.png"}
                     alt={"Github"}
                     width={20}
                     height={20}
-                    className="rounded-full hidden md:block"
+                    className="hidden rounded-full md:block"
                 />
                 <Image
                     src={"/github.png"}
                     alt={"Github"}
                     width={15}
                     height={15}
-                    className="rounded-full md:hidden block"
+                    className="block rounded-full md:hidden"
                 />
                 <p className="font-medium text-md md:text-xl mt-0.5 md:mt-0 text-accent">
                     Github
@@ -115,7 +119,7 @@ export default function Navbar({}: Props) {
                 onClick={() => setOpen(!open)}
             >
                 {open ? (
-                    <XMarkIcon className="h-8 w-8 text-accent" />
+                    <XMarkIcon className="w-8 h-8 text-accent" />
                 ) : (
                     <Bars3BottomRightIcon className="w-8 h-8 text-accent" />
                 )}
@@ -132,7 +136,7 @@ export default function Navbar({}: Props) {
                         exit={{
                             x: 1000,
                         }}
-                        className="lg:hidden absolute top-0 right-0 z-40 bg-tertiary py-12 flex flex-col items-center justify-between w-screen md:w-1/2 h-screen gap-6"
+                        className="absolute top-0 right-0 z-40 flex flex-col items-center justify-between w-screen h-screen gap-6 py-12 lg:hidden bg-tertiary md:w-1/2"
                     >
                         <motion.div className="flex flex-col items-center justify-center h-full gap-6">
                             {links.map((link) => (
@@ -146,7 +150,7 @@ export default function Navbar({}: Props) {
                             ))}
                             <Link
                                 href="https://github.com/bartosz-skejcik"
-                                className="flex items-center justify-between py-1 px-6 gap-6 mt-8 rounded-2xl border-2 border-transparent hover:border-accent hover:scale-105 transition-all duration-300"
+                                className="flex items-center justify-between gap-6 px-6 py-1 mt-8 transition-all duration-300 border-2 border-transparent rounded-2xl hover:border-accent hover:scale-105"
                             >
                                 <Image
                                     src={"/github.png"}

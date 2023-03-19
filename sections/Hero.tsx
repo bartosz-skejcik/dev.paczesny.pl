@@ -7,12 +7,12 @@ type Props = {};
 
 export default function Hero({}: Props) {
     return (
-        <section className="w-screen h-screen flex flex-col items-center justify-center gap-10">
+        <section className="flex flex-col items-center justify-center w-screen h-screen gap-10">
             <motion.div
                 variants={textVariant(0.1)}
                 initial="hidden"
                 whileInView={"show"}
-                className="text-center flex flex-col items-center md:items-start justify-center w-full md:w-2/3 font-medium text-neutral-100 text-4xl md:text-5xl 2xl:text-6xl"
+                className="flex flex-col items-center justify-center w-screen text-4xl font-medium text-center md:items-start md:w-2/3 text-neutral-100 md:text-5xl 2xl:text-6xl"
             >
                 <h1 className="">
                     Hi, {"I'm "}
@@ -24,17 +24,20 @@ export default function Hero({}: Props) {
                 variants={textVariant(0.2)}
                 initial="hidden"
                 whileInView={"show"}
-                className="flex items-center justify-center md:justify-start w-full md:w-2/3 gap-6"
+                className="flex items-center justify-center w-full gap-6 lg:w-2/3 md:justify-start"
+                style={{
+                    overflow: "hidden",
+                }}
             >
                 <a
                     href="#about"
-                    className="border-2 rounded-2xl border-accent py-1 px-10 text-center text-accent text-lg font-medium hover:text-tertiary hover:bg-accent hover:scale-105 shadow-lg shadow-transparent hover:shadow-accent transition-all duration-300"
+                    className="px-10 py-1 text-lg font-medium text-center transition-all duration-300 border-2 shadow-lg rounded-2xl border-accent text-accent hover:text-tertiary hover:bg-accent hover:scale-105 shadow-transparent hover:shadow-accent"
                 >
                     Get Started
                 </a>
                 <a
                     href="#projects"
-                    className="border-2 rounded-2xl border-accent py-1 px-10 text-center text-accent text-lg font-medium hover:text-tertiary hover:bg-accent hover:scale-105 shadow-lg shadow-transparent hover:shadow-accent transition-all duration-300"
+                    className="px-10 py-1 text-lg font-medium text-center transition-all duration-300 border-2 shadow-lg rounded-2xl border-accent text-accent hover:text-tertiary hover:bg-accent hover:scale-105 shadow-transparent hover:shadow-accent"
                 >
                     Projects
                 </a>

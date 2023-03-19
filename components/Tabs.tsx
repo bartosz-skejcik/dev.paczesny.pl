@@ -74,12 +74,22 @@ export default function Tabs({}: Props) {
                 experience: "2 year",
                 icon: "https://cdn.worldvectorlogo.com/logos/mysql-6.svg",
             },
+            {
+                name: "Docker",
+                experience: "<1 year",
+                icon: "https://cdn.worldvectorlogo.com/logos/docker-3.svg",
+            },
         ],
         Tools: [
             {
                 name: "Git",
                 experience: "3+ years",
                 icon: "https://cdn.worldvectorlogo.com/logos/git-icon.svg",
+            },
+            {
+                name: "Linux",
+                experience: "4+ years",
+                icon: "/linux.png",
             },
             {
                 name: "GitHub",
@@ -114,10 +124,10 @@ export default function Tabs({}: Props) {
             style={{
                 overflow: "hidden",
             }}
-            className="px-2 sm:px-0 flex flex-col items-center justify-center h-fit w-full"
+            className="flex flex-col items-center justify-center w-full px-2 sm:px-0 h-fit"
         >
             <Tab.Group>
-                <Tab.List className="flex items-center justify-center gap-6 p-1 w-full md:w-11/12">
+                <Tab.List className="flex items-center justify-center w-full gap-6 p-1 md:w-11/12 xl:w-3/4">
                     {Object.keys(categories).map((category, index) => (
                         <Tab
                             key={category}
@@ -139,7 +149,7 @@ export default function Tabs({}: Props) {
                         </Tab>
                     ))}
                 </Tab.List>
-                <Tab.Panels className="mt-3 w-full md:w-11/12 py-4 rounded-2xl">
+                <Tab.Panels className="w-full py-4 mt-3 md:w-11/12 rounded-2xl">
                     {Object.values(categories).map((category, i) => (
                         <Tab.Panel
                             key={i}
