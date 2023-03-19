@@ -7,7 +7,7 @@ export default function Head() {
                 name="viewport"
             />
             <meta name="description" content="Bartek Paczesny - Portfolio" />
-            <meta name="theme-color" content="#0F3460" />
+            <meta name="theme-color" content="#001120" />
             <link rel="icon" href="/favicon.ico" />
         </>
     );
