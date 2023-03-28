@@ -5,6 +5,7 @@ import { Lexend } from "@next/font/google";
 import { Session } from "next-auth";
 import { headers } from "next/headers";
 import AuthContext from "./AuthContext";
+import Script from "next/script";
 
 const lexend = Lexend({
     subsets: ["latin"],
@@ -44,6 +45,22 @@ export default async function RootLayout({
                 }}
                 className={`${lexend.className} bg-no-repeat bg-center bg-cover bg-[url(/cover-mobile.svg)] md:bg-[url(/cover.svg)] w-screen`}
             >
+                <Script
+                    strategy="lazyOnload"
+                    src={`https://www.googletagmanager.com/gtag/js?id=${process.env.NEXT_PUBLIC_GOOGLE_ANALYTICS}`}
+                />
+                <Script id="1" strategy="lazyOnload">
+                    {`
+                    window.dataLayer = window.dataLayer || [];
+                    function gtag(){
+                        dataLayer.push(arguments);
+                    }
+                    gtag('js', new Date());
+                    gtag('config', '${process.env.NEXT_PUBLIC_GOOGLE_ANALYTICS}', {
+                        page_path: window.location.pathname,
+                    });
+                `}
+                </Script>
                 <AuthContext session={session}>{children}</AuthContext>
             </body>
         </html>
