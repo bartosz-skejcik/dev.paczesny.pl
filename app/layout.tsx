@@ -1,22 +1,38 @@
-"use client";
-
 import "../styles/globals.css";
-import "react-toastify/dist/ReactToastify.css";
-import { ToastContainer } from "react-toastify";
 
 import { Lexend } from "@next/font/google";
+
+import { Session } from "next-auth";
+import { headers } from "next/headers";
+import AuthContext from "./AuthContext";
 
 const lexend = Lexend({
     subsets: ["latin"],
 });
 
-export default function RootLayout({
+async function getSession(cookie: string): Promise<Session> {
+    const response = await fetch(
+        `${process.env.LOCAL_AUTH_URL}/api/auth/session`,
+        {
+            headers: {
+                cookie,
+            },
+        }
+    );
+
+    const session = await response.json();
+
+    return Object.keys(session).length > 0 ? session : null;
+}
+
+export default async function RootLayout({
     children,
 }: {
     children: React.ReactNode;
 }) {
+    const session = await getSession(headers().get("cookie") ?? "");
     return (
-        <html lang="pl">
+        <html lang="en">
             {/*
         <head /> will contain the components returned by the nearest parent
         head.tsx. Find out more at https://beta.nextjs.org/docs/api-reference/file-conventions/head
@@ -28,18 +44,7 @@ export default function RootLayout({
                 }}
                 className={`${lexend.className} bg-no-repeat bg-center bg-cover bg-[url(/cover-mobile.svg)] md:bg-[url(/cover.svg)] w-screen`}
             >
-                <ToastContainer
-                    position="top-right"
-                    autoClose={5000}
-                    hideProgressBar={false}
-                    newestOnTop={false}
-                    closeOnClick
-                    rtl={false}
-                    pauseOnFocusLoss
-                    pauseOnHover
-                    theme="dark"
-                />
-                {children}
+                <AuthContext session={session}>{children}</AuthContext>
             </body>
         </html>
     );
