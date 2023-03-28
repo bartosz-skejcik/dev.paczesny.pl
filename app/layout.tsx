@@ -46,10 +46,10 @@ export default async function RootLayout({
                 className={`${lexend.className} bg-no-repeat bg-center bg-cover bg-[url(/cover-mobile.svg)] md:bg-[url(/cover.svg)] w-screen`}
             >
                 <Script
-                    strategy="lazyOnload"
+                    async
                     src={`https://www.googletagmanager.com/gtag/js?id=${process.env.NEXT_PUBLIC_GOOGLE_ANALYTICS}`}
                 />
-                <Script id="1" strategy="lazyOnload">
+                <Script id="gtag">
                     {`
                     window.dataLayer = window.dataLayer || [];
                     function gtag(){
