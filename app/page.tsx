@@ -1,7 +1,3 @@
-import Analytics from "analytics";
-//@ts-ignore
-import googleAnalytics from "@analytics/google-analytics";
-
 import { Navbar } from "@components";
 import {
     About,
@@ -14,15 +10,6 @@ import {
 } from "@sections";
 
 export default function Home() {
-    const analytics = Analytics({
-        app: "portfolio",
-        plugins: [
-            googleAnalytics({
-                measurementIds: [`${process.env.NEXT_PUBLIC_GOOGLE_ANALYTICS}`],
-            }),
-        ],
-    });
-    analytics.page();
     return (
         <section
             style={{

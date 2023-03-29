@@ -5,7 +5,6 @@ import { Lexend } from "@next/font/google";
 import { Session } from "next-auth";
 import { headers } from "next/headers";
 import AuthContext from "./AuthContext";
-import Script from "next/script";
 
 const lexend = Lexend({
     subsets: ["latin"],
