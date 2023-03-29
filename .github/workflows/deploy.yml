@@ -9,19 +9,18 @@ on:
     workflow_dispatch:
 
 jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
+    deploy:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v3
 
-      - name: Connect to Remote Server
-        uses: appleboy/ssh-action@v0.1.8
-        with:
-          host: ${{ secrets.HOST }}
-          username: ${{ secrets.USERNAME }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: 22
-          password: ${{ secrets.PASSWORD }}
-          script: portfolio -r ${{ secrets.PASSWORD }}
-            ${{ secrets.PASSWORD }}
+            - name: Connect to Remote Server
+              uses: appleboy/ssh-action@v0.1.8
+              with:
+                  host: ${{ secrets.HOST }}
+                  username: ${{ secrets.USERNAME }}
+                  key: ${{ secrets.SSH_PRIVATE_KEY }}
+                  port: 22
+                  password: ${{ secrets.PASSWORD }}
+                  script: portfolio -r ${{ secrets.PASSWORD }}

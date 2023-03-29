@@ -19,7 +19,6 @@ export default function Page({}: Props) {
             <br />
             Email: {session?.user?.email}
             <br />
-            Image:{" "}
             <Image
                 src={session?.user?.image!}
                 width={100}
