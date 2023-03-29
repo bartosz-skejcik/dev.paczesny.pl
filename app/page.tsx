@@ -18,7 +18,7 @@ export default function Home() {
         app: "portfolio",
         plugins: [
             googleAnalytics({
-                trackingId: `${process.env.NEXT_PUBLIC_GOOGLE_ANALYTICS}`,
+                measurementIds: [`${process.env.NEXT_PUBLIC_GOOGLE_ANALYTICS}`],
             }),
         ],
     });
