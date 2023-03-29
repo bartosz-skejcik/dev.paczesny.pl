@@ -4,7 +4,7 @@ import { SessionProvider } from "next-auth/react";
 import { Session } from "next-auth";
 import "react-toastify/dist/ReactToastify.css";
 import { ToastContainer } from "react-toastify";
-import { GoogleAnalytics } from "nextjs-google-analytics";
+import { GoogleAnalytics, usePageViews } from "nextjs-google-analytics";
 
 export interface AuthContextProps {
     children: React.ReactNode;
@@ -12,9 +12,10 @@ export interface AuthContextProps {
 }
 
 export default function AuthContext({ children }: AuthContextProps) {
+    usePageViews();
     return (
         <SessionProvider>
-            <GoogleAnalytics trackPageViews />
+            <GoogleAnalytics />
             <ToastContainer
                 position="top-right"
                 autoClose={5000}
