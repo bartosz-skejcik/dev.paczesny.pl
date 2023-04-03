@@ -7,6 +7,7 @@ import Image from "next/image";
 import { motion } from "framer-motion";
 import { tabVariant, slideInVariant } from "@utils/motion";
 import Tile from "./Tile";
+import { event } from "nextjs-google-analytics";
 
 type Props = {};
 
@@ -130,6 +131,12 @@ export default function Tabs({}: Props) {
                 <Tab.List className="flex items-center justify-center w-full gap-6 p-1 md:w-11/12 xl:w-3/4">
                     {Object.keys(categories).map((category, index) => (
                         <Tab
+                            onClick={() => {
+                                event("view_skill", {
+                                    category: "skill",
+                                    label: category,
+                                });
+                            }}
                             key={category}
                             className={({ selected }) =>
                                 classNames(
@@ -144,8 +151,9 @@ export default function Tabs({}: Props) {
                             <motion.div
                                 variants={slideInVariant("top", 0.1 * index)}
                                 className="w-full text-center"
-                            ></motion.div>
-                            {category}
+                            >
+                                {category}
+                            </motion.div>
                         </Tab>
                     ))}
                 </Tab.List>

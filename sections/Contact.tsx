@@ -2,6 +2,7 @@
 
 import { slideInVariant, textVariant } from "@utils/motion";
 import { motion } from "framer-motion";
+import { event } from "nextjs-google-analytics";
 import { useState } from "react";
 
 import { toast } from "react-toastify";
@@ -34,6 +35,10 @@ export default function Contact({}: Props) {
         const data = await res.json();
 
         if (data.success) {
+            event("email_sent", {
+                category: "Contact",
+                label: message,
+            });
             toast.success("Email sent successfully");
             setName("");
             setEmail("");
@@ -46,15 +51,15 @@ export default function Contact({}: Props) {
     return (
         <section
             id="contact"
-            className="h-screen flex items-center justify-evenly overflow-hidden"
+            className="flex items-center h-screen overflow-hidden justify-evenly"
         >
             <div className="container px-5 py-24 mx-auto">
-                <div className="flex flex-col text-center w-full mb-12">
+                <div className="flex flex-col w-full mb-12 text-center">
                     <motion.h1
                         variants={textVariant(0.2)}
                         initial="hidden"
                         whileInView={"show"}
-                        className="font-medium text-accent text-4xl md:text-5xl 2xl:text-6xl mb-2"
+                        className="mb-2 text-4xl font-medium text-accent md:text-5xl 2xl:text-6xl"
                     >
                         <span className="text-neutral-100">Contact </span>Me
                     </motion.h1>
@@ -62,25 +67,25 @@ export default function Contact({}: Props) {
                         variants={textVariant(0.2)}
                         initial="hidden"
                         whileInView={"show"}
-                        className="lg:w-1/2 mx-auto leading-relaxed text-base text-neutral-100"
+                        className="mx-auto text-base leading-relaxed lg:w-1/2 text-neutral-100"
                     >
                         If you wanna get in touch, talk to me about a project
                         collaboration or just say hi, fill up the awesome form
                         below or send an email to bartek@paczesny.pl
                     </motion.p>
                 </div>
-                <div className="lg:w-1/2 md:w-2/3 mx-auto">
+                <div className="mx-auto lg:w-1/2 md:w-2/3">
                     <div className="flex flex-wrap -m-2">
                         <motion.div
                             variants={slideInVariant("left", 0.2)}
                             initial="hidden"
                             whileInView={"show"}
                             exit="hidden"
-                            className="p-2 w-1/2"
+                            className="w-1/2 p-2"
                         >
                             <label
                                 htmlFor="name"
-                                className="leading-7 text-sm text-gray-400"
+                                className="text-sm leading-7 text-gray-400"
                             >
                                 Name
                             </label>
@@ -89,7 +94,7 @@ export default function Contact({}: Props) {
                                 type="text"
                                 id="name"
                                 name="name"
-                                className="w-full bg-gray-800 bg-opacity-40 rounded-xl border border-gray-700 focus:border-accent/50 focus:bg-gray-900 focus:ring-2 focus:ring-accent text-base outline-none text-gray-100 py-1 px-3 leading-8 transition-colors duration-200 ease-in-out"
+                                className="w-full px-3 py-1 text-base leading-8 text-gray-100 transition-colors duration-200 ease-in-out bg-gray-800 border border-gray-700 outline-none bg-opacity-40 rounded-xl focus:border-accent/50 focus:bg-gray-900 focus:ring-2 focus:ring-accent"
                             />
                         </motion.div>
                         <motion.div
@@ -97,11 +102,11 @@ export default function Contact({}: Props) {
                             initial="hidden"
                             whileInView="show"
                             exit="hidden"
-                            className="p-2 w-1/2"
+                            className="w-1/2 p-2"
                         >
                             <label
                                 htmlFor="email"
-                                className="leading-7 text-sm text-gray-400"
+                                className="text-sm leading-7 text-gray-400"
                             >
                                 Email
                             </label>
@@ -110,7 +115,7 @@ export default function Contact({}: Props) {
                                 type="email"
                                 id="email"
                                 name="email"
-                                className="w-full bg-gray-800 bg-opacity-40 rounded-xl border border-gray-700 focus:border-accent/50 focus:bg-gray-900 focus:ring-2 focus:ring-accent text-base outline-none text-gray-100 py-1 px-3 leading-8 transition-colors duration-200 ease-in-out"
+                                className="w-full px-3 py-1 text-base leading-8 text-gray-100 transition-colors duration-200 ease-in-out bg-gray-800 border border-gray-700 outline-none bg-opacity-40 rounded-xl focus:border-accent/50 focus:bg-gray-900 focus:ring-2 focus:ring-accent"
                             />
                         </motion.div>
                         <motion.div
@@ -118,12 +123,12 @@ export default function Contact({}: Props) {
                             initial="hidden"
                             whileInView="show"
                             exit="hidden"
-                            className="p-2 w-full"
+                            className="w-full p-2"
                         >
                             <div className="relative">
                                 <label
                                     htmlFor="message"
-                                    className="leading-7 text-sm text-gray-400"
+                                    className="text-sm leading-7 text-gray-400"
                                 >
                                     Message
                                 </label>
@@ -140,13 +145,13 @@ export default function Contact({}: Props) {
                             initial="hidden"
                             whileInView="show"
                             exit="hidden"
-                            className="p-2 w-full"
+                            className="w-full p-2"
                         >
                             <button
                                 onClick={() => {
                                     sendEmail();
                                 }}
-                                className="flex mx-auto text-accent bg-transparent border-2 border-accent hover:border-transparent hover:text-neutral-100 py-1 px-8 transition-all duration-300 hover:scale-105 hover:-translate-y-2 focus:outline-none hover:bg-accent rounded-2xl text-lg"
+                                className="flex px-8 py-1 mx-auto text-lg transition-all duration-300 bg-transparent border-2 text-accent border-accent hover:border-transparent hover:text-neutral-100 hover:scale-105 hover:-translate-y-2 focus:outline-none hover:bg-accent rounded-2xl"
                             >
                                 Send
                             </button>

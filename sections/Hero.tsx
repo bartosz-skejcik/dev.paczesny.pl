@@ -2,6 +2,7 @@
 
 import { textVariant } from "@utils/motion";
 import { motion } from "framer-motion";
+import { event } from "nextjs-google-analytics";
 
 type Props = {};
 
@@ -32,12 +33,24 @@ export default function Hero({}: Props) {
                 <a
                     href="#about"
                     className="px-10 py-1 text-lg font-medium text-center transition-all duration-300 border-2 shadow-lg rounded-2xl border-accent text-accent hover:text-tertiary hover:bg-accent hover:scale-105 shadow-transparent hover:shadow-accent"
+                    onClick={() => {
+                        event("navigate_to", {
+                            category: "hero",
+                            label: "get_started",
+                        });
+                    }}
                 >
                     Get Started
                 </a>
                 <a
                     href="#projects"
                     className="px-10 py-1 text-lg font-medium text-center transition-all duration-300 border-2 shadow-lg rounded-2xl border-accent text-accent hover:text-tertiary hover:bg-accent hover:scale-105 shadow-transparent hover:shadow-accent"
+                    onClick={() => {
+                        event("navigate_to", {
+                            category: "hero",
+                            label: "projects",
+                        });
+                    }}
                 >
                     Projects
                 </a>

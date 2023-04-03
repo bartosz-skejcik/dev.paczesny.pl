@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { event } from "nextjs-google-analytics";
 
 type Props = {
     href: string;
@@ -30,14 +31,18 @@ export default function LinkBlock({ href, text, open, setOpen }: Props) {
         <motion.a
             onClick={() => {
                 setOpen && setOpen(!open);
+                event("navigate_to", {
+                    category: "navbar",
+                    label: text,
+                });
             }}
             href={href}
             initial="rest"
             whileHover="hover"
             animate="rest"
-            className="text-neutral-100 hover:cursor-pointer text-center text-xl font-medium"
+            className="text-xl font-medium text-center text-neutral-100 hover:cursor-pointer"
         >
-            <span className="text-accent font-medium">{"// "}</span>
+            <span className="font-medium text-accent">{"// "}</span>
             {text}
             <motion.div
                 variants={underscoreMotion}

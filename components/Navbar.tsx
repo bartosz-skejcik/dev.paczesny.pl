@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useState } from "react";
 import LinkBlock from "./Link";
 import { slideInVariant } from "@utils/motion";
+import { event } from "nextjs-google-analytics";
 
 const links = [
     {
@@ -86,6 +87,12 @@ export default function Navbar({}: Props) {
                 ))}
             </motion.div>
             <motion.a
+                onClick={() => {
+                    event("navigate_to", {
+                        category: "navbar",
+                        label: "github",
+                    });
+                }}
                 variants={slideInVariant("top", 0)}
                 initial="hidden"
                 animate="show"
@@ -151,6 +158,12 @@ export default function Navbar({}: Props) {
                             <Link
                                 href="https://github.com/bartosz-skejcik"
                                 className="flex items-center justify-between gap-6 px-6 py-1 mt-8 transition-all duration-300 border-2 border-transparent rounded-2xl hover:border-accent hover:scale-105"
+                                onClick={() => {
+                                    event("navigate_to", {
+                                        category: "navbar",
+                                        label: "github",
+                                    });
+                                }}
                             >
                                 <Image
                                     src={"/github.png"}

@@ -2,6 +2,7 @@ import { ArrowUpOnSquareIcon } from "@heroicons/react/24/outline";
 import { slideInVariant } from "@utils/motion";
 import { motion } from "framer-motion";
 import Image from "next/image";
+import { event } from "nextjs-google-analytics";
 
 type Props = {
     project: any;
@@ -23,7 +24,7 @@ export default function Project({ project }: Props) {
                     project.direction ? "md:items-end" : "md:items-start"
                 } justify-center items-center w-full md:w-1/2 lg:w-1/3`}
             >
-                <h1 className="font-medium text-neutral-100 text-2xl md:text-3xl 2xl:text-4xl mb-6">
+                <h1 className="mb-6 text-2xl font-medium text-neutral-100 md:text-3xl 2xl:text-4xl">
                     {project.name}
                 </h1>
                 <p
@@ -44,19 +45,25 @@ export default function Project({ project }: Props) {
                         (technology: string, index: number) => (
                             <span
                                 key={index}
-                                className="text-neutral-100 text-sm md:text-md 2xl:text-lg py-1 text-accent/80"
+                                className="py-1 text-sm text-neutral-100 md:text-md 2xl:text-lg text-accent/80"
                             >
                                 {technology}
                             </span>
                         )
                     )}
                 </div>
-                <div className="flex items-center justify-center mt-6 gap-4">
+                <div className="flex items-center justify-center gap-4 mt-6">
                     <a
                         href={project.github}
                         target="_blank"
                         rel="noreferrer"
                         className="text-neutral-300"
+                        onClick={() => {
+                            event("view_sourcecode", {
+                                category: "project",
+                                label: project.name,
+                            });
+                        }}
                     >
                         <svg
                             role="img"
@@ -76,12 +83,18 @@ export default function Project({ project }: Props) {
                         target="_blank"
                         rel="noreferrer"
                         className="text-neutral-100"
+                        onClick={() => {
+                            event("view_website", {
+                                category: "project",
+                                label: project.name,
+                            });
+                        }}
                     >
                         <ArrowUpOnSquareIcon className="h-7 w-7" />
                     </a>
                 </div>
             </div>
-            <div className="hidden md:flex items-center justify-center w-1/2 lg:w-1/3">
+            <div className="items-center justify-center hidden w-1/2 md:flex lg:w-1/3">
                 <Image
                     src={project.image}
                     alt={project.name}
