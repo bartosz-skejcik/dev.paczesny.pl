@@ -1,9 +1,8 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Tab } from "@headlessui/react";
-import Image from "next/image";
 import { motion } from "framer-motion";
 import { tabVariant, slideInVariant } from "@utils/motion";
 import Tile from "./Tile";
@@ -16,109 +15,26 @@ function classNames(...classes: string[]) {
 }
 
 export default function Tabs({}: Props) {
-    let [categories] = useState({
-        Frontend: [
-            {
-                name: "React.js",
-                experience: "3+ years",
-                icon: "https://cdn.worldvectorlogo.com/logos/react-2.svg",
-            },
-            {
-                name: "Next.js",
-                experience: "2+ years",
-                icon: "https://cdn.worldvectorlogo.com/logos/nextjs-2.svg",
-            },
-            {
-                name: "Tailwind CSS",
-                experience: "3+ years",
-                icon: "https://cdn.worldvectorlogo.com/logos/tailwindcss.svg",
-            },
-            {
-                name: "Framer Motion",
-                experience: "6 months",
-                icon: "https://cdn.worldvectorlogo.com/logos/framer-motion.svg",
-            },
-            {
-                name: "Headless UI",
-                experience: "1 year",
-                icon: "/headless-ui.svg",
-            },
-            {
-                name: "TypeScript",
-                experience: "1+ years",
-                icon: "https://cdn.worldvectorlogo.com/logos/typescript.svg",
-            },
-        ],
-        Backend: [
-            {
-                name: "Node.js",
-                experience: "3+ years",
-                icon: "https://cdn.worldvectorlogo.com/logos/nodejs-icon.svg",
-            },
-            {
-                name: "Express.js",
-                experience: "1+ years",
-                icon: "/express.svg",
-            },
-            {
-                name: "MongoDB",
-                experience: "1+ years",
-                icon: "https://cdn.worldvectorlogo.com/logos/mongodb-icon-1.svg",
-            },
-            {
-                name: "Prisma",
-                experience: "1 year",
-                icon: "https://cdn.worldvectorlogo.com/logos/prisma-3.svg",
-            },
-            {
-                name: "MySQL",
-                experience: "2 year",
-                icon: "https://cdn.worldvectorlogo.com/logos/mysql-6.svg",
-            },
-            {
-                name: "Docker",
-                experience: "<1 year",
-                icon: "https://cdn.worldvectorlogo.com/logos/docker-3.svg",
-            },
-        ],
-        Tools: [
-            {
-                name: "Git",
-                experience: "3+ years",
-                icon: "https://cdn.worldvectorlogo.com/logos/git-icon.svg",
-            },
-            {
-                name: "Linux",
-                experience: "4+ years",
-                icon: "/linux.png",
-            },
-            {
-                name: "GitHub",
-                experience: "3+ years",
-                icon: "https://cdn.worldvectorlogo.com/logos/github-icon-1.svg",
-            },
-            {
-                name: "VS Code",
-                experience: "4 years",
-                icon: "https://cdn.worldvectorlogo.com/logos/visual-studio-code-1.svg",
-            },
-            {
-                name: "Figma",
-                experience: "1 year",
-                icon: "https://cdn.worldvectorlogo.com/logos/figma-1.svg",
-            },
-            {
-                name: "IntelliJ IDEA",
-                experience: "1 year",
-                icon: "https://cdn.worldvectorlogo.com/logos/intellij-idea-1.svg",
-            },
-            {
-                name: "Postman",
-                experience: "1 year",
-                icon: "https://cdn.worldvectorlogo.com/logos/postman.svg",
-            },
-        ],
-    });
+    const [categories, setCategories] = useState({});
+
+    // query data from api/sanity/get?collection=skills
+    useEffect(() => {
+        fetch("/api/sanity/get?collection=skills")
+            .then((res) => res.json())
+            .then((data) => {
+                // the response is an array of objects
+                // we need to group them by category
+                const categories: any = {
+                    Frontend: [],
+                    Backend: [],
+                    Tools: [],
+                };
+                data.forEach((skill: any) => {
+                    categories[skill.category].push(skill);
+                });
+                setCategories(categories);
+            });
+    }, []);
 
     return (
         <motion.div
@@ -167,6 +83,7 @@ export default function Tabs({}: Props) {
                                 variants={tabVariant}
                                 className="flex flex-wrap items-center justify-center w-full gap-4 md:gap-10"
                             >
+                                {/* @ts-ignore */}
                                 {category.map((skill, index) => (
                                     <Tile
                                         key={index}
