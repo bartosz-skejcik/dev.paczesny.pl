@@ -19,7 +19,7 @@ export default async function handler(
         case "education":
             // sort by year descending
             data = await client.fetch(
-                `*[_type == "${collection}"] | order(year asc, month asc)`
+                `*[_type == "${collection}"] | order(date asc)`
             );
             res.status(200).json(data);
             break;

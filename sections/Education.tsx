@@ -35,8 +35,10 @@ export default function Education({}: Props) {
                 return (
                     <Block
                         key={index}
-                        year={path.year}
-                        month={path.month}
+                        year={new Date(path.date).getFullYear()}
+                        month={new Date(path.date).toLocaleDateString("en-US", {
+                            month: "long",
+                        })}
                         title={path.title}
                         text={path.text}
                         description={path.description}
