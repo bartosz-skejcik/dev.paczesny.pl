@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import client from "utils/sanity";
+import { client } from "utils/sanity";
 
 export default async function handler(
     req: NextApiRequest,
@@ -7,7 +7,14 @@ export default async function handler(
 ) {
     const { collection } = req.query;
 
-    const data = await client.fetch(`*[_type == "${collection}"]`);
-
-    res.status(200).json(data);
+    if (collection === "projects") {
+        const data = await client.fetch(`*[_type == "${collection}"]{
+            ...,
+            technologies[]->
+        }`);
+        res.status(200).json(data);
+    } else {
+        const data = await client.fetch(`*[_type == "${collection}"]`);
+        res.status(200).json(data);
+    }
 }

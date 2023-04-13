@@ -1,5 +1,6 @@
 import { ArrowUpOnSquareIcon } from "@heroicons/react/24/outline";
 import { slideInVariant } from "@utils/motion";
+import { urlFor } from "@utils/sanity";
 import { motion } from "framer-motion";
 import Image from "next/image";
 import { event } from "nextjs-google-analytics";
@@ -42,12 +43,12 @@ export default function Project({ project }: Props) {
                     } w-full gap-4 justify-center`}
                 >
                     {project.technologies.map(
-                        (technology: string, index: number) => (
+                        (technology: { name: string }, index: number) => (
                             <span
                                 key={index}
                                 className="py-1 text-sm text-neutral-100 md:text-md 2xl:text-lg text-accent/80"
                             >
-                                {technology}
+                                {technology.name}
                             </span>
                         )
                     )}
@@ -96,7 +97,7 @@ export default function Project({ project }: Props) {
             </div>
             <div className="items-center justify-center hidden w-1/2 md:flex lg:w-1/3">
                 <Image
-                    src={project.image}
+                    src={urlFor(project.image).url()}
                     alt={project.name}
                     width={500}
                     height={300}
