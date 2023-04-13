@@ -6,15 +6,26 @@ export default async function handler(
     res: NextApiResponse
 ) {
     const { collection } = req.query;
+    let data = [];
 
-    if (collection === "projects") {
-        const data = await client.fetch(`*[_type == "${collection}"]{
-            ...,
-            technologies[]->
-        }`);
-        res.status(200).json(data);
-    } else {
-        const data = await client.fetch(`*[_type == "${collection}"]`);
-        res.status(200).json(data);
+    switch (collection) {
+        case "projects":
+            data = await client.fetch(`*[_type == "${collection}"]{
+                ...,
+                technologies[]->
+            }`);
+            res.status(200).json(data);
+            break;
+        case "education":
+            // sort by year descending
+            data = await client.fetch(
+                `*[_type == "${collection}"] | order(year asc, month asc)`
+            );
+            res.status(200).json(data);
+            break;
+        default:
+            data = await client.fetch(`*[_type == "${collection}"]`);
+            res.status(200).json(data);
+            break;
     }
 }
