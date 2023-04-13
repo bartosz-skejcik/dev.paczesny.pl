@@ -13,7 +13,7 @@ export default async function handler(
             data = await client.fetch(`*[_type == "${collection}"]{
                 ...,
                 technologies[]->
-            }`);
+            } | order(order)`);
             res.status(200).json(data);
             break;
         case "education":

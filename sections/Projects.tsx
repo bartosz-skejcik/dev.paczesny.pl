@@ -15,7 +15,7 @@ export default function Projects({}: Props) {
             .then((res) => res.json())
             .then((data) => {
                 // remove keys from objects: _key, _ref, _type, _createdAt, _updatedAt, _rev, _id
-                data.forEach((project: any) => {
+                data.forEach((project: any, index: number) => {
                     delete project._key;
                     delete project._ref;
                     delete project._type;
@@ -28,8 +28,8 @@ export default function Projects({}: Props) {
                     delete project.technologies._rev;
                     delete project.technologies._type;
                     delete project.technologies._updatedAt;
+                    project.direction = index % 2 === 0 ? true : false;
                 });
-                console.log(data);
                 setProjects(data);
             });
     }, []);
