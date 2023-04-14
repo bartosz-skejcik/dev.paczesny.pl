@@ -20,7 +20,7 @@ const getWebStatus = async () => {
 };
 
 export default async function Home() {
-    const status = await getWebStatus();
+    // const status = await getWebStatus();
 
     return (
         <section
@@ -29,20 +29,20 @@ export default async function Home() {
             }}
             className="flex flex-col items-center justify-center backdrop-blur-3xl bg-[#001120]/10"
         >
-            {status === "online" ? (
-                <>
-                    <Navbar />
-                    <Hero />
-                    <About />
-                    <Skills />
-                    <Education />
-                    <Projects />
-                    <Contact />
-                    <Footer />
-                </>
-            ) : (
-                <Offline />
-            )}
+            {/* {status === "online" ? ( */}
+            {/* <> */}
+            <Navbar />
+            <Hero />
+            <About />
+            <Skills />
+            <Education />
+            <Projects />
+            <Contact />
+            <Footer />
+            {/* </> */}
+            {/* ) : ( */}
+            {/* <Offline /> */}
+            {/* )} */}
         </section>
     );
 }
