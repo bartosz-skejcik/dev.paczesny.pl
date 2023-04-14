@@ -5,5 +5,6 @@ import Education from "./Education";
 import Projects from "./Projects";
 import Footer from "./Footer";
 import Contact from "./Contact";
+import Offline from "./Offline";
 
-export { Hero, Skills, About, Education, Projects, Contact, Footer };
+export { Hero, Skills, About, Education, Projects, Contact, Footer, Offline };

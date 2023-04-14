@@ -11,6 +11,7 @@ export const authOptions: NextAuthOptions = {
     ],
     callbacks: {
         async signIn({ user }) {
+            console.log("test");
             let isAllowedToSignIn = true;
             const allowedUser = ["87588698"];
             console.log(user);
