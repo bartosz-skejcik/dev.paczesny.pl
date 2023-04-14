@@ -24,13 +24,12 @@ export default async function handler(
 
         mg.messages().send(data, function (error: any, body: any) {
             if (error) {
-                console.error(error);
+                console.error("Error sending email: ", error);
                 res.status(500).json({
                     success: false,
                     message: error.message,
                 });
             } else {
-                console.log(body);
                 res.status(200).json({
                     success: true,
                     message: "Wiadomość została wysłana",

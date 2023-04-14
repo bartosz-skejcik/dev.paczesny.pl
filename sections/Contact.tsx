@@ -3,13 +3,17 @@
 import { slideInVariant, textVariant } from "@utils/motion";
 import { motion } from "framer-motion";
 import { event } from "nextjs-google-analytics";
-import { useState } from "react";
+import { createRef, useState } from "react";
+
+import ReCAPTCHA from "react-google-recaptcha";
 
 import { toast } from "react-toastify";
 
 type Props = {};
 
 export default function Contact({}: Props) {
+    const recaptchaRef = createRef<ReCAPTCHA>();
+
     const [name, setName] = useState("");
     const [email, setEmail] = useState("");
     const [message, setMessage] = useState("");
@@ -17,6 +21,12 @@ export default function Contact({}: Props) {
     const sendEmail = async () => {
         if (!name || !email || !message) {
             toast.error("Please fill all the fields");
+            return;
+        }
+
+        const isCaptchaVerified = recaptchaRef.current?.getValue();
+        if (!isCaptchaVerified) {
+            toast.error("Please verify that you are not a robot");
             return;
         }
 
@@ -45,6 +55,14 @@ export default function Contact({}: Props) {
             setMessage("");
         } else {
             toast.error("Something went wrong");
+        }
+    };
+
+    const onReCAPTCHAChange = (captchaCode: string | null) => {
+        // If the reCAPTCHA code is null or undefined indicating that
+        // the reCAPTCHA was expired then return early
+        if (!captchaCode) {
+            return;
         }
     };
 
@@ -145,8 +163,17 @@ export default function Contact({}: Props) {
                             initial="hidden"
                             whileInView="show"
                             exit="hidden"
-                            className="w-full p-2"
+                            className="flex flex-col items-center justify-center w-full gap-4 p-2"
                         >
+                            <ReCAPTCHA
+                                ref={recaptchaRef}
+                                size="normal"
+                                sitekey={
+                                    process.env
+                                        .NEXT_PUBLIC_RECAPTCHA_SITE_KEY || ""
+                                }
+                                onChange={onReCAPTCHAChange}
+                            />
                             <button
                                 onClick={() => {
                                     sendEmail();
