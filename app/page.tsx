@@ -19,8 +19,21 @@ const getWebStatus = async () => {
     return data.status;
 };
 
+const getAboutData = async () => {
+    const res = await fetch(
+        `${process.env.NEXTAUTH_URL}/api/sanity/get?collection=about`
+    );
+    const data = await res.json();
+    if (data && data.length > 0) {
+        return data[0];
+    } else {
+        return null;
+    }
+};
+
 export default async function Home() {
     // const status = await getWebStatus();
+    const aboutData = await getAboutData();
 
     return (
         <section
@@ -33,7 +46,7 @@ export default async function Home() {
             {/* <> */}
             <Navbar />
             <Hero />
-            <About />
+            <About data={aboutData as AboutResponse} />
             <Skills />
             <Education />
             <Projects />
