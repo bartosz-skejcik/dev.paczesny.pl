@@ -18,3 +18,10 @@ html {
 ::-webkit-scrollbar-thumb {
     background: #e94560;
 }
+
+.nameHeader {
+    -webkit-text-stroke: 2.5px #e94560;
+    -webkit-text-fill-color: transparent;
+    /* make the space between the letters a bit bigger */
+    letter-spacing: 0.1rem;
+}

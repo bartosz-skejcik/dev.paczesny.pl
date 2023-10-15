@@ -13,11 +13,11 @@ export default function Hero({}: Props) {
                 variants={textVariant(0.1)}
                 initial="hidden"
                 whileInView={"show"}
-                className="flex flex-col items-center justify-center w-screen text-4xl font-medium text-center md:items-start md:w-2/3 text-neutral-100 md:text-5xl 2xl:text-6xl"
+                className="flex flex-col items-center justify-center w-screen text-4xl font-semibold text-center md:items-start md:w-2/3 text-neutral-100 md:text-5xl 2xl:text-6xl"
             >
                 <h1 className="">
                     Hi, {"I'm "}
-                    <span className="text-accent">Bartek.</span>
+                    <span className="text-accent nameHeader">Bartek.</span>
                 </h1>
                 <h1>{"I'm a "}full stack developer.</h1>
             </motion.div>
