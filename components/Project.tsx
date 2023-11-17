@@ -18,14 +18,18 @@ export default function Project({ project }: Props) {
             exit="exit"
             className={`flex ${
                 project.direction ? "flex-row-reverse" : "flex-row"
-            } items-center justify-between lg:justify-around w-11/12 lg:w-5/6 py-12 overflow-hidden`}
+            } items-center justify-between w-11/12 lg:w-5/6 py-12 overflow-hidden`}
         >
             <div
                 className={`flex flex-col ${
                     project.direction ? "md:items-end" : "md:items-start"
-                } justify-center items-center w-full md:w-1/2 lg:w-1/3`}
+                } justify-center items-center w-full md:w-1/2`}
             >
-                <h1 className="mb-6 text-2xl font-medium text-neutral-100 md:text-3xl 2xl:text-4xl">
+                <h1
+                    className={`mb-6 text-2xl font-medium text-neutral-100 md:text-3xl 2xl:text-4xl ${
+                        project.direction ? "text-end" : "text-start"
+                    }`}
+                >
                     {project.name}
                 </h1>
                 <p
@@ -40,7 +44,7 @@ export default function Project({ project }: Props) {
                         project.direction
                             ? "md:justify-end"
                             : "md:justify-start"
-                    } w-full gap-4 justify-center`}
+                    } w-full gap-2 justify-center`}
                 >
                     {project.technologies.map(
                         (technology: { name: string }, index: number) => (
@@ -95,17 +99,15 @@ export default function Project({ project }: Props) {
                     </a>
                 </div>
             </div>
-            <div className="items-center justify-center hidden w-1/2 md:flex lg:w-1/3">
-                <Image
-                    src={urlFor(project.image).url()}
-                    alt={project.name}
-                    width={500}
-                    height={300}
-                    className={`bg-center bg-cover bg-no-repeat rounded-2xl opacity-90 lg:shadow-[${
-                        project.direction ? "" : "-"
-                    }20px_20px_0px_0px_#E94560] scale-100 lg:scale-115 lg:shadow-accent w-full h-full`}
-                />
-            </div>
+            <Image
+                src={urlFor(project.image).url()}
+                alt={project.name}
+                width={1000}
+                height={600}
+                className={`object-center object-cover hidden md:block w-[40%] bg-no-repeat rounded-2xl opacity-90 lg:shadow-[${
+                    project.direction ? "" : "-"
+                }20px_20px_0px_0px_#E94560] scale-100 lg:shadow-accent h-full`}
+            />
         </motion.div>
     );
 }
