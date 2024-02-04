@@ -1,21 +1,19 @@
 import GradientBackground from "@/components/gradient-background";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServerClientReadOnly } from "@/lib/supabase/server";
 import { Button } from "@nextui-org/button";
 import { Github, LogOut, Mailbox, Rocket } from "lucide-react";
-import { getUserSession } from "@/app/(auth)/auth/actions";
 
 type Props = {};
 
 async function Hero({}: Props) {
     // TEMPORARY
-    const { data } = await getUserSession();
 
     const handleSignout = async (e: FormData) => {
         "use server";
 
         console.log("signing out");
 
-        const supabase = await createSupabaseServerClient();
+        const supabase = await createSupabaseServerClientReadOnly();
 
         const { error } = await supabase.auth.signOut();
 
@@ -48,7 +46,7 @@ async function Hero({}: Props) {
                 currently studying IT at ZS14 in Warsaw and working with React,
                 Next.js, TypeScript, TailwindCSS, and more.
             </p>
-            <div className="flex items-center justify-center gap-4">
+            <div className="flex flex-wrap items-center justify-center gap-4">
                 <Button
                     size="lg"
                     variant="bordered"
@@ -74,20 +72,6 @@ async function Hero({}: Props) {
                 >
                     Contact me
                 </Button>
-                {/* sign out button */}
-                {data.session?.user && (
-                    <form action={handleSignout}>
-                        <Button
-                            size="lg"
-                            type="submit"
-                            variant="shadow"
-                            color="primary"
-                            startContent={<LogOut />}
-                        >
-                            Sign out
-                        </Button>
-                    </form>
-                )}
             </div>
         </GradientBackground>
     );
