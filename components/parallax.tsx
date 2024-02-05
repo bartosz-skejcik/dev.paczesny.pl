@@ -23,9 +23,9 @@ export const Parallax = ({
         description: string;
     };
 }) => {
-    const firstRow = items.slice(0, 5);
-    const secondRow = items.slice(5, 10);
-    const thirdRow = items.slice(10, 15);
+    const firstRow = items.slice(0, 4);
+    const secondRow = items.slice(4, 9);
+    const thirdRow = items.slice(9, 14);
     const ref = React.useRef(null);
     const { scrollYProgress } = useScroll({
         target: ref,
@@ -35,11 +35,11 @@ export const Parallax = ({
     const springConfig = { stiffness: 300, damping: 30, bounce: 100 };
 
     const translateX = useSpring(
-        useTransform(scrollYProgress, [0, 1], [0, 600]),
+        useTransform(scrollYProgress, [0, 2], [0, 700]),
         springConfig
     );
     const translateXReverse = useSpring(
-        useTransform(scrollYProgress, [0, 1], [0, -500]),
+        useTransform(scrollYProgress, [0, 2], [0, -500]),
         springConfig
     );
     const rotateX = useSpring(
@@ -55,13 +55,13 @@ export const Parallax = ({
         springConfig
     );
     const translateY = useSpring(
-        useTransform(scrollYProgress, [0, 0.3], [-700, 500]),
+        useTransform(scrollYProgress, [0, 0.3], [-500, 500]),
         springConfig
     );
     return (
         <div
             ref={ref}
-            className="h-[300vh] 2xl:py-56 py-20 overflow-hidden antialiased relative flex flex-col self-auto [perspective:1000px] [transform-style:preserve-3d]"
+            className="h-[100rem] md:h-[155rem] 2xl:h-[175rem] 2xl:py-56 py-20 overflow-hidden antialiased relative flex flex-col self-auto [perspective:1000px] [transform-style:preserve-3d]"
         >
             <Header {...header} />
             <motion.div
@@ -73,7 +73,7 @@ export const Parallax = ({
                 }}
                 className=""
             >
-                <motion.div className="flex flex-row-reverse space-x-reverse space-x-20 mb-20">
+                <motion.div className="flex flex-row-reverse space-x-reverse xl:gap-20 gap-10 xl:mb-20 mb-10">
                     {firstRow.map((project) => (
                         <ProjectCard
                             project={project}
@@ -82,7 +82,7 @@ export const Parallax = ({
                         />
                     ))}
                 </motion.div>
-                <motion.div className="flex flex-row mb-20 space-x-20 ">
+                <motion.div className="flex flex-row xl:mb-20 mb-10 xl:gap-20 gap-10">
                     {secondRow.map((project) => (
                         <ProjectCard
                             project={project}
@@ -91,7 +91,7 @@ export const Parallax = ({
                         />
                     ))}
                 </motion.div>
-                <motion.div className="flex flex-row-reverse space-x-reverse space-x-20">
+                <motion.div className="flex flex-row-reverse space-x-reverse xl:gap-20 gap-10">
                     {thirdRow.map((project) => (
                         <ProjectCard
                             project={project}
@@ -145,7 +145,7 @@ export const ProjectCard = ({
                 y: -20,
             }}
             key={project.title}
-            className="group/project h-96 w-[30rem] relative flex-shrink-0 rounded-xl overflow-hidden"
+            className="group/project w-56 h-44 xl:h-96 xl:w-[30rem] relative flex-shrink-0 rounded-xl overflow-hidden"
         >
             <Link
                 href={`/projects/${project.id}`}
@@ -161,9 +161,13 @@ export const ProjectCard = ({
             </Link>
             <div className="absolute inset-0 h-full w-full opacity-0 group-hover/project:opacity-80 bg-black pointer-events-none"></div>
             <div className="absolute bottom-4 left-4 opacity-0 group-hover/project:opacity-100 text-white flex flex-col items-start gap-2 justify-end">
-                <h4 className="text-xl font-semibold">{project.title}</h4>
-                <p>{project.short_description}</p>
-                <div className="flex flex-wrap items-center justify-start gap-1.5">
+                <h4 className="text-sm lg:text-xl font-semibold">
+                    {project.title}
+                </h4>
+                <p className="lg:text-base text-xs">
+                    {project.short_description}
+                </p>
+                <div className="hidden md:flex flex-wrap items-center justify-start gap-1.5">
                     {project.stack.map((item, idx) => {
                         return (
                             <Chip key={idx} variant="flat" color="danger">
