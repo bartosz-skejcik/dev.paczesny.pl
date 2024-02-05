@@ -8,5 +8,9 @@ export const siteConfig = {
     links: {
         login: "/auth",
         dashboard: "/dashboard",
+        order: {
+            default: "/order",
+            buy: "/order#buy",
+        },
     },
 };
