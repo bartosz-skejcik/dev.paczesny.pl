@@ -1,7 +1,7 @@
 import GradientBackground from "@/components/gradient-background";
 import { createSupabaseServerClientReadOnly } from "@/lib/supabase/server";
 import { Button } from "@nextui-org/button";
-import { Github, LogOut, Mailbox, Rocket } from "lucide-react";
+import { Github, Mailbox, Rocket } from "lucide-react";
 
 type Props = {};
 
