@@ -33,6 +33,8 @@ function AuthPage({}: Props) {
             },
         });
 
+        console.log(data);
+
         // handle popups here
         if (error) console.log(error);
     }
