@@ -50,11 +50,11 @@ export const dashboardConfig: DashboardConfig = {
             {
                 label: "Messages",
                 href: "/dashboard/messages",
-                icon: <Banknote />,
+                icon: <MessagesSquare />,
             },
             {
                 label: "Website CMS",
-                icon: <MessagesSquare />,
+                icon: <Database />,
                 items: [
                     {
                         label: "Projects",

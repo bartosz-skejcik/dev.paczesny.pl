@@ -1,5 +1,6 @@
 "use server";
 
+import { Profile } from "@/types/user";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
@@ -39,4 +40,17 @@ export async function createSupabaseServerClient() {
             },
         }
     );
+}
+
+export async function getUserProfile(email: string) {
+    const supabase = await createSupabaseServerClientReadOnly();
+    const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("email", email)
+        .single();
+    if (error) {
+        throw error;
+    }
+    return data as Profile;
 }

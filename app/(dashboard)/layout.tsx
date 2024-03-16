@@ -25,7 +25,7 @@ export default function RootLayout({
             <body
                 className={
                     poppins.className +
-                    "flex items-center justify-center min-h-screen"
+                    "flex items-center justify-center min-h-screen overflow-hidden"
                 }
             >
                 <Providers
@@ -34,8 +34,10 @@ export default function RootLayout({
                     enableSystem
                     disableTransitionOnChange={false}
                 >
-                    <Sidebar />
-                    {children}
+                    <section className="flex flex-row items-center justify-evenly min-h-screen w-full">
+                        <Sidebar />
+                        {children}
+                    </section>
                 </Providers>
             </body>
         </html>
