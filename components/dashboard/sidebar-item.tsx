@@ -15,7 +15,6 @@ export function SidebarItem({
     href: string;
     variant?: "slim" | "default";
 }) {
-    console.log(label, variant);
     return (
         <Link
             className={`px-2 block w-full ${variant == "slim" ? "pl-8" : ""}`}
