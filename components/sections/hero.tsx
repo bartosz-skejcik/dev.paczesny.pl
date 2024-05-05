@@ -1,7 +1,10 @@
 import GradientBackground from "@/components/gradient-background";
+import { siteConfig } from "@/config/site";
 import { createSupabaseServerClientReadOnly } from "@/lib/supabase/server";
 import { Button } from "@nextui-org/button";
 import { Github, Mailbox, Rocket } from "lucide-react";
+import posthog from "posthog-js";
+import Buttons from "./hero/buttons";
 
 type Props = {};
 
@@ -46,33 +49,7 @@ async function Hero({}: Props) {
                 currently studying IT at ZS14 in Warsaw and working with React,
                 Next.js, TypeScript, TailwindCSS, and more.
             </p>
-            <div className="flex flex-wrap items-center justify-center gap-4">
-                <Button
-                    size="lg"
-                    variant="bordered"
-                    color="secondary"
-                    startContent={<Github />}
-                >
-                    Github
-                </Button>
-                <Button
-                    size="lg"
-                    className="m-2"
-                    variant="shadow"
-                    color="warning"
-                    startContent={<Rocket />}
-                >
-                    My projects
-                </Button>
-                <Button
-                    size="lg"
-                    variant="bordered"
-                    color="danger"
-                    startContent={<Mailbox />}
-                >
-                    Contact me
-                </Button>
-            </div>
+            <Buttons />
         </GradientBackground>
     );
 }

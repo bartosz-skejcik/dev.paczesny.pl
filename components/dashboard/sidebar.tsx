@@ -9,6 +9,7 @@ import {
     SidebarItem,
 } from "@/components/dashboard/sidebar-item";
 import { Button } from "@nextui-org/button";
+
 type Props = {};
 
 async function Sidebar({}: Props) {

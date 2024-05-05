@@ -5,6 +5,11 @@ export const siteConfig = {
         { name: "About me", href: "/about" },
         { name: "Order", href: "/order" },
     ],
+    hero: {
+        github: "https://github.com/bartosz-skejcik",
+        projects: "/projects",
+        contact: "mailto:bartek@paczesny.pl",
+    },
     links: {
         login: "/auth",
         dashboard: "/dashboard",
