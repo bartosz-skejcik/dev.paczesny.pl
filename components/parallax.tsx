@@ -168,10 +168,10 @@ export const ProjectCard = ({
                     {project.short_description}
                 </p>
                 <div className="hidden md:flex flex-wrap items-center justify-start gap-1.5">
-                    {project.stack.map((item, idx) => {
+                    {project.skills.map((skill, idx) => {
                         return (
                             <Chip key={idx} variant="flat" color="danger">
-                                {item}
+                                {skill.name}
                             </Chip>
                         );
                     })}

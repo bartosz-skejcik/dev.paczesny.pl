@@ -3,9 +3,8 @@ export interface Project {
     title: string;
     short_description: string;
     full_description: string;
-    stack: string[];
+    skills: { name: string }[];
     link: string;
     github?: string;
     thumbnail: string;
-    images?: string[];
 }
