@@ -19,7 +19,7 @@ function ProjectTile({ project, setSelectedProject, setOpen }: Props) {
     const [trashHovered, setTrashHovered] = useState(false);
     const [editHovered, setEditHovered] = useState(false);
     return (
-        <Card className="bg-foreground-300/60 dark:bg-default-900/50 w-[60%]">
+        <Card className="bg-foreground-300/60 dark:bg-foreground-100/70 w-[60%]">
             <CardBody className="overflow-hidden h-auto flex items-center justify-center flex-1">
                 <div className="flex gap-6 md:gap-4 items-center justify-center">
                     <div className="relative w-1/4">
