@@ -16,6 +16,7 @@ export function Providers({ children, ...props }: ThemeProviderProps) {
 
     if (typeof window !== "undefined") {
         posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY!, {
+            ui_host: "https://eu.posthog.com",
             api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST,
         });
     }
