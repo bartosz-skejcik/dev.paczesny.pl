@@ -32,9 +32,9 @@ async function Sidebar({}: Props) {
 
     return (
         <form action={handleSignout} className="w-1/6 h-screen ">
-            <aside className="w-full h-full dark:bg-white/5 bg-black/5 p-4 flex flex-col items-center justify-between">
+            <aside className="w-full h-full dark:bg-white/5 bg-black/5 p-4 flex flex-col items-center justify-between border-r border-foreground-200">
                 <div className="flex flex-col w-full flex-1 items-start justify-start">
-                    {profile.role === "admin"
+                    {profile.user_roles?.role === "admin"
                         ? dashboardConfig.sidebar.admin.map((item, idx) => {
                               return item.href ? (
                                   <SidebarItem
