@@ -15,7 +15,7 @@ export default async function Education({}: Props) {
             </h6>
             <h1 className="text-5xl font-semibold mb-16">My road so far</h1>
             <div className="grid xl:grid-cols-2 grid-cols-1 xl:grid-rows-2 gap-10 w-2/3 2xl:h-[40vh]">
-                {education.map((el, idx) => (
+                {education.slice(0, 4).map((el, idx) => (
                     <Block
                         key={"education" + idx}
                         title={el.title}
@@ -68,7 +68,7 @@ const Block = ({
                     </p>
                 )}
                 <div className="flex flex-wrap gap-2 relative z-50 pt-3">
-                    {stack?.split(", ").map((el: string, idx: number) => (
+                    {stack!.split(", ").map((el: string, idx: number) => (
                         <Chip key={idx} color="warning" variant="flat">
                             {el}
                         </Chip>
