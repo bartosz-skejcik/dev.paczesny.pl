@@ -1,7 +1,7 @@
 ## Things to implement for MVP:
 
 -   [ ] Project page with an id `[slug].tsx`
--   [ ] Education CMS
+-   [x] Education CMS
 -   [ ] Education Page
 -   [ ] Finish the Landing Page
 -   [ ] Site Analytics -> Display them in the dashboard

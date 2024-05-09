@@ -211,3 +211,53 @@ export async function deleteSkill(skill_id: string) {
     }
     return skillData;
 }
+
+export async function getEducation() {
+    const supabase = await createSupabaseServerClientReadOnly();
+    const { data, error } = await supabase.from("education").select("*");
+    if (error) {
+        throw error;
+    }
+    return data;
+}
+
+export async function updateEducation(education: any) {
+    const supabase = await createSupabaseServerClient();
+    const { data, error } = await supabase
+        .from("education")
+        .update(education)
+        .eq("id", education.id)
+        .select()
+        .single();
+    if (error) {
+        throw error;
+    }
+    return data;
+}
+
+export async function createEducation(education: any) {
+    const supabase = await createSupabaseServerClient();
+    const { data, error } = await supabase
+        .from("education")
+        .insert(education)
+        .select()
+        .single();
+    if (error) {
+        throw error;
+    }
+    return data;
+}
+
+export async function deleteEducation(education_id: string) {
+    const supabase = await createSupabaseServerClient();
+    const { data, error } = await supabase
+        .from("education")
+        .delete()
+        .eq("id", education_id)
+        .select()
+        .single();
+    if (error) {
+        throw error;
+    }
+    return data;
+}

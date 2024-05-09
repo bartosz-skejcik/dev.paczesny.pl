@@ -1,42 +1,13 @@
 import Meteors from "@/components/meteors";
+import { getEducation } from "@/lib/supabase/server";
 import { Chip } from "@nextui-org/react";
 import { CalendarDays, Timer } from "lucide-react";
 
 type Props = {};
 
-const education = [
-    {
-        title: "Proffesion Exam",
-        text: "Zespół Szkół nr 14, Warsaw",
-        description: "INF. 02",
-        stack: ["pract. 100%", "theory 86%"],
-        // duration: "",
-        date: "2022-06",
-    },
-    {
-        title: "Code Internship",
-        text: "Devapo",
-        stack: ["React", "Jest", "Git"],
-        duration: "1 month",
-        date: "2022-05",
-    },
-    {
-        title: "Code Internship",
-        text: "Bearly.io",
-        stack: ["Nuxt", "SCSS", "Git"],
-        duration: "1 month",
-        date: "2023-05",
-    },
-    {
-        title: "Job: Frontend Developer",
-        text: "FanthStudios",
-        stack: ["Next", "Nuxt", "TailwindCSS", "TypeScript", "Git"],
-        duration: "currently, 2nd year",
-        date: "2022-05",
-    },
-];
-
-export default function Education({}: Props) {
+export default async function Education({}: Props) {
+    const education = await getEducation();
+    if (!education) return null;
     return (
         <section className="w-full flex flex-col items-center justify-center py-14 xl:py-28">
             <h6 className="uppercase text-amber-500 font-medium text-base mb-3">
@@ -48,11 +19,12 @@ export default function Education({}: Props) {
                     <Block
                         key={"education" + idx}
                         title={el.title}
-                        text={el.text}
-                        description={el.description}
-                        stack={el.stack}
-                        duration={el.duration}
-                        date={el.date}
+                        text={el.text!}
+                        description={el.description!}
+                        // @ts-ignore
+                        stack={el.stack!}
+                        duration={el.duration!}
+                        date={el.date!}
                     />
                 ))}
             </div>
@@ -96,7 +68,7 @@ const Block = ({
                     </p>
                 )}
                 <div className="flex flex-wrap gap-2 relative z-50 pt-3">
-                    {stack?.map((el, idx) => (
+                    {stack?.split(", ").map((el: string, idx: number) => (
                         <Chip key={idx} color="warning" variant="flat">
                             {el}
                         </Chip>
