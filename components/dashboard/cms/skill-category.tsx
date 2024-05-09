@@ -48,7 +48,7 @@ function SkillCategory({ category, skills, setSkills }: Props) {
                     setSelectedSkill(undefined);
                 }}
             />
-            <div className="py-3 px-6 flex items-center justify-between w-full">
+            <div className="py-3 px-6 flex items-center justify-between w-full border-y border-foreground-100 bg-foreground-50 mb-5">
                 <h3 className="text-xl">{category}</h3>
                 <Button
                     color="warning"
@@ -65,7 +65,7 @@ function SkillCategory({ category, skills, setSkills }: Props) {
                     Add skill
                 </Button>
             </div>
-            <div className="flex items-start justify-start flex-wrap gap-6 w-full px-6 pb-6 pt-3">
+            <div className="flex items-start justify-start flex-wrap gap-6 w-full px-6 pb-6 pt-3 mb-5">
                 {skills.map((skill) => (
                     <SkillTile
                         key={skill.id}

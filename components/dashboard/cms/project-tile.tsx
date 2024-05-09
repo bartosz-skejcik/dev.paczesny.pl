@@ -19,13 +19,13 @@ function ProjectTile({ project, setSelectedProject, setOpen }: Props) {
     const [trashHovered, setTrashHovered] = useState(false);
     const [editHovered, setEditHovered] = useState(false);
     return (
-        <Card className="bg-foreground-300/60 dark:bg-foreground-100/70 w-[60%]">
+        <Card className="bg-foreground-300/60 dark:bg-foreground-100/70 w-4/5 3xl:w-[60%]">
             <CardBody className="overflow-hidden h-auto flex items-center justify-center flex-1">
                 <div className="flex gap-6 md:gap-4 items-center justify-center">
-                    <div className="relative w-1/4">
+                    <div className="relative w-1/4 h-full flex-shrink-0">
                         <Image
                             alt="Album cover"
-                            className="object-cover aspect-video"
+                            className="object-cover aspect-video h-full"
                             shadow="md"
                             src={project.thumbnail ?? ""}
                             height="100%"
@@ -33,7 +33,7 @@ function ProjectTile({ project, setSelectedProject, setOpen }: Props) {
                     </div>
 
                     <div className="relative flex flex-col justify-between w-full flex-1 gap-1 h-full">
-                        <div className="flex items-start justify-between w-full">
+                        <div className="flex items-start justify-between flex-grow">
                             <div>
                                 <h1 className="text-2xl font-bold text-foreground-800">
                                     {project.title}
