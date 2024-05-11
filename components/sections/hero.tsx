@@ -3,7 +3,6 @@ import { siteConfig } from "@/config/site";
 import { createSupabaseServerClientReadOnly } from "@/lib/supabase/server";
 import { Button } from "@nextui-org/button";
 import { Github, Mailbox, Rocket } from "lucide-react";
-import posthog from "posthog-js";
 import Buttons from "./hero/buttons";
 
 type Props = {};
