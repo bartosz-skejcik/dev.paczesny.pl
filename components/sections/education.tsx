@@ -21,8 +21,7 @@ export default async function Education({}: Props) {
                         title={el.title}
                         text={el.text!}
                         description={el.description!}
-                        // @ts-ignore
-                        stack={el.stack!}
+                        stack={el.stack}
                         duration={el.duration!}
                         date={el.date!}
                     />
@@ -36,7 +35,7 @@ type BlockProps = {
     title: string;
     text: string;
     description?: string;
-    stack?: string[];
+    stack?: string;
     duration?: string;
     date: string;
 };
@@ -67,13 +66,15 @@ const Block = ({
                         <br />
                     </p>
                 )}
-                <div className="flex flex-wrap gap-2 relative z-50 pt-3">
-                    {stack!.split(", ").map((el: string, idx: number) => (
-                        <Chip key={idx} color="warning" variant="flat">
-                            {el}
-                        </Chip>
-                    ))}
-                </div>
+                {stack && stack?.length > 0 && stack !== "[]" && (
+                    <div className="flex flex-wrap gap-2 relative z-50 pt-3">
+                        {stack.split(", ").map((el: string, idx: number) => (
+                            <Chip key={idx} color="warning" variant="flat">
+                                {el}
+                            </Chip>
+                        ))}
+                    </div>
+                )}
 
                 <div className="flex flex-wrap gap-3 relative z-50 pt-3">
                     {duration && (

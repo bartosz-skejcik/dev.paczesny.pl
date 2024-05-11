@@ -1,8 +1,9 @@
-import Services from "@/components/sections/services";
+// import Services from "@/components/sections/services";
+// import Cta from "@/components/sections/cta";
 import Education from "@/components/sections/education";
 import Hero from "@/components/sections/hero";
 import Projects from "@/components/sections/projects";
-import Cta from "@/components/sections/cta";
+import Skills from "@/components/sections/skills";
 
 export default async function Home() {
     return (
@@ -10,8 +11,9 @@ export default async function Home() {
             <Hero />
             <Education />
             <Projects />
-            <Services />
-            <Cta />
+            <Skills />
+            {/* <Services /> */}
+            {/* <Cta /> */}
         </section>
     );
 }

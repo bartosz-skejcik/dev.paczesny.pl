@@ -21,6 +21,7 @@
         "@nextui-org/react": "^2.2.9",
         "@nextui-org/select": "^2.1.27",
         "@nextui-org/system": "^2.1.2",
+        "@nextui-org/tabs": "^2.0.29",
         "@nextui-org/theme": "^2.2.3",
         "@react-aria/ssr": "^3.9.1",
         "@react-aria/visually-hidden": "^3.8.8",

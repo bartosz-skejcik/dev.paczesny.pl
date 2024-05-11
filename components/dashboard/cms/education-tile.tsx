@@ -83,16 +83,22 @@ function EducationTile({
                         </p>
                     )}
 
-                    <div className="flex flex-wrap gap-2 relative z-50 pt-3">
-                        {education
-                            // @ts-ignore
-                            .stack!.split(", ")
-                            .map((el: string, idx: number) => (
-                                <Chip key={idx} color="warning" variant="flat">
-                                    {el}
-                                </Chip>
-                            ))}
-                    </div>
+                    {education.stack !== ("" || "[]") &&
+                        education.stack.length > 0 && (
+                            <div className="flex flex-wrap gap-2 relative z-50 pt-3">
+                                {education
+                                    .stack!.split(", ")
+                                    .map((el: string, idx: number) => (
+                                        <Chip
+                                            key={idx}
+                                            color="warning"
+                                            variant="flat"
+                                        >
+                                            {el}
+                                        </Chip>
+                                    ))}
+                            </div>
+                        )}
 
                     <div className="flex flex-wrap gap-3 relative z-50 pt-3">
                         {education.duration && (

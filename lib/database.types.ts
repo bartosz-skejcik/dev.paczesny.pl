@@ -163,7 +163,7 @@ export type Database = {
           description: string | null
           duration: string | null
           id: string
-          stack: Json | null
+          stack: string
           text: string | null
           title: string
         }
@@ -172,7 +172,7 @@ export type Database = {
           description?: string | null
           duration?: string | null
           id?: string
-          stack?: Json | null
+          stack: string
           text?: string | null
           title: string
         }
@@ -181,41 +181,11 @@ export type Database = {
           description?: string | null
           duration?: string | null
           id?: string
-          stack?: Json | null
+          stack?: string
           text?: string | null
           title?: string
         }
         Relationships: []
-      }
-      education_skills: {
-        Row: {
-          education_id: string
-          skill_id: string
-        }
-        Insert: {
-          education_id: string
-          skill_id: string
-        }
-        Update: {
-          education_id?: string
-          skill_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "education_skills_education_id_fkey"
-            columns: ["education_id"]
-            isOneToOne: false
-            referencedRelation: "education"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "education_skills_skill_id_fkey"
-            columns: ["skill_id"]
-            isOneToOne: false
-            referencedRelation: "skills"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       notifications: {
         Row: {
@@ -397,36 +367,6 @@ export type Database = {
           },
         ]
       }
-      project_skills: {
-        Row: {
-          project_id: string
-          skill_id: string
-        }
-        Insert: {
-          project_id: string
-          skill_id: string
-        }
-        Update: {
-          project_id?: string
-          skill_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "project_skills_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "project_skills_skill_id_fkey"
-            columns: ["skill_id"]
-            isOneToOne: false
-            referencedRelation: "skills"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       projects: {
         Row: {
           full_description: string | null
@@ -434,7 +374,6 @@ export type Database = {
           id: string
           link: string | null
           short_description: string | null
-          stack: Json | null
           thumbnail: string | null
           title: string
         }
@@ -444,7 +383,6 @@ export type Database = {
           id?: string
           link?: string | null
           short_description?: string | null
-          stack?: Json | null
           thumbnail?: string | null
           title: string
         }
@@ -454,7 +392,6 @@ export type Database = {
           id?: string
           link?: string | null
           short_description?: string | null
-          stack?: Json | null
           thumbnail?: string | null
           title?: string
         }
@@ -541,6 +478,36 @@ export type Database = {
           name?: string
         }
         Relationships: []
+      }
+      stack: {
+        Row: {
+          project_id: string
+          skill_id: string
+        }
+        Insert: {
+          project_id: string
+          skill_id: string
+        }
+        Update: {
+          project_id?: string
+          skill_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "public_stack_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "public_stack_skill_id_fkey"
+            columns: ["skill_id"]
+            isOneToOne: false
+            referencedRelation: "skills"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
