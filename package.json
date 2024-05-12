@@ -10,6 +10,7 @@
     },
     "dependencies": {
         "@internationalized/date": "^3.5.3",
+        "@next/third-parties": "^14.2.3",
         "@nextui-org/accordion": "^2.0.28",
         "@nextui-org/button": "^2.0.26",
         "@nextui-org/chip": "^2.0.28",
@@ -31,7 +32,7 @@
         "clsx": "^2.1.0",
         "framer-motion": "^11.0.3",
         "lucide-react": "^0.316.0",
-        "next": "14.1.3",
+        "next": "14.2.3",
         "next-themes": "^0.2.1",
         "react": "^18.2.0",
         "react-dom": "^18.2.0",

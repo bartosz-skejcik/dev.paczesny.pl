@@ -5,6 +5,8 @@ import { Button } from "@nextui-org/button";
 import { Github, Mailbox, Rocket } from "lucide-react";
 import React from "react";
 
+import { sendGAEvent } from "@next/third-parties/google";
+
 type Props = {};
 
 function Buttons({}: Props) {
@@ -16,6 +18,7 @@ function Buttons({}: Props) {
                 color="secondary"
                 startContent={<Github />}
                 href={siteConfig.hero.github}
+                onClick={() => sendGAEvent("hero", "click", "github")}
             >
                 Github
             </Button>
@@ -25,6 +28,7 @@ function Buttons({}: Props) {
                 variant="shadow"
                 color="warning"
                 startContent={<Rocket />}
+                onClick={() => sendGAEvent("hero", "click", "projects")}
                 href={siteConfig.hero.projects}
             >
                 My projects
@@ -34,6 +38,7 @@ function Buttons({}: Props) {
                 variant="bordered"
                 color="danger"
                 startContent={<Mailbox />}
+                onClick={() => sendGAEvent("hero", "click", "contact")}
                 href={siteConfig.hero.contact}
             >
                 Contact me
