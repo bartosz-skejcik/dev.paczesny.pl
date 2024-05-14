@@ -42,12 +42,13 @@ function EducationModal({
     setSelectedEducation,
 }: Props) {
     const [formData, setFormData] = useState<Tables<"education">>({
+        id: "",
         title: "",
         text: "",
         description: "",
         duration: "",
         date: "",
-        stack: [""],
+        stack: "",
     } as Tables<"education">);
 
     useEffect(() => {

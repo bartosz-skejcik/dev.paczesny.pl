@@ -43,6 +43,7 @@ function ProjectModal({
     setSelectedProject,
 }: Props) {
     const [formData, setFormData] = useState<Tables<"projects">>({
+        id: "",
         title: "",
         short_description: "",
         full_description: "",
@@ -67,6 +68,7 @@ function ProjectModal({
             } as Tables<"projects">);
         } else {
             setFormData({
+                id: "",
                 title: "",
                 short_description: "",
                 full_description: "",
@@ -209,6 +211,7 @@ function ProjectModal({
                                     onChange={(e) => {
                                         setFormData({
                                             ...formData,
+                                            // @ts-ignore
                                             stack: e.target.value.split(","),
                                         });
                                     }}
