@@ -29,7 +29,7 @@ function AuthPage({}: Props) {
         const { data, error } = await supabase.auth.signInWithOAuth({
             provider: "github",
             options: {
-                redirectTo: "http://localhost:3000/auth/callback",
+                redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`,
             },
         });
 
