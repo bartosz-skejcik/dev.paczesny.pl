@@ -6,7 +6,7 @@ import { ThemeProvider as NextThemesProvider } from "next-themes";
 import { type ThemeProviderProps } from "next-themes/dist/types";
 
 import Script from "next/script";
-import { GoogleAnalytics, GoogleTagManager } from "@next/third-parties/google";
+import { GoogleAnalytics } from "@next/third-parties/google";
 import { Analytics } from "@vercel/analytics/react";
 
 import { NextUIProvider } from "@nextui-org/react";
@@ -20,10 +20,7 @@ export function Providers({ children, ...props }: ThemeProviderProps) {
         <NextUIProvider navigate={router.push}>
             <NextThemesProvider {...props}>
                 <Analytics />
-                <GoogleTagManager gtmId="GT-P8Q25N2X" />
-                {/* <GoogleAnalytics
-                    gaId={gaId}
-                /> */}
+                <GoogleAnalytics gaId={gaId} />
                 {children}
             </NextThemesProvider>
         </NextUIProvider>
