@@ -68,7 +68,7 @@ function Tabs({ skills }: Props) {
                     </Button>
                 ))}
             </TabHeader>
-            {activeCategory.length > 0 && (
+            {activeCategory && activeCategory.length > 0 && (
                 <div className="flex-1 col-span-3 w-full flex flex-col items-center justify-start rounded-lg overflow-hidden bg-foreground-50/50 h-full">
                     <div className="w-full py-3 px-5 flex items-center gap-x-5 justify-start text-xl font-semibold bg-foreground-100">
                         <h3 className="capitalize">
