@@ -10,7 +10,7 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { Project } from "@/types/project";
-import { Chip } from "@nextui-org/react";
+import { Chip } from "@nextui-org/chip";
 
 export const Parallax = ({
     items,

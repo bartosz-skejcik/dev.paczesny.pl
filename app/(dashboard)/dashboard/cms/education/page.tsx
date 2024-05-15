@@ -2,7 +2,7 @@
 
 import Header from "@/components/dashboard/cms/header";
 import { getEducation } from "@/lib/supabase/server";
-import { useDisclosure } from "@nextui-org/react";
+import { useDisclosure } from "@nextui-org/modal";
 import { useEffect, useState } from "react";
 
 import { Tables } from "@/lib/database.types";
