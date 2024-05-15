@@ -12,7 +12,6 @@ import {
     TableCell,
 } from "@nextui-org/react";
 import { FullscreenIcon } from "lucide-react";
-import { useEffect } from "react";
 import ReactCountryFlag from "react-country-flag";
 import { getCode } from "country-list";
 
@@ -32,7 +31,7 @@ const parseNumber = (value: string) => {
 
 function SingleMetricStatistic({ title, data }: Props) {
     // sum up all metric values from each metricValues
-    const totalMetricValue = data.reduce(
+    const totalMetricValue = data?.reduce(
         (acc: number, row: any) =>
             Number(acc) + Number(row.metricValues[0].value),
         0
