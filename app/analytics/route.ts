@@ -20,10 +20,10 @@ const { BetaAnalyticsDataClient } = require("@google-analytics/data");
 // specified in GOOGLE_APPLICATION_CREDENTIALS environment variable.
 const analyticsDataClient = new BetaAnalyticsDataClient({
     credentals: {
-        client_email: process.env.NEXT_PUBLIC_GA_CLIENT_EMAIL || "",
-        private_key: process.env.NEXT_PUBLIC_GA_PRIVATE_KEY || "",
+        client_email: process.env.NEXT_PUBLIC_GA_CLIENT_EMAIL!,
+        private_key: process.env.NEXT_PUBLIC_GA_PRIVATE_KEY!,
     },
-    projectId: process.env.NEXT_PUBLIC_GA_PROJECT_ID || "",
+    projectId: process.env.NEXT_PUBLIC_GA_PROJECT_ID!,
 });
 
 const metricFunctions: any = {
