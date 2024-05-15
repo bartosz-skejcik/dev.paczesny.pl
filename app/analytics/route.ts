@@ -63,7 +63,19 @@ export async function GET(request: Request) {
         });
     }
 
-    const result = await runReport(metric);
+    try {
+        const result = await runReport(metric);
 
-    return NextResponse.json(result);
+        return NextResponse.json(result);
+    } catch (e: any) {
+        console.error(e);
+        console.log(
+            process.env.NEXT_PUBLIC_GA_CLIENT_EMAIL,
+            process.env.NEXT_PUBLIC_GA_PRIVATE_KEY,
+            process.env.NEXT_PUBLIC_GA_PROJECT_ID
+        );
+        return NextResponse.json({
+            error: e.message,
+        });
+    }
 }
