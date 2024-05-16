@@ -10,29 +10,16 @@ import {
     CartesianGrid,
 } from "recharts";
 
-type Props = {
-    data:
-        | {
-              name: string;
-              views: number | null;
-              date: Date;
-          }[]
-        | {
-              name: string;
-              visitors: number | null;
-              date: Date;
-          }[];
-};
-
 const populateTheRestOfDataIfLengthIsLessThanSeven = (
     data: {
         name: string;
-        views: number | null;
-        visitors: number | null;
+        views: number;
+        visitors: number;
         date: Date;
-    }[]
+    }[],
+    metricParam: string
 ) => {
-    if (data.length < 7) {
+    if (data.length < 7 && data.length > 0) {
         const firstDate = data[0].date;
         for (let i = 0; i < 7 - data.length; i++) {
             data.unshift({
@@ -54,12 +41,33 @@ const populateTheRestOfDataIfLengthIsLessThanSeven = (
     return data;
 };
 
-function Chart({ data }: Props) {
+type Props = {
+    data:
+        | (
+              | {
+                    name: string;
+                    views: number;
+                    date: Date;
+                }
+              | {
+                    name: string;
+                    visitors: number;
+                    date: Date;
+                }
+          )[]
+        | undefined;
+    metricParam: string;
+};
+
+function Chart({ data, metricParam }: Props) {
     return (
         <AreaChart
             width={1500}
             height={450}
-            data={populateTheRestOfDataIfLengthIsLessThanSeven(data as any)}
+            data={populateTheRestOfDataIfLengthIsLessThanSeven(
+                data as any,
+                metricParam
+            )}
         >
             <CartesianGrid
                 strokeDasharray="0"
@@ -68,7 +76,7 @@ function Chart({ data }: Props) {
             />
             <Area
                 isAnimationActive={false}
-                dataKey={(d) => (d.views !== null ? d.views : d.visitors)}
+                dataKey={metricParam == "visitorsByDate" ? "visitors" : "views"}
                 stroke="#0070f3"
                 strokeWidth={2}
                 fill="rgba(0, 112, 243, 0.4)"

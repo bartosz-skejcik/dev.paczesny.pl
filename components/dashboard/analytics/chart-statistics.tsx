@@ -1,73 +1,60 @@
+"use client";
+
 import { Card, CardBody, CardHeader } from "@nextui-org/card";
 import Chart from "./chart";
-import { GAApiResponse } from "@/types/ga-response";
-import { headers } from "next/headers";
 import SmallStatFiles from "./small-stat-files";
+import { useMutation } from "@tanstack/react-query";
+import { fetchChartData } from "@/app/(dashboard)/dashboard/analytics/actions";
+import { useEffect, useState } from "react";
 
 type Props = {};
 
-const getChartData = async (metric: string) => {
-    const res = await fetch(
-        `${process.env.NEXT_PUBLIC_SITE_URL}/analytics?metric=${metric}`,
-        {
-            cache: "force-cache",
-        }
-    );
-    const data: GAApiResponse = await res.json();
+function ChartStatistics({}: Props) {
+    const [metricParam, setMetricParam] = useState<string>("visitorsByDate");
 
-    // convert this to the format that the chart component expects
-    // here is and example:
-    // const data = [{name: 'Page A', uv: 400, pv: 2400, amt: 2400}, ...];
-
-    const chartData = data.map((row) => {
-        // dimensionValue is a string in the format "YYYYMMDDHHMM", example: 202405142210
-        // we need to convert it to a date object
-        const date = new Date(
-            Number(row.dimensionValues[0].value.slice(0, 4)),
-            Number(row.dimensionValues[0].value.slice(4, 6)),
-            Number(row.dimensionValues[0].value.slice(6, 8)),
-            Number(row.dimensionValues[0].value.slice(8, 10)),
-            Number(row.dimensionValues[0].value.slice(10, 12))
-        );
-
-        return {
-            name: date
-                .toLocaleString("en-PL", {
-                    month: "short",
-                    day: "2-digit",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                })
-                .replace(",", ""),
-            views: Number(row.metricValues[0].value),
-            date: date,
-        };
+    const {
+        data,
+        isPending,
+        isError,
+        mutate: server_fetchChartData,
+    } = useMutation({
+        mutationFn: fetchChartData,
+        onError: (error) => {
+            console.error("Failed to fetch data", error);
+        },
     });
 
-    return chartData;
-};
+    useEffect(() => {
+        server_fetchChartData(metricParam);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [metricParam]);
 
-async function getDataBasedOnMetric(metric: string) {
-    const data = await getChartData(metric);
-    return data;
-}
-
-async function ChartStatistics({}: Props) {
-    const headersList = headers();
-    // read the custom x-url header
-    const header_url = headersList.get("x-url") || "";
-
-    const metricParam = header_url.split("metric=")[1] ?? "pageViewsByDate";
-
-    let data = await getDataBasedOnMetric(metricParam);
+    if (isError) {
+        return <p>Failed to load data</p>;
+    }
 
     return (
         <Card className="w-fit flex px-6 flex-col items-center justify-center">
             <CardHeader>
-                <SmallStatFiles metricParam={metricParam} />
+                <SmallStatFiles
+                    metricParam={metricParam}
+                    setMetricParam={setMetricParam}
+                />
             </CardHeader>
             <CardBody>
-                <Chart data={data} />
+                {isPending ? (
+                    <div
+                        className="bg-foreground-200/40 rounded-lg animate-pulse"
+                        style={{
+                            width: 1500,
+                            height: 450,
+                        }}
+                    />
+                ) : isError ? (
+                    <p>Failed to load data</p>
+                ) : (
+                    <Chart data={data ?? []} metricParam={metricParam} />
+                )}
             </CardBody>
         </Card>
     );

@@ -200,8 +200,8 @@ export const visitorsByDate = (propertyId: string) => {
         ],
         orderBys: [
             {
-                metric: {
-                    metricName: "date",
+                dimension: {
+                    dimensionName: "date",
                 },
                 desc: true,
             },

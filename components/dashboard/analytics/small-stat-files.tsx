@@ -3,17 +3,17 @@ import { Button, ButtonGroup } from "@nextui-org/button";
 
 type Props = {
     metricParam: string;
+    setMetricParam: (param: string) => void;
 };
 
-function SmallStatFiles({ metricParam }: Props) {
+function SmallStatFiles({ metricParam, setMetricParam }: Props) {
     return (
         <ButtonGroup>
             <Button
                 className="flex flex-col items-start justify-center h-fit py-3 w-32"
                 variant={metricParam == "visitorsByDate" ? "solid" : "flat"}
                 color={metricParam == "visitorsByDate" ? "primary" : "default"}
-                as={Link}
-                href="?metric=visitorsByDate"
+                onPress={() => setMetricParam("visitorsByDate")}
             >
                 <h4
                     className={`text-md font-semibold ${
@@ -30,8 +30,7 @@ function SmallStatFiles({ metricParam }: Props) {
                 className="flex flex-col items-start justify-center h-fit py-3 w-32"
                 variant={metricParam == "pageViewsByDate" ? "solid" : "flat"}
                 color={metricParam == "pageViewsByDate" ? "primary" : "default"}
-                as={Link}
-                href="?metric=pageViewsByDate"
+                onPress={() => setMetricParam("pageViewsByDate")}
             >
                 <h4
                     className={`text-md font-semibold ${
