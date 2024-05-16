@@ -1,3 +1,4 @@
+import ChartStatistics from "@/components/dashboard/analytics/chart-statistics";
 import SingleMetricStatistic from "@/components/dashboard/analytics/single-metric-statistic";
 import React from "react";
 
@@ -53,6 +54,7 @@ async function AnalyticsPage({}: Props) {
                 <h2 className="text-2xl text-foreground-600">Analytics</h2>
             </header>
             <div className="flex flex-wrap gap-4 w-full flex-1 p-4 overflow-y-auto">
+                <ChartStatistics />
                 {metricData.map((data: any[], index: number) => (
                     <SingleMetricStatistic
                         key={index}

@@ -1,9 +1,11 @@
 import {
     eventCountByEventName,
     newUsersByFirstUserDefaultChannelGroup,
+    pageViewsByDate,
     totalUsersByCountry,
     viewsByPageTitleAndScreenClass,
     viewsPerPagePath,
+    visitorsByDate,
 } from "@/lib/ga/config";
 import { NextResponse } from "next/server";
 
@@ -36,6 +38,8 @@ const metricFunctions: any = {
     totalUsersByCountry,
     viewsByPageTitleAndScreenClass,
     viewsPerPagePath,
+    pageViewsByDate,
+    visitorsByDate,
 };
 
 // Runs a simple report.

@@ -147,3 +147,65 @@ export const viewsPerPagePath = (propertyId: string) => {
         ],
     };
 };
+
+export const pageViewsByDate = (propertyId: string) => {
+    return {
+        property: `properties/${propertyId}`,
+        dateRanges: [
+            {
+                startDate: "2020-01-01",
+                endDate: "today",
+            },
+        ],
+        dimensions: [
+            {
+                name: "date",
+            },
+        ],
+        metrics: [
+            {
+                name: "screenPageViews",
+            },
+        ],
+        orderBys: [
+            {
+                metric: {
+                    metricName: "screenPageViews",
+                },
+                desc: true,
+            },
+        ],
+        metricAgregations: ["TOTAL"],
+    };
+};
+
+export const visitorsByDate = (propertyId: string) => {
+    return {
+        property: `properties/${propertyId}`,
+        dateRanges: [
+            {
+                startDate: "2020-01-01",
+                endDate: "today",
+            },
+        ],
+        dimensions: [
+            {
+                name: "date",
+            },
+        ],
+        metrics: [
+            {
+                name: "totalUsers",
+            },
+        ],
+        orderBys: [
+            {
+                metric: {
+                    metricName: "date",
+                },
+                desc: true,
+            },
+        ],
+        metricAgregations: ["TOTAL"],
+    };
+};
