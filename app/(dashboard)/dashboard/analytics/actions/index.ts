@@ -6,7 +6,7 @@ export const fetchChartData = async (metric: string) => {
     const res = await fetch(
         `${process.env.NEXT_PUBLIC_SITE_URL}/analytics?metric=${metric}`,
         {
-            cache: "force-cache",
+            cache: "no-cache",
         }
     );
     const data: GAApiResponse = await res.json();
