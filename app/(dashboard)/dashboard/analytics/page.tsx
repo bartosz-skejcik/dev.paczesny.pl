@@ -23,24 +23,24 @@ const fetchData = async (param: string) => {
 async function AnalyticsPage({}: Props) {
     const availableMetrics = [
         {
-            id: "eventCountByEventName",
-            title: "Goal Conversions",
-        },
-        {
-            id: "newUsersByFirstUserDefaultChannelGroup",
-            title: "Top Sources",
-        },
-        {
             id: "totalUsersByCountry",
             title: "Countries",
+        },
+        {
+            id: "viewsPerPagePath",
+            title: "Top Pages",
         },
         {
             id: "viewsByPageTitleAndScreenClass",
             title: "Top Pages by Page Title",
         },
         {
-            id: "viewsPerPagePath",
-            title: "Top Pages",
+            id: "newUsersByFirstUserDefaultChannelGroup",
+            title: "Top Sources",
+        },
+        {
+            id: "eventCountByEventName",
+            title: "Goal Conversions",
         },
     ];
 
