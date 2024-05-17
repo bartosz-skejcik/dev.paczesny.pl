@@ -64,7 +64,9 @@ function SingleMetricStatistic({ title, data }: Props) {
                 <TableBody items={data}>
                     {data.map((row: any, index: number) => {
                         const countryCode = getCode(
-                            row.dimensionValues[0].value
+                            row.dimensionValues[0].value === "United States"
+                                ? "United States of America"
+                                : row.dimensionValues[0].value
                         )!;
                         return (
                             <TableRow key={index}>

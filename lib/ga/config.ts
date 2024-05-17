@@ -203,7 +203,7 @@ export const visitorsByDate = (propertyId: string) => {
                 dimension: {
                     dimensionName: "date",
                 },
-                desc: true,
+                asc: true,
             },
         ],
         metricAgregations: ["TOTAL"],
