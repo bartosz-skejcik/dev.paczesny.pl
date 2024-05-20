@@ -15,6 +15,7 @@ const config = {
         extend: {
             animation: {
                 "meteor-effect": "meteor 5s linear infinite",
+                "caret-blink": "caret 0.85s step-end infinite",
             },
             keyframes: {
                 meteor: {
@@ -27,6 +28,11 @@ const config = {
                         transform: "rotate(215deg) translateX(-500px)",
                         opacity: "0",
                     },
+                },
+                caret: {
+                    "0%": { opacity: "0" },
+                    "50%": { opacity: "1" },
+                    "100%": { opacity: "0" },
                 },
             },
         },
