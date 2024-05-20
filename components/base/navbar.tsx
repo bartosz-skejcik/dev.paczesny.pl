@@ -28,7 +28,7 @@ export const Navbar = async ({}: Props) => {
     const user = data.session?.user;
 
     return (
-        <NextUINavbar maxWidth="xl" position="static" className="absolute">
+        <NextUINavbar maxWidth="xl">
             <NavbarBrand as="li" className="gap-3 max-w-fit">
                 <NextLink
                     className="flex justify-start items-center gap-1"

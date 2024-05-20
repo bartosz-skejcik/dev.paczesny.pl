@@ -1,9 +1,10 @@
 export const siteConfig = {
     navItems: [
+        { name: "Services", href: "/services" },
         { name: "Experience", href: "#experience" },
-        { name: "Projects", href: "#projects" },
-        { name: "About me", href: "/about" },
-        { name: "Order", href: "/order" },
+        { name: "Resume", href: "/resume" },
+        { name: "Work", href: "#projects" },
+        { name: "Contact", href: "/contact" },
     ],
     hero: {
         github: "https://github.com/bartosz-skejcik",

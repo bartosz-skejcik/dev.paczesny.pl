@@ -12,7 +12,7 @@ async function Skills({}: Props) {
             <h6 className="uppercase text-amber-500 font-medium text-base mb-3">
                 Skills
             </h6>
-            <h1 className="text-5xl font-semibold mb-16">
+            <h1 className="text-4xl lg:text-5xl font-semibold mb-16 text-center">
                 Languages, Frameworks, and Tools {"I've"} worked with
             </h1>
             <Tabs skills={skills} />
