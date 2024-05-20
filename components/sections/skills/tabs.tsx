@@ -38,7 +38,7 @@ function Tabs({ skills }: Props) {
             <TabHeader
                 title="Skills"
                 description="Programming languages I've worked with in the past"
-                className="col-span-1"
+                className="col-span-4 xl:col-span-1 row-span-2 mb-10 xl:mb-0"
             >
                 {Object.keys(categories).map((category, index, skills) => (
                     <Button
@@ -69,16 +69,21 @@ function Tabs({ skills }: Props) {
                 ))}
             </TabHeader>
             {activeCategory && activeCategory.length > 0 && (
-                <div className="flex-1 col-span-3 w-full flex flex-col items-center justify-start rounded-lg overflow-hidden bg-foreground-50/50 h-full">
+                <div className="flex-1 col-span-4 xl:col-span-3 w-full flex flex-col items-center justify-start rounded-lg overflow-hidden bg-foreground-50/50 h-full">
                     <div className="w-full py-3 px-5 flex items-center gap-x-5 justify-start text-xl font-semibold bg-foreground-100">
                         <h3 className="capitalize">
                             {activeCategory[0].category}
                         </h3>
                         <p className="text-foreground-500 text-sm font-normal">
-                            Hover over the skills to see more details
+                            <span className="hidden xl:block">
+                                Hover over the skills to see more details
+                            </span>
+                            <span className="block xl:hidden">
+                                Click on the skills to see more details
+                            </span>
                         </p>
                     </div>
-                    <div className="w-full grid grid-cols-6 gap-4 p-5">
+                    <div className="w-full grid grid-cols-2 xl:grid-cols-6 gap-4 p-5">
                         {activeCategory.map((skill) => (
                             <SkillTile key={skill.id} skill={skill} />
                         ))}

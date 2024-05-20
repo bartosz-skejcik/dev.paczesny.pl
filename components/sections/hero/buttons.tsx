@@ -17,14 +17,14 @@ function Buttons({}: Props) {
                 variant="bordered"
                 color="secondary"
                 startContent={<Github />}
-                href={siteConfig.hero.github}
-                onClick={() =>
+                onPress={() => {
                     sendGAEvent({
                         category: "hero",
                         action: "click",
                         label: "github",
-                    })
-                }
+                    });
+                    window.location.href = siteConfig.hero.github;
+                }}
             >
                 Github
             </Button>
@@ -34,14 +34,14 @@ function Buttons({}: Props) {
                 variant="shadow"
                 color="warning"
                 startContent={<Rocket />}
-                onClick={() =>
+                onPress={() => {
                     sendGAEvent({
                         category: "hero",
                         action: "click",
                         label: "projects",
-                    })
-                }
-                href={siteConfig.hero.projects}
+                    });
+                    window.location.href = siteConfig.hero.projects;
+                }}
             >
                 My projects
             </Button>
@@ -50,13 +50,14 @@ function Buttons({}: Props) {
                 variant="bordered"
                 color="danger"
                 startContent={<Mailbox />}
-                onClick={() =>
+                onPress={() => {
                     sendGAEvent({
                         category: "hero",
                         action: "click",
                         label: "contact",
-                    })
-                }
+                    });
+                    window.location.href = siteConfig.hero.contact;
+                }}
             >
                 Contact me
             </Button>
