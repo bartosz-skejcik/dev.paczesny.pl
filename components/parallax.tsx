@@ -12,6 +12,8 @@ import Link from "next/link";
 import { Project } from "@/types/project";
 import { Chip } from "@nextui-org/chip";
 
+import { usePlausible } from "next-plausible";
+
 export const Parallax = ({
     items,
     header,
@@ -136,6 +138,8 @@ export const ProjectCard = ({
     project: Project;
     translate: MotionValue<number>;
 }) => {
+    const plausible = usePlausible();
+
     return (
         <motion.div
             style={{
@@ -146,10 +150,24 @@ export const ProjectCard = ({
             }}
             key={project.title}
             className="group/project w-56 h-44 xl:h-96 xl:w-[30rem] relative flex-shrink-0 rounded-xl overflow-hidden"
+            onMouseEnter={() => {
+                plausible("project-card-hover", {
+                    props: {
+                        name: project.title,
+                    },
+                });
+            }}
         >
             <Link
                 href={`/projects/${project.id}`}
                 className="block group-hover/project:shadow-2xl"
+                onClick={() => {
+                    plausible("project-card-click", {
+                        props: {
+                            name: project.title,
+                        },
+                    });
+                }}
             >
                 <Image
                     src={project.thumbnail}

@@ -10,11 +10,10 @@ import {
 import { Button } from "@nextui-org/button";
 import { Link } from "@nextui-org/link";
 
-import { link as linkStyles } from "@nextui-org/theme";
+import NavbarItemLink from "./navbar-item";
 
 import { siteConfig } from "@/config/site";
 import NextLink from "next/link";
-import clsx from "clsx";
 
 import { ThemeSwitch } from "@/components/base/theme-switch";
 import { KeyRound, LayoutDashboard } from "lucide-react";
@@ -41,23 +40,7 @@ export const Navbar = async ({}: Props) => {
                 <ul className="hidden md:flex gap-8 justify-start ml-2">
                     {siteConfig.navItems.map((item, index) => (
                         <NavbarItem key={item.href}>
-                            <NextLink
-                                className={clsx(
-                                    linkStyles({ color: "foreground" }),
-                                    "data-[active=true]:text-primary data-[active=true]:font-medium"
-                                )}
-                                color={
-                                    index === 1
-                                        ? "warning"
-                                        : index ===
-                                          siteConfig.navItems.length - 1
-                                        ? "danger"
-                                        : "foreground"
-                                }
-                                href={item.href}
-                            >
-                                {item.name}
-                            </NextLink>
+                            <NavbarItemLink index={index} item={item} />
                         </NavbarItem>
                     ))}
                 </ul>

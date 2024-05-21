@@ -6,10 +6,13 @@ import { Github, Mailbox, Rocket } from "lucide-react";
 import React from "react";
 
 import { sendGAEvent } from "@next/third-parties/google";
+import { usePlausible } from "next-plausible";
 
 type Props = {};
 
 function Buttons({}: Props) {
+    const plausible = usePlausible();
+
     return (
         <div className="flex flex-wrap items-center justify-center gap-4">
             <Button
@@ -22,6 +25,11 @@ function Buttons({}: Props) {
                         category: "hero",
                         action: "click",
                         label: "github",
+                    });
+                    plausible("github-click", {
+                        props: {
+                            position: "hero",
+                        },
                     });
                     window.location.href = siteConfig.hero.github;
                 }}
@@ -40,6 +48,11 @@ function Buttons({}: Props) {
                         action: "click",
                         label: "projects",
                     });
+                    plausible("projects-click", {
+                        props: {
+                            position: "hero",
+                        },
+                    });
                     window.location.href = siteConfig.hero.projects;
                 }}
             >
@@ -55,6 +68,11 @@ function Buttons({}: Props) {
                         category: "hero",
                         action: "click",
                         label: "contact",
+                    });
+                    plausible("contact-click", {
+                        props: {
+                            position: "hero",
+                        },
                     });
                     window.location.href = siteConfig.hero.contact;
                 }}

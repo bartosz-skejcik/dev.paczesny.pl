@@ -4,14 +4,17 @@ import { Tables } from "@/lib/database.types";
 import React, { useEffect, useState } from "react";
 import TabHeader from "./tab-header";
 import { Button } from "@nextui-org/button";
-import { Image } from "@nextui-org/react";
 import SkillTile from "./skill-tile";
+
+import { usePlausible } from "next-plausible";
 
 type Props = {
     skills: Tables<"skills">[];
 };
 
 function Tabs({ skills }: Props) {
+    const plausible = usePlausible();
+
     const [categories, setCategories] = useState<{
         [key: string]: Tables<"skills">[];
     }>({});
@@ -55,7 +58,14 @@ function Tabs({ skills }: Props) {
                                 : "default"
                         }
                         radius="sm"
-                        onPress={() => setActiveCategory(categories[category])}
+                        onPress={() => {
+                            setActiveCategory(categories[category]);
+                            plausible("skills-tab-click", {
+                                props: {
+                                    category: category,
+                                },
+                            });
+                        }}
                     >
                         <h3 className="text-2xl font-semibold">{category}</h3>
                         <p>

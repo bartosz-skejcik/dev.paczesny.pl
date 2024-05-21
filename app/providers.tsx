@@ -5,12 +5,16 @@ import { useRouter } from "next/navigation";
 import { ThemeProvider as NextThemesProvider } from "next-themes";
 import { type ThemeProviderProps } from "next-themes/dist/types";
 
+// Analytics
 import Script from "next/script";
 import { GoogleAnalytics } from "@next/third-parties/google";
 
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
+import PlausibleProvider from "next-plausible";
+
+// Fetching stuff
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const queryClient = new QueryClient();
@@ -26,10 +30,12 @@ export function Providers({ children, ...props }: ThemeProviderProps) {
         <QueryClientProvider client={queryClient}>
             <NextUIProvider navigate={router.push}>
                 <NextThemesProvider {...props}>
-                    <Analytics />
-                    <SpeedInsights />
-                    <GoogleAnalytics gaId={gaId} />
-                    {children}
+                    <PlausibleProvider domain="dev.paczesny.pl">
+                        <Analytics />
+                        <SpeedInsights />
+                        <GoogleAnalytics gaId={gaId} />
+                        {children}
+                    </PlausibleProvider>
                 </NextThemesProvider>
             </NextUIProvider>
         </QueryClientProvider>

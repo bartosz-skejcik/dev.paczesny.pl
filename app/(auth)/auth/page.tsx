@@ -17,6 +17,9 @@ import { Eye, EyeOff, GithubIcon } from "lucide-react";
 // Auth
 import { createBrowserClient } from "@supabase/ssr";
 
+// Analytics
+import { usePlausible } from "next-plausible";
+
 type Props = {};
 
 function AuthPage({}: Props) {
@@ -25,11 +28,19 @@ function AuthPage({}: Props) {
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
 
+    const plausible = usePlausible();
+
     async function handleSignInWithGithub() {
         const { data, error } = await supabase.auth.signInWithOAuth({
             provider: "github",
             options: {
                 redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`,
+            },
+        });
+
+        plausible("github-sign-in", {
+            props: {
+                position: "auth",
             },
         });
 

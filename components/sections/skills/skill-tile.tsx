@@ -1,14 +1,33 @@
+"use client";
+
 import { Card } from "@nextui-org/card";
 import { Image } from "@nextui-org/react";
 import { Tables } from "@/lib/database.types";
+
+import { usePlausible } from "next-plausible";
 
 type Props = {
     skill: Tables<"skills">;
 };
 
 function SkillTile({ skill }: Props) {
+    const plausible = usePlausible();
     return (
         <Card
+            onMouseEnter={() => {
+                plausible("skill-tile-hover", {
+                    props: {
+                        name: skill.name,
+                    },
+                });
+            }}
+            onClick={() => {
+                plausible("skill-tile-click", {
+                    props: {
+                        name: skill.name,
+                    },
+                });
+            }}
             className="p-2 aspect-square overflow-hidden relative group"
             radius="lg"
         >
