@@ -1,13 +1,12 @@
 import type { Metadata } from "next";
-import { Poppins } from "next/font/google";
+import { Inter } from "next/font/google";
 import "@/app/globals.css";
 
 import { Providers } from "../providers";
 import { Navbar } from "@/components/base/navbar";
 
-const poppins = Poppins({
+const inter = Inter({
     subsets: ["latin"],
-    weight: ["200", "300", "400", "500", "600", "700", "800", "900"],
 });
 
 export const metadata: Metadata = {
@@ -24,7 +23,7 @@ export default function RootLayout({
         <html lang="en" className="dark text-foreground bg-background h-full">
             <body
                 className={
-                    poppins.className +
+                    inter.className +
                     "flex items-center justify-center min-h-screen"
                 }
             >
