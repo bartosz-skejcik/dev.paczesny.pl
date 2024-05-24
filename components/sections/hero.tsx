@@ -1,6 +1,7 @@
 import GradientBackground from "@/components/gradient-background";
 import Buttons from "./hero/buttons";
 import Stats from "./hero/stats";
+import WordRotate from "../magicui/word-rotate";
 
 type Props = {};
 
@@ -8,7 +9,6 @@ async function Hero({}: Props) {
     return (
         <GradientBackground className="flex flex-col items-center lg:justify-center justify-start min-h-screen h-fit flex-1 pt-20 w-full gap-7">
             <h1 className="font-bold text-4xl lg:text-6xl text-center">
-                Hello, my name is <br />
                 <span
                     className=""
                     style={{
@@ -22,12 +22,21 @@ async function Hero({}: Props) {
                 >
                     Bartek Paczesny
                 </span>
+                <br />
+                19-Year-Old
+                <br />
+                <WordRotate
+                    words={[
+                        "Self-Taught Developer",
+                        "Student",
+                        "Caffeine-Fueled Coder",
+                    ]}
+                    className="-my-2"
+                />
             </h1>
             <p className="text-default-500 w-2/3 lg:w-1/2 text-lg text-center">
-                {"I'm "}a 19 years old self-taught developer from Poland.{" "}
-                {"I'm "}
-                currently studying IT at ZS14 in Warsaw and working with React,
-                Next.js, TypeScript, TailwindCSS, and more.
+                Polish developer fueled by curiosity and a love for creating
+                with code. Exploring new technologies and pushing boundaries.{" "}
             </p>
             <Buttons />
             <Stats />
