@@ -135,6 +135,9 @@ importers:
       '@types/node':
         specifier: ^20
         version: 20.11.8
+      '@types/randomcolor':
+        specifier: ^0.5.9
+        version: 0.5.9
       '@types/react':
         specifier: ^18
         version: 18.2.48
@@ -1678,6 +1681,9 @@ packages:
 
   '@types/prop-types@15.7.11':
     resolution: {integrity: sha512-ga8y9v9uyeiLdpKddhxYQkxNDrfvuPrlFb0N1qnZZByvcElJaXthF1UhvCh9TLWJBEHeNtdnbysW7Y6Uq8CVng==}
+
+  '@types/randomcolor@0.5.9':
+    resolution: {integrity: sha512-k58cfpkK15AKn1m+oRd9nh5BnuiowhbyvBBdAzcddtARMr3xRzP0VlFaAKovSG6N6Knx08EicjPlOMzDejerrQ==}
 
   '@types/react-dom@18.2.18':
     resolution: {integrity: sha512-TJxDm6OfAX2KJWJdMEVTwWke5Sc/E/RlnPGvGfS0W7+6ocy2xhDVQVh/KvC2Uf7kACs+gDytdusDSdWfWkaNzw==}
@@ -6168,6 +6174,8 @@ snapshots:
   '@types/phoenix@1.6.4': {}
 
   '@types/prop-types@15.7.11': {}
+
+  '@types/randomcolor@0.5.9': {}
 
   '@types/react-dom@18.2.18':
     dependencies:
