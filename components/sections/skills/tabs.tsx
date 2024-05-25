@@ -37,7 +37,7 @@ function Tabs({ skills }: Props) {
     }, [skills]);
 
     return (
-        <section className="grid grid-cols-4 items-start justify-center w-3/4">
+        <section className="grid grid-cols-4 items-start justify-center w-3/4 h-fit grid-rows-1">
             <TabHeader
                 title="Skills"
                 description="Programming languages I've worked with in the past"

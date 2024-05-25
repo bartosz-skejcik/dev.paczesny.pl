@@ -13,6 +13,7 @@
         "@internationalized/date": "^3.5.3",
         "@next/third-parties": "^14.2.3",
         "@nextui-org/accordion": "^2.0.28",
+        "@nextui-org/badge": "^2.0.27",
         "@nextui-org/button": "^2.0.26",
         "@nextui-org/card": "^2.0.28",
         "@nextui-org/chip": "^2.0.28",
@@ -42,6 +43,7 @@
         "next": "14.2.3",
         "next-plausible": "^3.12.0",
         "next-themes": "^0.2.1",
+        "randomcolor": "^0.6.2",
         "react": "18.3.1",
         "react-country-flag": "^3.1.0",
         "react-dom": "18.3.1",
@@ -52,6 +54,7 @@
     "devDependencies": {
         "@types/country-list": "^2.1.4",
         "@types/node": "^20",
+        "@types/randomcolor": "^0.5.9",
         "@types/react": "^18",
         "@types/react-dom": "^18",
         "autoprefixer": "^10.0.1",
