@@ -27,6 +27,7 @@ async function Projects({}: Props) {
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 w-full">
                         {projects.map((project) => (
+                            // @ts-ignore
                             <Card key={project.id} project={project} />
                         ))}
                     </div>
