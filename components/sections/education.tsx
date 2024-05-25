@@ -14,7 +14,7 @@ export default async function Education({}: Props) {
                 Education
             </h6>
             <h1 className="text-5xl font-semibold mb-16">My road so far</h1>
-            <div className="grid xl:grid-cols-2 grid-cols-1 xl:grid-rows-2 gap-10 w-2/3 2xl:h-[40vh]">
+            <div className="container grid xl:grid-cols-2 grid-cols-1 w-full xl:grid-rows-2 gap-10 2xl:h-[40vh]">
                 {education.slice(0, 4).map((el, idx) => (
                     <Block
                         key={"education" + idx}
@@ -49,7 +49,7 @@ const Block = ({
     date,
 }: BlockProps) => {
     return (
-        <div className="relative group" id="experience">
+        <div className="relative group container mx-auto" id="experience">
             <div className="group-hover:opacity-100 opacity-10 transition-all duration-300 absolute inset-0 h-full w-full bg-gradient-to-r from-purple-600 via-pink-600 to-amber-600 transform scale-[0.85] rounded-2xl blur-xl" />
             <div className="group-hover:scale-[1.02] transition duration-250 relative shadow-xl bg-neutral-100 border-neutral-300 dark:bg-black border dark:border-gray-900  p-4 h-full overflow-hidden rounded-xl flex flex-col justify-start items-start">
                 <div className="w-full flex items-center justify-between">
