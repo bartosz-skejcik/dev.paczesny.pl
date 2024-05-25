@@ -30,7 +30,7 @@ export function Providers({ children, ...props }: ThemeProviderProps) {
         <QueryClientProvider client={queryClient}>
             <NextUIProvider navigate={router.push}>
                 <NextThemesProvider {...props}>
-                    <PlausibleProvider domain="dev.paczesny.pl">
+                    <PlausibleProvider domain="dev.paczesny.pl" selfHosted>
                         <Analytics />
                         <SpeedInsights />
                         <GoogleAnalytics gaId={gaId} />
