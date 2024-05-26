@@ -50,8 +50,8 @@ async function AnalyticsPage({}: Props) {
 
     return (
         <main className="w-full h-screen flex-col flex items-center justify-start overflow-y-auto">
-            <header className="flex items-center justify-between px-5 py-3.5 w-full border-b border-foreground-200 dark:bg-white/5 bg-black/5">
-                <h2 className="text-2xl text-foreground-600">Analytics</h2>
+            <header className="flex items-center justify-between px-5 py-[0.97rem] w-full border-b border-foreground-200 bg-foreground-50">
+                <h2 className="text-xl text-foreground-600">Analytics</h2>
             </header>
             <div className="flex flex-wrap gap-4 w-full flex-1 p-4 overflow-y-auto">
                 <ChartStatistics />

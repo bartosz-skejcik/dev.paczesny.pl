@@ -20,31 +20,28 @@ export function SidebarItem({
 
     return (
         <Link
-            className={`px-2 block w-full ${variant == "slim" ? "pl-8" : ""}`}
             href={href}
+            className={`flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary ${
+                variant == "slim" ? "pl-8" : ""
+            }`}
         >
             <div
-                className={`flex ${
-                    variant == "default" ? "py-2" : ""
-                } w-full h-full gap-3 items-center tap-highlight-transparent outline-none data-[focus-visible=true]:z-10 data-[focus-visible=true]:outline-2 data-[focus-visible=true]:outline-focus data-[focus-visible=true]:outline-offset-2 py-2 transition-opacity`}
+                className={`flex-shrink-0 ${
+                    path == href ? "text-blue-500" : "text-foreground"
+                } transition-all duration-200`}
             >
-                <div
-                    className={`flex-shrink-0 ${
-                        path == href ? "text-purple-500" : "text-foreground"
-                    } transition-all duration-200`}
-                >
-                    {icon}
-                </div>
-                <div className="flex-1 flex flex-col text-start">
-                    <span
-                        className={`text-medium text-md transition-all duration-200 ${
-                            path == href ? "text-purple-500" : "text-foreground"
-                        }`}
-                    >
-                        {label}
-                    </span>
-                </div>
+                {icon}
             </div>
+            <span
+                className={`transition-all duration-200 ${
+                    path == href ? "text-blue-500" : "text-foreground"
+                }`}
+            >
+                {label}
+            </span>
+            {/* <Chip className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-full">
+                6
+            </Chip> */}
         </Link>
     );
 }
@@ -59,13 +56,17 @@ export function SidebarDropdown({
     items: SidebarItemType[];
 }) {
     return (
-        <Accordion isCompact selectionMode="multiple">
+        <Accordion isCompact>
             <AccordionItem
                 isCompact
                 key="1"
                 aria-label={label}
                 title={label}
                 startContent={icon}
+                classNames={{
+                    title: "text-sm",
+                    base: "ml-[0.22rem]",
+                }}
             >
                 {items.map((item, idx) => {
                     return (

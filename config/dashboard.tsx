@@ -8,18 +8,20 @@ import {
     Hammer,
     LayoutDashboard,
     MessagesSquare,
+    PackageIcon,
     ShoppingBasket,
     Star,
+    UsersIcon,
 } from "lucide-react";
 
 export const dashboardConfig: DashboardConfig = {
     sidebar: {
         client: [
-            {
-                label: "Dashboard",
-                href: "/dashboard",
-                icon: <LayoutDashboard />,
-            },
+            // {
+            //     label: "Dashboard",
+            //     href: "/dashboard",
+            //     icon: <LayoutDashboard />,
+            // },
             {
                 label: "Order History",
                 href: "/dashboard/orders",
@@ -48,9 +50,14 @@ export const dashboardConfig: DashboardConfig = {
                 icon: <ShoppingBasket />,
             },
             {
-                label: "Messages",
-                href: "/dashboard/messages",
-                icon: <MessagesSquare />,
+                label: "Products",
+                href: "/dashboard/products",
+                icon: <PackageIcon />,
+            },
+            {
+                label: "Customers",
+                href: "/dashboard/customers",
+                icon: <UsersIcon />,
             },
             {
                 label: "Website CMS",

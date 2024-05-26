@@ -4,6 +4,7 @@ import "@/app/globals.css";
 
 import { Providers } from "@/app/providers";
 import Sidebar from "@/components/dashboard/sidebar";
+import SidebarMobile from "@/components/dashboard/sidebar-mobile";
 
 const inter = Inter({
     subsets: ["latin"],
@@ -34,9 +35,14 @@ export default function RootLayout({
                     enableSystem
                     disableTransitionOnChange={false}
                 >
-                    <section className="flex flex-row items-center justify-evenly min-h-screen w-full">
+                    <section className="grid min-h-screen w-full md:grid-cols-[220px_1fr] lg:grid-cols-[280px_1fr]">
                         <Sidebar />
-                        {children}
+                        <div className="flex> flex-col">
+                            <SidebarMobile />
+                            <main className="flex flex-1 flex-col gap-4 lg:gap-6">
+                                {children}
+                            </main>
+                        </div>
                     </section>
                 </Providers>
             </body>
