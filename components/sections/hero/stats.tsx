@@ -21,35 +21,28 @@ function Stats({}: Props) {
     }
 
     return (
-        <div className="w-5/6 lg:w-2/3 flex lg:flex-row flex-col lg:gap-y-0 gap-y-8 items-center justify-evenly pt-20 lg:pt-36">
+        <dl className="mt-10 grid grid-cols-2 gap-x-10 gap-y-6 sm:mt-16 sm:gap-x-16 sm:gap-y-10 sm:text-center lg:auto-cols-auto lg:grid-flow-col lg:grid-cols-none lg:justify-start lg:text-left">
             {data &&
                 Object.entries(data).map(([key, value]) => (
-                    <div key={key} className="flex items-center gap-2">
-                        <p className="font-bold text-4xl lg:text-6xl">
+                    <div key={key}>
+                        <dt className="font-mono text-base text-neutral-400">
+                            {key.split("_").map((word, index) => (
+                                <span
+                                    key={word}
+                                    className={`capitalize ${
+                                        index > 0 ? "ml-1.5" : ""
+                                    }`}
+                                >
+                                    {word}
+                                </span>
+                            ))}
+                        </dt>
+                        <dd className="mt-0.5 text-3xl md:text-4xl font-semibold tracking-tight text-neutral-100">
                             <NumberTicker value={value ?? 0} />
-                        </p>
-                        <p className="text-default-500 font-semibold lg:text-lg text-sm">
-                            {key
-                                .replace(/_/g, " ")
-                                .split(" ")
-                                .map((word, index) => (
-                                    <span
-                                        key={word}
-                                        className={
-                                            index === 0
-                                                ? "block capitalize"
-                                                : index === 1
-                                                ? "ml-0"
-                                                : "ml-1"
-                                        }
-                                    >
-                                        {word}
-                                    </span>
-                                ))}
-                        </p>
+                        </dd>
                     </div>
                 ))}
-        </div>
+        </dl>
     );
 }
 

@@ -1,13 +1,19 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Montserrat, Open_Sans } from "next/font/google";
 import "@/app/globals.css";
 
 import { Providers } from "../providers";
 import { Navbar } from "@/components/base/navbar";
 
-const inter = Inter({
+const monserrat = Montserrat({
     subsets: ["latin"],
+    weight: ["100", "200", "300", "400", "500", "700", "600", "800", "900"],
 });
+
+// const openSans = Open_Sans({
+//     subsets: ["latin"],
+//     weight: ["300", "400", "500", "700", "600", "800"],
+// });
 
 export const metadata: Metadata = {
     title: "Portfolio | dev.paczesny",
@@ -22,10 +28,8 @@ export default function RootLayout({
     return (
         <html lang="en" className="dark text-foreground bg-background h-full">
             <body
-                className={
-                    inter.className +
-                    "flex items-center justify-center min-h-screen"
-                }
+                style={monserrat.style}
+                className="flex items-center justify-center min-h-screen"
             >
                 <Providers
                     attribute="class"

@@ -61,7 +61,9 @@ function Card({ project }: Props) {
             </div>
             <div className="p-6 space-y-4 relative z-20 bg-background">
                 <div className="flex items-start justify-between">
-                    <h3 className="text-2xl font-bold">{project.title}</h3>
+                    <h3 className="text-2xl font-semibold dark:text-neutral-300">
+                        {project.title}
+                    </h3>
                     <div className="flex items-center space-x-2">
                         <Button
                             as={Link}

@@ -15,9 +15,9 @@ async function Projects({}: Props) {
                         <h6 className="uppercase text-amber-500 font-medium text-base mb-3">
                             Projects
                         </h6>
-                        <h2 className="text-4xl font-bold tracking-tight">
+                        <h1 className="text-4xl lg:text-5xl font-semibold text-center">
                             My Best Projects
-                        </h2>
+                        </h1>
                         <p className="max-w-[600px] text-gray-400">
                             Explore a collection of my most innovative and
                             creative projects, each one a testament to my

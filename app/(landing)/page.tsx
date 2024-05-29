@@ -6,14 +6,14 @@ import Projects from "@/components/sections/projects";
 import Skills from "@/components/sections/skills";
 
 export default async function Home() {
-    return (
-        <section>
-            <Hero />
-            <Education />
-            <Projects />
-            <Skills />
-            {/* <Services /> */}
-            {/* <Cta /> */}
-        </section>
-    );
+  return (
+    <section>
+      <Hero />
+      <Education />
+      <Projects />
+      <Skills />
+      {/* <Services /> */}
+      {/* <Cta /> */}
+    </section>
+  );
 }

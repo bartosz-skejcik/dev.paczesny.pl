@@ -53,7 +53,7 @@ const Block = ({
             <div className="group-hover:opacity-100 opacity-10 transition-all duration-300 absolute inset-0 h-full w-full bg-gradient-to-r from-purple-600 via-pink-600 to-amber-600 transform scale-[0.85] rounded-2xl blur-xl" />
             <div className="group-hover:scale-[1.02] transition duration-250 relative shadow-xl bg-neutral-100 border-neutral-300 dark:bg-black border dark:border-gray-900  p-4 h-full overflow-hidden rounded-xl flex flex-col justify-start items-start">
                 <div className="w-full flex items-center justify-between">
-                    <h1 className="font-bold text-xl xl:text-2xl text-start dark:text-neutral-300 text-neutral-700 relative z-50">
+                    <h1 className="font-semibold text-xl xl:text-2xl text-start dark:text-neutral-300 text-neutral-700 relative z-50">
                         {title}
                     </h1>
                     <p className="font-normal text-end text-sm xl:text-base text-slate-500 relative z-50">
