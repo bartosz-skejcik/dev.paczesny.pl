@@ -31,6 +31,8 @@ const config = {
             animation: {
                 "meteor-effect": "meteor 5s linear infinite",
                 "caret-blink": "caret 0.85s step-end infinite",
+                "border-beam":
+                    "border-beam calc(var(--duration)*1s) infinite linear",
             },
             keyframes: {
                 meteor: {
@@ -48,6 +50,11 @@ const config = {
                     "0%": { opacity: "0" },
                     "50%": { opacity: "1" },
                     "100%": { opacity: "0" },
+                },
+                "border-beam": {
+                    "100%": {
+                        "offset-distance": "100%",
+                    },
                 },
             },
         },
