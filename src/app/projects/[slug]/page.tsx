@@ -1,25 +1,29 @@
 import { Container } from "@ui/Container";
 import { SingleProduct } from "@/components/Product";
-import { products } from "@/constants/products";
-import { Product } from "@/types/products";
 import { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { getProject } from "@lib/supabase/server";
+import { getProject, getProjects } from "@lib/supabase/server";
+import { Tables } from "@lib/database.types";
 
 type Props = {
     params: { slug: string };
 };
 
+interface Project extends Tables<"projects"> {
+    skills?: Tables<"skills">[];
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const slug = params.slug;
-    const product: Product | undefined = products.find(
-        (product: Product) => product.slug === slug
+    const projects = await getProjects();
+    const project: Tables<"projects"> | undefined = projects.find(
+        (project: Tables<"projects">) => project.id === slug,
     );
 
-    if (product) {
+    if (project) {
         return {
-            title: product.title,
-            description: product.description,
+            title: project.title,
+            description: project.full_description,
         };
     } else {
         return {
@@ -36,14 +40,14 @@ export default async function SingleProjectPage({
     params: { slug: string };
 }) {
     const slug = params.slug;
-    const product = await getProject(slug);
+    const project = await getProject(slug);
 
-    if (!product) {
+    if (!project) {
         redirect("/projects");
     }
     return (
         <Container>
-            <SingleProduct product={product} />
+            <SingleProduct project={project} />
         </Container>
     );
 }
