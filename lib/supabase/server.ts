@@ -1,9 +1,9 @@
 "use server";
 
 // import { Profile } from "@/types/user";
+import { Database } from "../database.types";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { Database } from "../database.types";
 
 export async function createSupabaseServerClientReadOnly() {
     const cookieStore = cookies();
@@ -33,10 +33,22 @@ export async function createSupabaseServerClient() {
                     return cookieStore.get(name)?.value;
                 },
                 set(name: string, value: string, options: CookieOptions) {
-                    cookieStore.set({ name, value, ...options });
+                    try {
+                        cookieStore.set({ name, value, ...options });
+                    } catch (error) {
+                        // The `set` method was called from a Server Component.
+                        // This can be ignored if you have middleware refreshing
+                        // user sessions.
+                    }
                 },
                 remove(name: string, options: CookieOptions) {
-                    cookieStore.delete({ name, ...options });
+                    try {
+                        cookieStore.set({ name, value: "", ...options });
+                    } catch (error) {
+                        // The `delete` method was called from a Server Component.
+                        // This can be ignored if you have middleware refreshing
+                        // user sessions.
+                    }
                 },
             },
         }
@@ -61,6 +73,19 @@ export async function getProjects() {
     const { data, error } = await supabase
         .from("projects")
         .select("*, skills ( name )");
+    if (error) {
+        throw error;
+    }
+    return data;
+}
+
+export async function getProject(id: string) {
+    const supabase = await createSupabaseServerClientReadOnly();
+    const { data, error } = await supabase
+        .from("projects")
+        .select("*, skills ( experience, id, name, icon, category )")
+        .eq("id", id)
+        .single();
     if (error) {
         throw error;
     }
