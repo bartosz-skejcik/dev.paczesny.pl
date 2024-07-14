@@ -1,65 +1,41 @@
-const { nextui } = require("@nextui-org/react");
 import type { Config } from "tailwindcss";
+const {
+    default: flattenColorPalette,
+} = require("tailwindcss/lib/util/flattenColorPalette");
 
-const config = {
-    darkMode: ["class"],
+const config: Config = {
     content: [
-        "./pages/**/*.{ts,tsx}",
-        "./components/**/*.{ts,tsx}",
-        "./app/**/*.{ts,tsx}",
-        "./src/**/*.{ts,tsx}",
-        "./node_modules/@nextui-org/theme/dist/**/*.{js,ts,jsx,tsx}",
+        "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
+        "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
+        "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
+        "./src/**/*.{js,ts,jsx,tsx,mdx}",
     ],
-    prefix: "",
     theme: {
-        fontSize: {
-            xs: ["0.75rem", { lineHeight: "1rem" }],
-            sm: ["0.875rem", { lineHeight: "1.5rem" }],
-            base: ["1rem", { lineHeight: "1.75rem" }],
-            lg: ["1.125rem", { lineHeight: "2rem" }],
-            xl: ["1.25rem", { lineHeight: "2rem" }],
-            "2xl": ["1.5rem", { lineHeight: "2rem" }],
-            "3xl": ["2rem", { lineHeight: "2.5rem" }],
-            "4xl": ["2.5rem", { lineHeight: "3.5rem" }],
-            "5xl": ["3rem", { lineHeight: "3.5rem" }],
-            "6xl": ["3.75rem", { lineHeight: "1" }],
-            "7xl": ["4.5rem", { lineHeight: "1.1" }],
-            "8xl": ["6rem", { lineHeight: "1" }],
-            "9xl": ["8rem", { lineHeight: "1" }],
-        },
         extend: {
-            animation: {
-                "meteor-effect": "meteor 5s linear infinite",
-                "caret-blink": "caret 0.85s step-end infinite",
-                "border-beam":
-                    "border-beam calc(var(--duration)*1s) infinite linear",
+            backgroundImage: {
+                "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",
+                "gradient-conic":
+                    "conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))",
             },
-            keyframes: {
-                meteor: {
-                    "0%": {
-                        transform: "rotate(215deg) translateX(0)",
-                        opacity: "1",
-                    },
-                    "70%": { opacity: "1" },
-                    "100%": {
-                        transform: "rotate(215deg) translateX(-500px)",
-                        opacity: "0",
-                    },
-                },
-                caret: {
-                    "0%": { opacity: "0" },
-                    "50%": { opacity: "1" },
-                    "100%": { opacity: "0" },
-                },
-                "border-beam": {
-                    "100%": {
-                        "offset-distance": "100%",
-                    },
-                },
+            colors: {
+                primary: "var(--neutral-200)",
+                secondary: "var(--neutral-400)",
             },
         },
     },
-    plugins: [nextui()],
+    plugins: [require("@tailwindcss/typography"), addVariablesForColors],
 } satisfies Config;
+
+// This plugin adds each Tailwind color as a global CSS variable, e.g. var(--gray-200).
+function addVariablesForColors({ addBase, theme }: any) {
+    let allColors = flattenColorPalette(theme("colors"));
+    let newVars = Object.fromEntries(
+        Object.entries(allColors).map(([key, val]) => [`--${key}`, val])
+    );
+
+    addBase({
+        ":root": newVars,
+    });
+}
 
 export default config;
