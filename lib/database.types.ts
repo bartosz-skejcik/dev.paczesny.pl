@@ -162,8 +162,10 @@ export type Database = {
           date: string | null
           description: string | null
           duration: string | null
+          end_date: string | null
           id: string
           stack: string
+          start_date: string | null
           text: string | null
           title: string
         }
@@ -171,8 +173,10 @@ export type Database = {
           date?: string | null
           description?: string | null
           duration?: string | null
+          end_date?: string | null
           id?: string
           stack: string
+          start_date?: string | null
           text?: string | null
           title: string
         }
@@ -180,8 +184,10 @@ export type Database = {
           date?: string | null
           description?: string | null
           duration?: string | null
+          end_date?: string | null
           id?: string
           stack?: string
+          start_date?: string | null
           text?: string | null
           title?: string
         }

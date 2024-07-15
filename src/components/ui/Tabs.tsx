@@ -5,7 +5,6 @@ import React, {
     Dispatch,
     SetStateAction,
     ReactNode,
-    cloneElement,
 } from "react";
 import { motion } from "framer-motion";
 import { twMerge } from "tailwind-merge";
@@ -43,7 +42,7 @@ const Cursor = ({ position }: CursorProps) => {
 
 function Tabs<T>({ children, initialActiveTab, onChange }: TabsProps<T>) {
     const [activeTab, setActiveTab] = useState<T | null>(
-        initialActiveTab || null
+        initialActiveTab || null,
     );
     const [position, setPosition] = useState<{
         top: number;
@@ -72,7 +71,7 @@ function Tabs<T>({ children, initialActiveTab, onChange }: TabsProps<T>) {
                         opacity: 0,
                     }));
                 }}
-                className="flex flex-col overflow-x-auto md:overflow-x-visible relative"
+                className="relative flex w-full flex-col overflow-x-auto md:overflow-x-visible"
             >
                 {children && Array.isArray(children)
                     ? children.map((child) => {
@@ -129,12 +128,12 @@ function Tab<T>({
                     opacity: 1,
                 });
             }}
-            className="relative group my-1 block"
+            className="group relative my-1 block w-full"
         >
             <button
                 className={twMerge(
-                    `px-4 py-2 text-zinc-400 relative z-20 min-w-28 w-full text-left transition-all duration-200 rounded-md flex flex-row space-x-2 items-center group text-secondary`,
-                    activeTab === value ? "bg-neutral-800 text-primary" : ""
+                    `group relative z-20 flex w-full flex-row items-center space-x-2 rounded-md px-4 py-2 text-left text-secondary text-zinc-400 transition-all duration-200`,
+                    activeTab === value ? "bg-neutral-800 text-primary" : "",
                 )}
                 onClick={() => {
                     setActiveTab(value);

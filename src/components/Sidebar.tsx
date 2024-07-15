@@ -33,7 +33,6 @@ export const Sidebar = ({ user }: { user: any }) => {
         if (user) {
             getUserProfile(user.email).then((profile) => {
                 setProfile(profile);
-                console.log("profile", profile);
             });
         }
     }, [user]);
@@ -56,10 +55,10 @@ export const Sidebar = ({ user }: { user: any }) => {
             <AnimatePresence>
                 {open && (
                     <motion.div
-                        initial={{ x: -200 }}
+                        initial={{ x: "-100%" }}
                         animate={{ x: 0 }}
                         transition={{ duration: 0.2, ease: "linear" }}
-                        exit={{ x: -200 }}
+                        exit={{ x: "-100%" }}
                         className="fixed left-0 z-[100] flex h-screen max-w-[14rem] flex-col justify-between bg-neutral-950 px-6 py-10 lg:relative lg:w-fit"
                     >
                         <div>
@@ -82,10 +81,10 @@ export const Sidebar = ({ user }: { user: any }) => {
                 )}
             </AnimatePresence>
             <button
-                className="fixed bottom-4 right-4 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-neutral-800 backdrop-blur-sm lg:hidden"
+                className="fixed bottom-4 right-4 z-10 flex h-10 w-10 items-center justify-center rounded-full border border-neutral-800 backdrop-blur-sm lg:hidden"
                 onClick={() => setOpen(!open)}
             >
-                <IconLayoutSidebarRightCollapse className="h-4 w-4 text-secondary" />
+                <IconLayoutSidebarRightCollapse className="h-6 w-6 text-secondary" />
             </button>
         </>
     );

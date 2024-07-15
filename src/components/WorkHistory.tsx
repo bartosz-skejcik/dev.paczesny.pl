@@ -6,10 +6,9 @@ import { IconCircleCheckFilled } from "@tabler/icons-react";
 
 function formatDate(date: string) {
     const dateObject = new Date(date);
-    return dateObject.toLocaleDateString("en-US", {
+    return dateObject.toLocaleDateString("en-PL", {
         year: "numeric",
-        month: "long",
-        day: "numeric",
+        month: "short",
     });
 }
 
@@ -26,7 +25,11 @@ export const WorkHistory = async () => {
                     key={item.id}
                 >
                     <Paragraph className="w-40">
-                        {formatDate(item.date!)}
+                        {item.start_date && item.end_date
+                            ? `${formatDate(item.start_date)} - ${formatDate(
+                                  item.end_date,
+                              )}`
+                            : formatDate(item.date!)}
                     </Paragraph>
                     <div>
                         <Heading

@@ -265,9 +265,9 @@ export async function updateEducation(education: any) {
         .select()
         .single();
     if (error) {
-        throw error;
+        return { error };
     }
-    return data;
+    return { data };
 }
 
 export async function createEducation(education: any) {
@@ -278,9 +278,9 @@ export async function createEducation(education: any) {
         .select()
         .single();
     if (error) {
-        throw error;
+        return { error };
     }
-    return data;
+    return { data };
 }
 
 export async function deleteEducation(education_id: string) {
