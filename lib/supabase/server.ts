@@ -17,7 +17,7 @@ export async function createSupabaseServerClientReadOnly() {
                     return cookieStore.get(name)?.value;
                 },
             },
-        }
+        },
     );
 }
 
@@ -51,8 +51,18 @@ export async function createSupabaseServerClient() {
                     }
                 },
             },
-        }
+        },
     );
+}
+
+export async function singOut() {
+    "use server";
+    const supabase = await createSupabaseServerClientReadOnly();
+    const { error } = await supabase.auth.signOut();
+
+    if (error) {
+        throw error;
+    }
 }
 
 export async function getUserProfile(email: string) {
