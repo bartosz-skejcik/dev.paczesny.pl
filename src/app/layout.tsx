@@ -1,9 +1,11 @@
-import { Sidebar } from "@/components/Sidebar";
 import "./globals.css";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { Sidebar } from "@components/Sidebar";
+import { Footer } from "@components/Footer";
 import { twMerge } from "tailwind-merge";
-import { Footer } from "@/components/Footer";
+import { getUser } from "@/actions/user";
+import { RootProviders } from "./providers";
 
 const inter = Inter({
     subsets: ["latin"],
@@ -16,23 +18,24 @@ export const metadata: Metadata = {
         "Bartek Paczesny is a developer, writer and speaker. He is a digital nomad and travels around the world while working remotely.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
     children,
 }: {
     children: React.ReactNode;
 }) {
+    const { data } = await getUser();
     return (
         <html lang="en">
             <body
                 className={twMerge(
                     inter.className,
-                    "flex antialiased h-screen overflow-hidden bg-neutral-950"
+                    "flex h-screen overflow-hidden bg-neutral-950 antialiased",
                 )}
             >
-                <Sidebar />
-                <div className="lg:pl-2 lg:pt-2 bg-neutral-950 flex-1 overflow-y-auto">
-                    <div className="flex-1 bg-neutral-900 min-h-screen lg:rounded-tl-xl border border-transparent lg:border-neutral-800 overflow-y-auto">
-                        {children}
+                <Sidebar user={data.user} />
+                <div className="flex-1 overflow-y-auto bg-neutral-950 lg:pl-2 lg:pt-2">
+                    <div className="min-h-screen flex-1 overflow-y-auto border border-transparent bg-neutral-900 lg:rounded-tl-xl lg:border-neutral-800">
+                        <RootProviders>{children}</RootProviders>
                         <Footer />
                     </div>
                 </div>
