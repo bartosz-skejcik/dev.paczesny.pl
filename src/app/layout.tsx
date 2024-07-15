@@ -5,6 +5,7 @@ import { Sidebar } from "@components/Sidebar";
 import { Footer } from "@components/Footer";
 import { twMerge } from "tailwind-merge";
 import { getUser } from "@/actions/user";
+import { RootProviders } from "./providers";
 
 const inter = Inter({
     subsets: ["latin"],
@@ -34,7 +35,7 @@ export default async function RootLayout({
                 <Sidebar user={data.user} />
                 <div className="flex-1 overflow-y-auto bg-neutral-950 lg:pl-2 lg:pt-2">
                     <div className="min-h-screen flex-1 overflow-y-auto border border-transparent bg-neutral-900 lg:rounded-tl-xl lg:border-neutral-800">
-                        {children}
+                        <RootProviders>{children}</RootProviders>
                         <Footer />
                     </div>
                 </div>
