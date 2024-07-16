@@ -4,12 +4,33 @@ import { Heading } from "@ui/Heading";
 import { getEducation } from "@lib/supabase/server";
 import { IconCircleCheckFilled } from "@tabler/icons-react";
 
-function formatDate(date: string) {
-    const dateObject = new Date(date);
-    return dateObject.toLocaleDateString("en-PL", {
-        year: "numeric",
-        month: "short",
-    });
+function formatDate(date: string, start_date: string, end_date: string) {
+    const dateObject = new Date(date || "");
+    const startDate = new Date(start_date || "");
+    const endDate = new Date(end_date || "");
+
+    if (start_date && end_date) {
+        // check if the year diff is greater than or equal to 1 year
+        const yearDiff = endDate.getFullYear() - startDate.getFullYear();
+        if (yearDiff >= 1) {
+            // return year - year
+            return `${startDate.getFullYear().toLocaleString("pl-PL")} - ${endDate.getFullYear().toLocaleString("pl-PL")}`;
+        } else {
+            // return month - month
+            return `${startDate.getMonth().toLocaleString("pl-PL")} - ${endDate.getMonth().toLocaleString("pl-PL")}`;
+        }
+    } else if (start_date && !end_date) {
+        // return month, year - "currently"
+        return `${startDate.getMonth().toLocaleString("pl-PL")}, ${startDate.getFullYear().toLocaleString("pl-PL")} - "Currently"`;
+    } else {
+        // return date
+        return dateObject.toLocaleDateString("pl-PL");
+    }
+
+    // return dateObject.toLocaleDateString("en-PL", {
+    //     year: "numeric",
+    //     month: "short",
+    // });
 }
 
 export const WorkHistory = async () => {
@@ -25,11 +46,11 @@ export const WorkHistory = async () => {
                     key={item.id}
                 >
                     <Paragraph className="w-40">
-                        {item.start_date && item.end_date
-                            ? `${formatDate(item.start_date)} - ${formatDate(
-                                  item.end_date,
-                              )}`
-                            : formatDate(item.date!)}
+                        {formatDate(
+                            item.date!,
+                            item.start_date!,
+                            item.end_date!,
+                        )}
                     </Paragraph>
                     <div>
                         <Heading
