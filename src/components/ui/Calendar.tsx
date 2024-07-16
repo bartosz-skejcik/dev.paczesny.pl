@@ -27,9 +27,13 @@ function Calendar({
     ...props
 }: Props) {
     // const monthNuber = date.getMonth();
+    const [month, setMonth] = React.useState(date);
     return (
         <DayPicker
-            month={date}
+            month={month}
+            onMonthChange={(d) => {
+                setMonth(d);
+            }}
             initialFocus={false}
             selected={date}
             locale={pl}
