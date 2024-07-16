@@ -8,9 +8,17 @@ import { cn } from "@lib/utils";
 import { Button } from "@ui/Button";
 import { Calendar } from "@ui/Calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@ui/Popover";
-import { useEffect, useState } from "react";
 
-export function DatePicker({ setDate, date, placeholder }: any) {
+export function DatePicker({
+    setDate,
+    date,
+    placeholder,
+}: {
+    setDate: any;
+    date: Date | string | null;
+    placeholder: string;
+}) {
+    const d = new Date(date ?? new Date());
     return (
         <Popover>
             <PopoverTrigger asChild>
@@ -22,11 +30,15 @@ export function DatePicker({ setDate, date, placeholder }: any) {
                     )}
                 >
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {date ? format(date, "PPP") : <span>{placeholder}</span>}
+                    {d && typeof d === "object" ? (
+                        d.toLocaleDateString("pl-PL")
+                    ) : (
+                        <span>{placeholder}</span>
+                    )}
                 </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0">
-                <Calendar date={date} setDate={setDate as any} />
+                <Calendar date={d} setDate={setDate as any} />
             </PopoverContent>
         </Popover>
     );

@@ -26,14 +26,16 @@ function Calendar({
     setDate,
     ...props
 }: Props) {
+    // const monthNuber = date.getMonth();
     return (
         <DayPicker
+            month={date}
+            initialFocus={false}
             selected={date}
             locale={pl}
             // @ts-ignore
             onSelect={(d) => {
-                const newDate = new Date(d!);
-                setDate(newDate);
+                setDate(d as any);
             }}
             mode="single"
             fixedWeeks
