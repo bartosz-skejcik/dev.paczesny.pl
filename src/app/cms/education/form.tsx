@@ -1,11 +1,11 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 "use client";
 
-import { DatePicker } from "@ui/DatePicker";
+import { DatePicker } from "@ui/shadcn/DatePicker";
 import { Heading } from "@ui/Heading";
 import { InputWithLabel } from "@ui/InputWithLabel";
 import { Tables } from "@lib/database.types";
-import { Label } from "@ui/Label";
+import { Label } from "@ui/shadcn/Label";
 import { Dispatch, SetStateAction, useEffect, useState } from "react";
 import { createEducation, updateEducation } from "@lib/supabase/server";
 

@@ -63,7 +63,7 @@ function Tabs<T>({ children, initialActiveTab, onChange }: TabsProps<T>) {
     }, [activeTab, onChange]);
 
     return (
-        <div className="relative">
+        <div className="relative w-full">
             <div
                 onMouseLeave={() => {
                     setPosition((pv) => ({

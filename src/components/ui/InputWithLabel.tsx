@@ -1,5 +1,5 @@
-import { Input } from "@ui/Input";
-import { Label } from "@ui/Label";
+import { Input } from "@ui/shadcn/Input";
+import { Label } from "@ui/shadcn/Label";
 import { twMerge } from "tailwind-merge";
 
 type Props = {

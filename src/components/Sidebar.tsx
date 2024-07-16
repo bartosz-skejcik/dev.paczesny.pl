@@ -81,7 +81,7 @@ export const Sidebar = ({ user }: { user: any }) => {
                 )}
             </AnimatePresence>
             <button
-                className="fixed bottom-4 right-4 z-10 flex h-10 w-10 items-center justify-center rounded-full border border-neutral-800 backdrop-blur-sm lg:hidden"
+                className="fixed bottom-4 right-4 z-50 flex h-10 w-10 items-center justify-center rounded-full border border-neutral-800 backdrop-blur-sm lg:hidden"
                 onClick={() => setOpen(!open)}
             >
                 <IconLayoutSidebarRightCollapse className="h-6 w-6 text-secondary" />
