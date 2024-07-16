@@ -9,6 +9,21 @@ function formatDate(date: string, start_date: string, end_date: string) {
     const startDate = new Date(start_date || "");
     const endDate = new Date(end_date || "");
 
+    const months = [
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December",
+    ];
+
     if (start_date && end_date) {
         // check if the year diff is greater than or equal to 1 year
         const yearDiff = endDate.getFullYear() - startDate.getFullYear();
@@ -17,14 +32,19 @@ function formatDate(date: string, start_date: string, end_date: string) {
             return `${startDate.getFullYear().toLocaleString("pl-PL")} - ${endDate.getFullYear().toLocaleString("pl-PL")}`;
         } else {
             // return month - month
-            return `${startDate.getMonth().toLocaleString("pl-PL")} - ${endDate.getMonth().toLocaleString("pl-PL")}`;
+            console.log(startDate.toLocaleString("pl-PL"), endDate);
+            return `${months[Number(startDate.getMonth().toLocaleString("pl-PL"))]} - ${months[endDate.getMonth()]} | ${endDate.getFullYear().toLocaleString("pl-PL")}`;
         }
     } else if (start_date && !end_date) {
         // return month, year - "currently"
-        return `${startDate.getMonth().toLocaleString("pl-PL")}, ${startDate.getFullYear().toLocaleString("pl-PL")} - "Currently"`;
+        return `${months[startDate.getMonth()]}, ${startDate.getFullYear().toLocaleString("pl-PL")} - Currently`;
     } else {
         // return date
-        return dateObject.toLocaleDateString("pl-PL");
+        return dateObject.toLocaleDateString("pl-PL", {
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+        });
     }
 
     // return dateObject.toLocaleDateString("en-PL", {
@@ -45,7 +65,7 @@ export const WorkHistory = async () => {
                     className="relative my-20 flex flex-col space-x-10 space-y-10 md:flex-row md:space-y-0"
                     key={item.id}
                 >
-                    <Paragraph className="w-40">
+                    <Paragraph className="w-40 whitespace-nowrap capitalize">
                         {formatDate(
                             item.date!,
                             item.start_date!,
