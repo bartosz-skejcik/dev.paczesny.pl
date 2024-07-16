@@ -214,9 +214,9 @@ export async function createSkill(skill: any) {
         .select()
         .single();
     if (skillError) {
-        throw skillError;
+        return { error: skillError };
     }
-    return skillData;
+    return { data: skillData };
 }
 
 export async function updateSkill(skill: any) {
@@ -228,9 +228,9 @@ export async function updateSkill(skill: any) {
         .select()
         .single();
     if (skillError) {
-        throw skillError;
+        return { error: skillError };
     }
-    return skillData;
+    return { data: skillData };
 }
 
 export async function deleteSkill(skill_id: string) {
@@ -242,9 +242,9 @@ export async function deleteSkill(skill_id: string) {
         .select()
         .single();
     if (skillError) {
-        throw skillError;
+        return { error: skillError };
     }
-    return skillData;
+    return { data: skillData };
 }
 
 export async function getEducation() {

@@ -6,18 +6,6 @@ import { Tables } from "@lib/database.types";
 import { getSkills } from "@lib/supabase/server";
 import { useEffect, useState } from "react";
 import { IconPencilPlus } from "@tabler/icons-react";
-// import Form from "./form";
-import {
-    Table,
-    TableBody,
-    TableCaption,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "@ui/shadcn/Table";
-import Image from "next/image";
-import { Heading } from "@/components/ui/Heading";
 import CategoryView from "./category-view";
 
 type Props = {};
@@ -35,7 +23,7 @@ function Skills({}: Props) {
 
     useEffect(() => {
         getSkills().then((skills) => {
-            setSkills(skills);
+            setSkills(skills.sort((a, b) => a.name.localeCompare(b.name)));
             setTableHead(tableHead);
         });
     }, []);
@@ -79,6 +67,8 @@ function Skills({}: Props) {
             </aside>
             <div className="m-0 flex min-h-screen w-full items-start justify-center rounded-xl border border-neutral-800/70 bg-neutral-950/30 lg:m-4">
                 <CategoryView
+                    setSkills={setSkills}
+                    activeCategory={activeCategory}
                     skills={skills.filter(
                         (skill) => skill.category === activeCategory,
                     )}
