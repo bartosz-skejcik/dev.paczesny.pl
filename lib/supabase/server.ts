@@ -206,24 +206,30 @@ export async function deleteProject(project_id: string) {
     return projectData;
 }
 
-export async function createSkill(skill: any) {
+export async function createSkill(skill: any, fileOptions: { path: string }) {
     const supabase = await createSupabaseServerClient();
     const { data: skillData, error: skillError } = await supabase
         .from("skills")
-        .insert({ ...skill, category: skill.category.toLowerCase() })
+        .insert({
+            ...skill,
+            category: skill.category.toLowerCase(),
+            icon: fileOptions.path,
+        })
         .select()
         .single();
+
     if (skillError) {
         return { error: skillError };
     }
+
     return { data: skillData };
 }
 
-export async function updateSkill(skill: any) {
+export async function updateSkill(skill: any, fileOptions: { path: string }) {
     const supabase = await createSupabaseServerClient();
     const { data: skillData, error: skillError } = await supabase
         .from("skills")
-        .update({ ...skill, category: skill.category.toLowerCase() })
+        .update({ ...skill, category: skill.category.toLowerCase(), icon: fileOptions.path })
         .eq("id", skill.id)
         .select()
         .single();

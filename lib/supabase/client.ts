@@ -8,6 +8,37 @@ export default function createSupabaseBrowerClient() {
     );
 }
 
+export async function uploadFile(
+    file: File,
+    bucket: "projects" | "skills",
+    path: string,
+) {
+    const supabase = createSupabaseBrowerClient();
+    const { data, error } = await supabase.storage
+        .from(bucket)
+        .upload(path, file, {
+            upsert: true,
+        });
+    if (error) {
+        return { error };
+    }
+    return { data };
+}
+
+export async function deleteFile(
+    bucket: "projects" | "skills",
+    fullPath: string,
+) {
+    const supabase = createSupabaseBrowerClient();
+    const { data, error } = await supabase.storage
+        .from(bucket)
+        .remove([fullPath]);
+    if (error) {
+        return { error };
+    }
+    return { data };
+}
+
 export async function getUserProfile(email: string) {
     const supabase = createSupabaseBrowerClient();
     const { data, error } = await supabase

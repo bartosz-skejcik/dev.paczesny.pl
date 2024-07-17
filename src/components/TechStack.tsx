@@ -47,12 +47,12 @@ export const TechStack = ({ stack }: { stack: StackItem[] }) => {
         <div>
             <Heading
                 as="h2"
-                className="font-black text-lg md:text-lg lg:text-lg mt-20 mb-4"
+                className="mb-4 mt-20 text-lg font-black md:text-lg lg:text-lg"
             >
                 Tech Stack
             </Heading>
-            <div className="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-2 sm:mt-10 max-w-4xl mx-auto">
-                <div className="flex flex-row md:flex-col overflow-x-auto md:overflow-x-visible relative">
+            <div className="mx-auto flex max-w-4xl flex-col space-y-4 sm:mt-10 md:flex-row md:space-x-2 md:space-y-0">
+                <div className="relative flex flex-row overflow-x-auto md:flex-col md:overflow-x-visible">
                     <FallingBeam />
                     <Tabs
                         initialActiveTab={Object.keys(categories)[0]}
@@ -71,9 +71,9 @@ export const TechStack = ({ stack }: { stack: StackItem[] }) => {
                                     <div
                                         ref={ref}
                                         onClick={onClick}
-                                        className="flex gap-2 items-center"
+                                        className="flex items-center gap-2"
                                     >
-                                        <div className="p-1 h-6 w-6 flex items-center justify-center rounded-full bg-gradient-to-br from-zinc-700 to-zinc-800"></div>
+                                        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-zinc-700 to-zinc-800 p-1"></div>
                                         <span className="capitalize">
                                             {category}
                                         </span>
@@ -83,10 +83,10 @@ export const TechStack = ({ stack }: { stack: StackItem[] }) => {
                         ))}
                     </Tabs>
                 </div>
-                <div className="md:pl-10 flex-1">
-                    <div className="flex flex-col space-y-4 w-full">
+                <div className="flex-1 md:pl-10">
+                    <div className="flex w-full flex-col space-y-4">
                         <div
-                            className="grid grid-cols-1 gap-4 lg:grid-cols-3 p-4 w-full"
+                            className="grid w-full grid-cols-1 gap-4 p-4 lg:grid-cols-3"
                             style={{
                                 opacity: 1,
                                 transform: "none",
@@ -96,11 +96,11 @@ export const TechStack = ({ stack }: { stack: StackItem[] }) => {
                             {activeCategory.map((skill) => (
                                 <div
                                     key={skill.id}
-                                    className="flex items-center justify-start gap-2 w-full"
+                                    className="flex w-full items-center justify-start gap-2"
                                 >
-                                    <div className="w-12 h-12 aspect-square p-1.5 bg-neutral-700 rounded-md flex items-center justify-center">
+                                    <div className="flex aspect-square h-12 w-12 items-center justify-center rounded-md bg-neutral-700 p-1.5">
                                         <Image
-                                            src={skill.icon!}
+                                            src={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${skill.icon!}`}
                                             alt={skill.name}
                                             width={128}
                                             height={128}
@@ -108,10 +108,10 @@ export const TechStack = ({ stack }: { stack: StackItem[] }) => {
                                         />
                                     </div>
                                     <div className="flex flex-col items-start justify-center">
-                                        <h1 className="text-lg font-medium text-primary whitespace-nowrap">
+                                        <h1 className="whitespace-nowrap text-lg font-medium text-primary">
                                             {skill.name}
                                         </h1>
-                                        <div className="text-secondary text-sm tracking-widest">
+                                        <div className="text-sm tracking-widest text-secondary">
                                             {skill.experience}
                                         </div>
                                     </div>

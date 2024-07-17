@@ -6,8 +6,8 @@ type Props = {
     type: string;
     label: string;
     placeholder: string;
-    value?: string | undefined;
-    onChange?: (value: string) => void;
+    value?: any;
+    onChange?: (value: any) => void;
     className?: string;
 };
 
@@ -26,7 +26,12 @@ export function InputWithLabel({
                 type={type}
                 id={label.toLowerCase()}
                 placeholder={placeholder}
-                onChange={(e) => onChange && onChange(e.target.value)}
+                onChange={(e) =>
+                    onChange &&
+                    (type == "file"
+                        ? onChange(e.target.files![0])
+                        : onChange(e.target.value))
+                }
                 value={value}
             />
         </div>

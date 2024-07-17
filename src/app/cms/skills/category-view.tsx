@@ -16,6 +16,9 @@ import { Highlight } from "@/components/ui/Highlight";
 import { InputWithLabel } from "@ui/InputWithLabel";
 import { createSkill, deleteSkill, updateSkill } from "@lib/supabase/server";
 import SimpleDrawer from "@/components/SimpleDrawer";
+import { deleteFile, uploadFile } from "@lib/supabase/client";
+import { Label } from "@/components/ui/shadcn/Label";
+import { Input } from "@/components/ui/shadcn/Input";
 
 type Props = {
     skills: Tables<"skills">[];
@@ -24,8 +27,11 @@ type Props = {
 };
 
 function CategoryView({ skills, activeCategory, setSkills }: Props) {
+    const [file, setFile] = useState<File>();
+
     const [open, setOpen] = useState(false);
     const [confirmationOpen, setConfirmationOpen] = useState(false);
+
     const [skillId, setSkillId] = useState<string>("");
     const [action, setAction] = useState<"create" | "edit">();
 
@@ -36,27 +42,72 @@ function CategoryView({ skills, activeCategory, setSkills }: Props) {
 
     async function handleSubmit() {
         if (action === "create") {
-            const { data, error } = await createSkill(form);
-            if (error) {
-                console.log(error);
-            }
-            const temp = [...skills, data as Tables<"skills">].sort((a, b) =>
-                a.name.localeCompare(b.name),
-            );
-            setSkills(temp);
-            setForm({} as Tables<"skills">);
-        } else {
-            const { data, error } = await updateSkill(form);
-            if (error) {
-                console.log(error);
+            const fileExt = file!.name.split(".").pop();
+            if (!fileExt) {
+                console.log("No file extension");
+                return;
             }
 
-            setSkills(
-                skills
-                    .map((skill) => (skill.id === data?.id ? data : skill))
-                    .sort((a, b) => a.name.localeCompare(b.name)),
+            const { data: fileData, error: fileError } = await uploadFile(
+                file as File,
+                "skills",
+                `${form.name.toLocaleLowerCase().replaceAll(" ", "-")}.${fileExt}`,
             );
-            setForm({} as Tables<"skills">);
+
+            if (fileError) {
+                return { error: fileError };
+            }
+
+            if (file) {
+                // create the skill
+                const { data, error } = await createSkill(form, {
+                    path: `skills/${form.name.toLocaleLowerCase().replaceAll(" ", "-")}.${fileExt}`,
+                });
+
+                if (error) {
+                    console.log(error);
+                }
+
+                const temp = [...skills, data as Tables<"skills">].sort(
+                    (a, b) => a.name.localeCompare(b.name),
+                );
+
+                setSkills(temp);
+                setForm({} as Tables<"skills">);
+            }
+        } else {
+            const fileExt = file!.name.split(".").pop();
+            if (!fileExt) {
+                console.log("No file extension");
+                return;
+            }
+
+            const { data: fileData, error: fileError } = await uploadFile(
+                file as File,
+                "skills",
+                `${form.name.toLocaleLowerCase().replaceAll(" ", "-")}.${fileExt}`,
+            );
+
+            if (fileError) {
+                return { error: fileError };
+            }
+
+            if (file) {
+                const { data, error } = await updateSkill(form, {
+                    path: `skills/${form.name.toLocaleLowerCase().replaceAll(" ", "-")}.${fileExt}`,
+                });
+                if (error) {
+                    console.log(error);
+                }
+
+                setSkills(
+                    skills
+                        .map((skill) => (skill.id === data?.id ? data : skill))
+                        .sort((a, b) => a.name.localeCompare(b.name)),
+                );
+                setForm({} as Tables<"skills">);
+                setFile(undefined);
+            }
         }
         setOpen(false);
     }
@@ -66,6 +117,15 @@ function CategoryView({ skills, activeCategory, setSkills }: Props) {
             const { data, error } = await deleteSkill(skillId);
             if (error) {
                 console.log(error);
+            }
+
+            const { data: fileData, error: fileError } = await deleteFile(
+                "skills",
+                data?.icon!,
+            );
+
+            if (fileError) {
+                return { error: fileError };
             }
 
             setSkills(skills.filter((skill) => skill.id !== skillId));
@@ -79,6 +139,7 @@ function CategoryView({ skills, activeCategory, setSkills }: Props) {
 
     function handleClose() {
         setOpen(false);
+        setFile(undefined);
         setForm({} as Tables<"skills">);
     }
 
@@ -125,7 +186,7 @@ function CategoryView({ skills, activeCategory, setSkills }: Props) {
                             Fill out the form below to add a new skill.
                         </DrawerDescription>
                     </DrawerHeader>
-                    <div className="mb-4 mt-3 space-y-3 px-4">
+                    <div className="mb-4 mt-3 flex flex-col items-start justify-center space-y-3 px-4">
                         <InputWithLabel
                             type="text"
                             label="Name"
@@ -135,19 +196,101 @@ function CategoryView({ skills, activeCategory, setSkills }: Props) {
                                 setForm({ ...form!, name: value })
                             }
                         />
-                        <InputWithLabel
-                            type="text"
-                            label="Icon"
-                            placeholder="Icon"
-                            value={form?.icon!}
-                            onChange={(value) =>
-                                setForm({ ...form!, icon: value })
-                            }
-                        />
+                        {/* Conditionally render the icon input */}
+                        {form.icon || file ? (
+                            <div className="mb-4 w-full max-w-sm items-center rounded-lg border-2 border-dashed border-neutral-700 bg-neutral-800 p-6 text-center text-primary">
+                                <div>
+                                    <Image
+                                        src={
+                                            file
+                                                ? URL.createObjectURL(file)
+                                                : form.icon?.startsWith("http")
+                                                  ? form.icon
+                                                  : `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${form.icon}`
+                                        }
+                                        alt="Icon Preview"
+                                        width={100}
+                                        height={100}
+                                        className="mx-auto max-h-48 rounded-lg"
+                                    />
+                                </div>
+                                <button
+                                    className="text-red-500 underline"
+                                    onClick={() => {
+                                        setFile(undefined);
+                                        setForm({ ...form, icon: "" });
+                                    }}
+                                >
+                                    Remove Image
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="mb-4 max-w-sm cursor-pointer items-center rounded-lg border-2 border-dashed border-neutral-700 bg-neutral-800 p-6 text-center text-primary">
+                                <Label
+                                    htmlFor="upload"
+                                    className="cursor-pointer"
+                                >
+                                    <svg
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        stroke-width="1.5"
+                                        stroke="currentColor"
+                                        className="mx-auto mb-4 h-8 w-8"
+                                    >
+                                        <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"
+                                        />
+                                    </svg>
+                                    <h5 className="mb-2 text-xl font-bold tracking-tight">
+                                        Upload the icon
+                                    </h5>
+                                    <p className="text-sm font-normal text-secondary md:px-5">
+                                        Choose photo size should be less than
+                                        2MB
+                                    </p>
+                                    <p className="text-sm font-normal text-neutral-400 md:px-6">
+                                        and should be in{" "}
+                                        <b className="text-secondary">
+                                            JPG, PNG, or GIF
+                                        </b>{" "}
+                                        format.
+                                    </p>
+                                    <span
+                                        id="filename"
+                                        className="z-50 bg-neutral-200 text-secondary"
+                                    ></span>
+                                </Label>
+                                <Input
+                                    id="upload"
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) {
+                                            setFile(file);
+                                            const reader = new FileReader();
+                                            reader.onload = (event) => {
+                                                setForm({
+                                                    ...form,
+                                                    icon: event.target
+                                                        ?.result as string,
+                                                });
+                                            };
+                                            reader.readAsDataURL(file);
+                                        }
+                                    }}
+                                />
+                            </div>
+                        )}
                         <InputWithLabel
                             type="text"
                             label="Experience"
                             placeholder="Experience"
+                            className="text-primary"
                             value={form?.experience!}
                             onChange={(value) =>
                                 setForm({ ...form!, experience: value })
@@ -183,15 +326,25 @@ const Item = ({
 }) => {
     return (
         <div className="group relative aspect-square w-full rounded-xl bg-transparent transition-all duration-500 hover:bg-neutral-950">
-            <div className="group-hover:shadow-under absolute inset-0 z-20 flex aspect-square w-full flex-col items-start justify-end gap-8 rounded-xl border border-neutral-800 bg-neutral-900 p-3 transition-all duration-200 group-hover:-top-14 group-hover:shadow-neutral-700/30 md:p-5">
+            <div className="absolute inset-0 z-20 flex aspect-square w-full flex-col items-start justify-end gap-8 rounded-xl border border-neutral-800 bg-neutral-900 p-3 transition-all duration-200 group-hover:-top-14 group-hover:shadow-under group-hover:shadow-neutral-700/30 md:p-5">
                 <div className="grid aspect-square w-[40%] items-center rounded-lg bg-neutral-700/30 p-1 md:p-2">
-                    <Image
-                        src={skill.icon!}
-                        alt={skill.name}
-                        width={100}
-                        height={100}
-                        className="aspect-square w-full"
-                    />
+                    {skill.icon?.startsWith("http") ? (
+                        <Image
+                            src={skill.icon!}
+                            alt={skill.name}
+                            width={100}
+                            height={100}
+                            className="aspect-square w-full"
+                        />
+                    ) : (
+                        <Image
+                            src={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${skill.icon!}`}
+                            alt={skill.name}
+                            width={100}
+                            height={100}
+                            className="aspect-square w-full"
+                        />
+                    )}
                 </div>
                 <div className="flex flex-col items-start justify-center">
                     <span className="text-xl font-medium text-primary">

@@ -44,6 +44,10 @@ const nextConfig = {
                 protocol: "https",
                 hostname: "images.sftcdn.net",
             },
+            {
+                protocol: "http",
+                hostname: "127.0.0.1",
+            },
         ],
     },
     experimental: {
