@@ -29,18 +29,18 @@ function formatDate(date: string, start_date: string, end_date: string) {
         const yearDiff = endDate.getFullYear() - startDate.getFullYear();
         if (yearDiff >= 1) {
             // return year - year
-            return `${startDate.getFullYear().toLocaleString("pl-PL")} - ${endDate.getFullYear().toLocaleString("pl-PL")}`;
+            return `${startDate.getFullYear().toLocaleString("en-PL")} - ${endDate.getFullYear().toLocaleString("en-PL")}`;
         } else {
             // return month - month
-            console.log(startDate.toLocaleString("pl-PL"), endDate);
-            return `${months[Number(startDate.getMonth().toLocaleString("pl-PL"))]} - ${months[endDate.getMonth()]} | ${endDate.getFullYear().toLocaleString("pl-PL")}`;
+            console.log(startDate.toLocaleString("en-PL"), endDate);
+            return `${months[Number(startDate.getMonth().toLocaleString("en-PL"))]} - ${months[endDate.getMonth()]} | ${endDate.getFullYear().toLocaleString("en-PL")}`;
         }
     } else if (start_date && !end_date) {
         // return month, year - "currently"
-        return `${months[startDate.getMonth()]}, ${startDate.getFullYear().toLocaleString("pl-PL")} - Currently`;
+        return `${months[startDate.getMonth()]}, ${startDate.getFullYear().toLocaleString("en-PL")} - Currently`;
     } else {
         // return date
-        return dateObject.toLocaleDateString("pl-PL", {
+        return dateObject.toLocaleDateString("en-PL", {
             year: "numeric",
             month: "long",
             day: "numeric",
