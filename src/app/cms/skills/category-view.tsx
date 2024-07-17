@@ -37,7 +37,6 @@ function CategoryView({ skills, activeCategory, setSkills }: Props) {
 
     const [form, setForm] = useState<Tables<"skills">>({
         ...({} as any),
-        category: activeCategory,
     });
 
     async function handleSubmit() {
@@ -60,9 +59,12 @@ function CategoryView({ skills, activeCategory, setSkills }: Props) {
 
             if (file) {
                 // create the skill
-                const { data, error } = await createSkill(form, {
-                    path: `skills/${form.name.toLocaleLowerCase().replaceAll(" ", "-")}.${fileExt}`,
-                });
+                const { data, error } = await createSkill(
+                    { ...form, category: activeCategory },
+                    {
+                        path: `skills/${form.name.toLocaleLowerCase().replaceAll(" ", "-")}.${fileExt}`,
+                    },
+                );
 
                 if (error) {
                     console.log(error);
@@ -93,9 +95,12 @@ function CategoryView({ skills, activeCategory, setSkills }: Props) {
             }
 
             if (file) {
-                const { data, error } = await updateSkill(form, {
-                    path: `skills/${form.name.toLocaleLowerCase().replaceAll(" ", "-")}.${fileExt}`,
-                });
+                const { data, error } = await updateSkill(
+                    { ...form, category: activeCategory },
+                    {
+                        path: `skills/${form.name.toLocaleLowerCase().replaceAll(" ", "-")}.${fileExt}`,
+                    },
+                );
                 if (error) {
                     console.log(error);
                 }
