@@ -11,25 +11,24 @@ type Props = {
 
 interface Project extends Tables<"projects"> {
     skills?: Tables<"skills">[];
+    images?: Tables<"images">[];
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const slug = params.slug;
     const projects = await getProjects();
-    const project: Tables<"projects"> | undefined = projects.find(
-        (project: Tables<"projects">) => project.id === slug,
-    );
+    const project = projects.find((project) => project.id === slug);
 
     if (project) {
         return {
             title: project.title,
-            description: project.full_description,
+            description: project.description,
         };
     } else {
         return {
             title: "Projects | Bartek Paczesny",
             description:
-                "Bartek Paczesny is a developer, writer and speaker. He is a digital nomad and travels around the world while working remotely.",
+                "Bartek Paczesny is a Polish front-end developer fueled by curiosity and a love for creating with code. Exploring new technologies and pushing boundaries. He's a junior software engineer with 2 years of work experience folowed by 4 years of experience in coding. A self-taught developer with a strong focus on visual design and accessibility.",
         };
     }
 }
@@ -47,7 +46,7 @@ export default async function SingleProjectPage({
     }
     return (
         <Container>
-            <SingleProduct project={project} />
+            <SingleProduct project={project as Project} />
         </Container>
     );
 }

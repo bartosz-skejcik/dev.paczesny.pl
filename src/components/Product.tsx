@@ -7,10 +7,11 @@ import { Paragraph } from "@ui/Paragraph";
 import { motion } from "framer-motion";
 import { Tables } from "@lib/database.types";
 import Link from "next/link";
-import { IconArrowLeft } from "@tabler/icons-react";
+import { IconArrowLeft, IconArrowRight } from "@tabler/icons-react";
 
 interface Project extends Tables<"projects"> {
     skills?: Tables<"skills">[];
+    images?: Tables<"images">[];
 }
 
 export const SingleProduct = ({ project }: { project: Project }) => {
@@ -47,22 +48,24 @@ export const SingleProduct = ({ project }: { project: Project }) => {
                 />
                 <div className="absolute bottom-0 h-40 w-full bg-gradient-to-b from-transparent to-neutral-900" />
             </motion.div>
-            {/* <div className="flex flex-row justify-center my-8 flex-wrap">
-                {product.images.map((image, idx) => (
-                    <button
-                        onClick={() => setActiveImage(image)}
-                        key={`image-thumbnail-${idx}`}
-                    >
-                        <Image
-                            src={image}
-                            alt="product thumbnail"
-                            height="1000"
-                            width="1000"
-                            className="h-14 w-16 md:h-40 md:w-60 object-cover object-top mr-4 mb-r border rounded-lg border-neutral-800"
-                        />
-                    </button>
-                ))}
-            </div> */}
+            {project.images && (
+                <div className="my-8 flex flex-row flex-wrap justify-center">
+                    {project.images.map((image, idx) => (
+                        <button
+                            onClick={() => setActiveImage(image.url)}
+                            key={`image-thumbnail-${idx}`}
+                        >
+                            <Image
+                                src={image.url}
+                                alt="product thumbnail"
+                                height="1000"
+                                width="1000"
+                                className="mb-r mr-4 h-14 w-16 rounded-lg border border-neutral-800 object-cover object-top md:h-40 md:w-60"
+                            />
+                        </button>
+                    ))}
+                </div>
+            )}
             <div className="mt-20 flex flex-col items-center justify-between lg:flex-row">
                 <Heading className="mb-2 pb-1 font-black">
                     {" "}
@@ -81,36 +84,32 @@ export const SingleProduct = ({ project }: { project: Project }) => {
             </div>
             <div className="mb-5">
                 <Paragraph className="mt-4 max-w-xl">
-                    {project.full_description}
+                    {project.description}
                 </Paragraph>
             </div>
-            {/* <div className="prose prose-sm md:prose-base max-w-none text-neutral-500">
+            <div className="prose prose-sm mb-5 max-w-none text-neutral-500 md:prose-base">
                 {project?.content}
-            </div> */}
-
-            <Link
-                href={project.link || "#"}
-                target="__blank"
-                className="group/button mt-auto inline-flex origin-left items-center gap-1 rounded-full bg-neutral-200 px-4 py-2 text-sm font-medium text-black shadow-lg shadow-white/20 ring-neutral-950/60 ring-offset-neutral-100 transition hover:scale-105 focus:outline-none focus-visible:ring-1 focus-visible:ring-offset-2 group-hover/button:scale-105 group-hover/button:bg-neutral-950/15 sm:backdrop-blur-sm"
-            >
-                Live Preview
-                <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5"
+            </div>
+            {project.link && (
+                <Link
+                    href={project.link || "#"}
+                    target="__blank"
+                    className="group/button mt-4 inline-flex origin-left items-center gap-1 rounded-full bg-neutral-200 px-4 py-2 text-sm font-medium text-black shadow-lg shadow-white/20 ring-neutral-950/60 ring-offset-neutral-100 transition hover:scale-105 focus:outline-none focus-visible:ring-1 focus-visible:ring-offset-2 group-hover/button:scale-105 group-hover/button:bg-neutral-950/15 sm:backdrop-blur-sm"
                 >
-                    <path d="M5 12l14 0"></path>
-                    <path d="M13 18l6 -6"></path>
-                    <path d="M13 6l6 6"></path>
-                </svg>
-            </Link>
+                    Live Preview
+                    <IconArrowRight className="h-4 w-4" />
+                </Link>
+            )}
+            {project.github && (
+                <Link
+                    href={project.github || "#"}
+                    target="__blank"
+                    className="group/button ml-4 inline-flex origin-left items-center gap-1 rounded-full bg-neutral-200 px-4 py-2 text-sm font-medium text-black shadow-lg shadow-white/20 ring-neutral-950/60 ring-offset-neutral-100 transition hover:scale-105 focus:outline-none focus-visible:ring-1 focus-visible:ring-offset-2 group-hover/button:scale-105 group-hover/button:bg-neutral-950/15 sm:backdrop-blur-sm"
+                >
+                    GitHub
+                    <IconArrowRight className="h-4 w-4" />
+                </Link>
+            )}
         </div>
     );
 };

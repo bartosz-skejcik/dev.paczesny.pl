@@ -17,12 +17,12 @@ export default async function Home() {
             <Heading className="font-black">
                 Hello there! I&apos;m Bartek
             </Heading>
-            <Paragraph className="max-w-xl mt-4">
+            <Paragraph className="mt-4 max-w-xl">
                 I&apos;m a Polish front-end developer fueled by curiosity and a{" "}
                 <Highlight>love for creating</Highlight> with code. Exploring
                 new technologies and pushing boundaries.
             </Paragraph>
-            <Paragraph className="max-w-xl mt-4">
+            <Paragraph className="mt-4 max-w-xl">
                 I&apos;m a junior software engineer with{" "}
                 <Highlight>2 years of work experience</Highlight> folowed by{" "}
                 <Highlight>4 years of experience</Highlight> in coding. I&apos;m
@@ -34,7 +34,7 @@ export default async function Home() {
             <TechStack stack={skills} />
             <Heading
                 as="h2"
-                className="font-black text-lg md:text-lg lg:text-lg mt-20 mb-4"
+                className="mb-4 mt-20 text-lg font-black md:text-lg lg:text-lg"
             >
                 What I&apos;ve been working on
             </Heading>

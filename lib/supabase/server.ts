@@ -93,7 +93,9 @@ export async function getProject(id: string) {
     const supabase = await createSupabaseServerClientReadOnly();
     const { data, error } = await supabase
         .from("projects")
-        .select("*, skills ( experience, id, name, icon, category )")
+        .select(
+            "*, skills ( experience, id, name, icon, category ), images ( id, url )",
+        )
         .eq("id", id)
         .single();
     if (error) {
@@ -111,87 +113,6 @@ export async function getSkills() {
     return data;
 }
 
-export async function updateProject(project: any) {
-    const supabase = await createSupabaseServerClient();
-    const skills = project.stack;
-    const { stack, ...projectData } = project;
-    const { data: projectDataResponse, error: projectError } = await supabase
-        .from("projects")
-        .update(projectData)
-        .eq("id", project.id)
-        .select()
-        .single();
-    if (projectError) {
-        throw projectError;
-    }
-
-    // for each skill, insert a connection between the project and the skill in the project_skills table
-
-    skills.forEach(async (skill: any) => {
-        const { data, error } = await supabase
-            .from("skills")
-            .select("*")
-            .eq("name", skill)
-            .single();
-        if (error) {
-            throw error;
-        }
-
-        const skillId = data.id;
-
-        const { data: projectSkillData, error: projectSkillError } =
-            await supabase.from("stack").upsert({
-                project_id: projectDataResponse.id,
-                skill_id: skillId,
-            });
-        if (projectSkillError) {
-            throw projectSkillError;
-        }
-    });
-
-    return projectDataResponse;
-}
-
-export async function createProject(project: any) {
-    const supabase = await createSupabaseServerClient();
-    const skills = project.stack;
-    const { stack, ...projectData } = project;
-    const { data: projectDataResponse, error: projectError } = await supabase
-        .from("projects")
-        .insert(projectData)
-        .select()
-        .single();
-    if (projectError) {
-        throw projectError;
-    }
-
-    // for each skill, insert a connection between the project and the skill in the project_skills table
-
-    skills.forEach(async (skill: any) => {
-        const { data, error } = await supabase
-            .from("skills")
-            .select("*")
-            .eq("name", skill)
-            .single();
-        if (error) {
-            throw error;
-        }
-
-        const skillId = data.id;
-
-        const { data: projectSkillData, error: projectSkillError } =
-            await supabase.from("stack").upsert({
-                project_id: projectDataResponse.id,
-                skill_id: skillId,
-            });
-        if (projectSkillError) {
-            throw projectSkillError;
-        }
-    });
-
-    return projectDataResponse;
-}
-
 export async function deleteProject(project_id: string) {
     const supabase = await createSupabaseServerClient();
     const { data: projectData, error: projectError } = await supabase
@@ -201,9 +122,9 @@ export async function deleteProject(project_id: string) {
         .select()
         .single();
     if (projectError) {
-        throw projectError;
+        return { error: projectError };
     }
-    return projectData;
+    return { data: projectData };
 }
 
 export async function createSkill(skill: any, fileOptions: { path: string }) {
@@ -229,7 +150,11 @@ export async function updateSkill(skill: any, fileOptions: { path: string }) {
     const supabase = await createSupabaseServerClient();
     const { data: skillData, error: skillError } = await supabase
         .from("skills")
-        .update({ ...skill, category: skill.category.toLowerCase(), icon: fileOptions.path })
+        .update({
+            ...skill,
+            category: skill.category.toLowerCase(),
+            icon: fileOptions.path,
+        })
         .eq("id", skill.id)
         .select()
         .single();
@@ -301,4 +226,29 @@ export async function deleteEducation(education_id: string) {
         throw error;
     }
     return data;
+}
+
+export async function deleteProjectImage(project_id: string, image_id: string) {
+    const supabase = await createSupabaseServerClient();
+    const { data, error } = await supabase
+        .from("images")
+        .delete()
+        .eq("project_id", project_id)
+        .eq("id", image_id)
+        .select()
+        .single();
+    if (error) {
+        return { error };
+    }
+
+    // delete the image from storage
+    const { data: storageData, error: storageError } = await supabase.storage
+        .from("projects")
+        .remove([data.url]);
+
+    if (storageError) {
+        return { error: storageError };
+    }
+
+    return { data, storageData };
 }

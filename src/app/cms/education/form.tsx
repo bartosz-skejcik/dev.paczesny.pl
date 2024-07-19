@@ -6,7 +6,7 @@ import { Heading } from "@ui/Heading";
 import { InputWithLabel } from "@ui/InputWithLabel";
 import { Tables } from "@lib/database.types";
 import { Label } from "@ui/shadcn/Label";
-import { Dispatch, SetStateAction, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { createEducation, updateEducation } from "@lib/supabase/server";
 
 type Props = {

@@ -5,11 +5,17 @@ import Link from "next/link";
 import Image from "next/image";
 import { Paragraph } from "./ui/Paragraph";
 import { motion } from "framer-motion";
+import { Tables } from "@lib/database.types";
 
-export const Products = ({ products }: { products: any[] }) => {
+type FormData = Tables<"projects"> & {
+    images?: Tables<"images">[];
+    skills: { name: string }[];
+};
+
+export const Products = ({ products }: { products: FormData[] }) => {
     return (
         <div>
-            <div className="grid grid-cols-1  gap-10">
+            <div className="grid grid-cols-1 gap-10">
                 {products.map((product, idx: number) => (
                     <motion.div
                         key={product.id}
@@ -30,7 +36,7 @@ export const Products = ({ products }: { products: any[] }) => {
                                     : product.id
                             }
                             key={product.id}
-                            className="group flex flex-col md:flex-row items-center justify-start space-y-4 md:space-y-0 md:space-x-4 hover:bg-neutral-800 rounded-2xl transition duration-200 p-4"
+                            className="group flex flex-col items-center justify-start space-y-4 rounded-2xl p-4 transition duration-200 hover:bg-neutral-800 md:flex-row md:space-x-4 md:space-y-0"
                         >
                             <Image
                                 src={product.thumbnail!}
@@ -43,24 +49,24 @@ export const Products = ({ products }: { products: any[] }) => {
                                 <div>
                                     <Heading
                                         as="h4"
-                                        className="font-black text-lg md:text-lg lg:text-lg "
+                                        className="text-lg font-black md:text-lg lg:text-lg"
                                     >
                                         {product.title}
                                     </Heading>
-                                    <Paragraph className="text-sm md:text-sm lg:text-sm mt-1 max-w-xl">
-                                        {product.short_description}
+                                    <Paragraph className="mt-1 max-w-xl text-sm md:text-sm lg:text-sm">
+                                        {product.description}
                                     </Paragraph>
                                 </div>
-                                <div className="flex md:mb-1 mt-2 flex-wrap gap-2">
+                                <div className="mt-2 flex flex-wrap gap-2 md:mb-1">
                                     {product.skills?.map(
                                         (stack: { name: string }) => (
                                             <span
                                                 key={stack.name}
-                                                className="text-xs  md:text-xs lg:text-xs bg-neutral-700 px-2 py-1 rounded-sm text-primary"
+                                                className="rounded-sm bg-neutral-700 px-2 py-1 text-xs text-primary md:text-xs lg:text-xs"
                                             >
                                                 {stack.name}
                                             </span>
-                                        )
+                                        ),
                                     )}
                                 </div>
                             </div>

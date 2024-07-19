@@ -193,6 +193,35 @@ export type Database = {
         }
         Relationships: []
       }
+      images: {
+        Row: {
+          created_at: string
+          id: number
+          project_id: string
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          project_id: string
+          url: string
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          project_id?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "public_images_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           id: string
@@ -375,29 +404,29 @@ export type Database = {
       }
       projects: {
         Row: {
-          full_description: string | null
+          content: string | null
+          description: string | null
           github: string | null
           id: string
           link: string | null
-          short_description: string | null
           thumbnail: string | null
           title: string
         }
         Insert: {
-          full_description?: string | null
+          content?: string | null
+          description?: string | null
           github?: string | null
           id?: string
           link?: string | null
-          short_description?: string | null
           thumbnail?: string | null
           title: string
         }
         Update: {
-          full_description?: string | null
+          content?: string | null
+          description?: string | null
           github?: string | null
           id?: string
           link?: string | null
-          short_description?: string | null
           thumbnail?: string | null
           title?: string
         }
@@ -465,21 +494,21 @@ export type Database = {
         Row: {
           category: Database["public"]["Enums"]["categoryenum"]
           experience: string | null
-          icon: string | null
+          icon: string
           id: string
           name: string
         }
         Insert: {
           category: Database["public"]["Enums"]["categoryenum"]
           experience?: string | null
-          icon?: string | null
+          icon: string
           id?: string
           name: string
         }
         Update: {
           category?: Database["public"]["Enums"]["categoryenum"]
           experience?: string | null
-          icon?: string | null
+          icon?: string
           id?: string
           name?: string
         }
