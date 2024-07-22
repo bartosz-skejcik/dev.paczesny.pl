@@ -124,7 +124,7 @@ export async function deleteProject(project_id: string) {
     if (projectError) {
         return { error: projectError };
     }
-    return { projectData };
+    return { data: projectData };
 }
 
 export async function createSkill(skill: any, fileOptions: { path: string }) {
@@ -143,7 +143,7 @@ export async function createSkill(skill: any, fileOptions: { path: string }) {
         return { error: skillError };
     }
 
-    return { skillData };
+    return { data: skillData };
 }
 
 export async function updateSkill(skill: any, fileOptions: { path: string }) {
@@ -161,7 +161,7 @@ export async function updateSkill(skill: any, fileOptions: { path: string }) {
     if (skillError) {
         return { error: skillError };
     }
-    return { skillData };
+    return { data: skillData };
 }
 
 export async function deleteSkill(skill_id: string) {
@@ -175,7 +175,7 @@ export async function deleteSkill(skill_id: string) {
     if (skillError) {
         return { error: skillError };
     }
-    return { skillData };
+    return { data: skillData };
 }
 
 export async function getEducation() {
@@ -225,7 +225,7 @@ export async function deleteEducation(education_id: string) {
     if (error) {
         throw error;
     }
-    return data;
+    return { data };
 }
 
 export async function deleteProjectImage(project_id: string, image_id: string) {
