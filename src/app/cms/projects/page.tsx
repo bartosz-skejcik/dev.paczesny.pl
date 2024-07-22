@@ -3,9 +3,9 @@
 
 import { Tabs, Tab } from "@ui/Tabs";
 import { Tables } from "@lib/database.types";
-import { getProjects } from "@lib/supabase/server";
+import { getProjects, deleteProject } from "@lib/supabase/server";
 import { useEffect, useState } from "react";
-import { IconPencilPlus } from "@tabler/icons-react";
+import { IconPencilPlus, IconTrash } from "@tabler/icons-react";
 import Form from "./form";
 
 type Props = {};
@@ -85,6 +85,9 @@ function Projects({}: Props) {
                                     <span className="capitalize">
                                         {project.title}
                                     </span>
+                                    <button className="ml-2 text-secondary hover:text-primary">
+                                        <IconTrash className="h-5 w-5" />
+                                    </button>
                                 </div>
                             )}
                         </Tab>
