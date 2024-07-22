@@ -23,10 +23,19 @@ type Props = {
     setProjects: (projects: FormData[]) => void;
     projects: FormData[];
     activeProject: FormData | null;
-    data: FormData | null;
+     FormData | null;
+    onProjectUpdate: (project: FormData) => Promise<void>;
+    onProjectCreate: (project: FormData) => Promise<void>;
 };
 
-function Form({ setProjects, projects, activeProject, data }: Props) {
+function Form({
+    setProjects,
+    projects,
+    activeProject,
+    data,
+    onProjectUpdate,
+    onProjectCreate,
+}: Props) {
     const [form, setForm] = useState<FormData>(data!);
 
     const [skills, setSkills] = useState<Tables<"skills">[]>([]);
@@ -57,6 +66,11 @@ function Form({ setProjects, projects, activeProject, data }: Props) {
 
     async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
         event.preventDefault();
+        if (activeProject) {
+            await onProjectUpdate(form);
+        } else {
+            await onProjectCreate(form);
+        }
     }
 
     return (
@@ -120,6 +134,19 @@ function Form({ setProjects, projects, activeProject, data }: Props) {
                     name={`thumbnail-${form.id}`}
                     accept="image/*"
                     className="hidden w-full"
+                    onChange={(e) => {
+                        if (e.target.files && e.target.files[0]) {
+                            setForm({
+                                ...form,
+                                thumbnail: {
+                                    file: e.target.files[0],
+                                    ext: e.target.files[0].name
+                                        .split(".")
+                                        .pop()!,
+                                },
+                            });
+                        }
+                    }}
                 />
             </div>
             <div className="col-span-2">
@@ -159,6 +186,19 @@ function Form({ setProjects, projects, activeProject, data }: Props) {
                     name="images"
                     multiple
                     className="w-full"
+                    onChange={(e) => {
+                        if (e.target.files) {
+                            setForm({
+                                ...form,
+                                images: Array.from(e.target.files).map(
+                                    (file) => ({
+                                        file: file,
+                                        ext: file.name.split(".").pop()!,
+                                    }),
+                                ),
+                            });
+                        }
+                    }}
                 />
             </div>
             <InputWithLabel

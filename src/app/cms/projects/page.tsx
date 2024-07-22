@@ -7,6 +7,7 @@ import { getProjects, deleteProject } from "@lib/supabase/server";
 import { useEffect, useState } from "react";
 import { IconPencilPlus, IconTrash } from "@tabler/icons-react";
 import Form from "./form";
+import { createProject, updateProject } from "@lib/supabase/client";
 
 type Props = {};
 
@@ -17,7 +18,7 @@ type FormData = Tables<"projects"> & {
 
 function Projects({}: Props) {
     const [projects, setProjects] = useState<FormData[]>([]);
-    const [activeProject, setActiveProject] = useState<FormData>({} as any);
+    const [activeProject, setActiveProject] = useState<FormData | null>(null);
     const [activeTab, setActiveTab] = useState<string>("");
 
     const [form, setForm] = useState<FormData>({
@@ -41,8 +42,18 @@ function Projects({}: Props) {
     }, []);
 
     function handleClearForm() {
-        setActiveProject(null as any);
-        setForm(null as any);
+        setActiveProject(null);
+        setForm({
+            id: "",
+            title: "",
+            description: "",
+            content: "",
+            thumbnail: "",
+            link: "",
+            github: "",
+            images: [],
+            skills: [],
+        });
     }
 
     useEffect(() => {
@@ -53,6 +64,30 @@ function Projects({}: Props) {
             }
         }
     }, [activeTab]);
+
+    async function handleProjectUpdate(project: FormData) {
+        const { data, error } = await updateProject(project);
+        if (error) {
+            console.error("Error updating project: ", error);
+            return;
+        }
+        const updatedProjects = projects.map((p) =>
+            p.id === project.id ? data : p,
+        );
+        setProjects(updatedProjects);
+        setActiveProject(data);
+    }
+
+    async function handleProjectCreate(project: FormData) {
+        const { data, error } = await createProject(project);
+        if (error) {
+            console.error("Error creating project: ", error);
+            return;
+        }
+        setProjects([...projects, data]);
+        setActiveTab(data.id);
+        setActiveProject(data);
+    }
 
     return (
         <div className="flex">
@@ -85,7 +120,31 @@ function Projects({}: Props) {
                                     <span className="capitalize">
                                         {project.title}
                                     </span>
-                                    <button className="ml-2 text-secondary hover:text-primary">
+                                    <button
+                                        className="ml-2 text-secondary hover:text-primary"
+                                        onClick={() => {
+                                            deleteProject(project.id).then(
+                                                (res) => {
+                                                    if (res.error) {
+                                                        console.error(
+                                                            "Error deleting project: ",
+                                                            res.error,
+                                                        );
+                                                        return;
+                                                    }
+                                                    setProjects(
+                                                        projects.filter(
+                                                            (p) =>
+                                                                p.id !==
+                                                                project.id,
+                                                        ),
+                                                    );
+                                                    setActiveProject(null);
+                                                    setActiveTab("");
+                                                },
+                                            );
+                                        }}
+                                    >
                                         <IconTrash className="h-5 w-5" />
                                     </button>
                                 </div>
@@ -96,11 +155,12 @@ function Projects({}: Props) {
             </aside>
             <div className="m-0 flex min-h-screen w-full items-center justify-center rounded-xl border border-neutral-800/70 bg-neutral-950/30 lg:m-4">
                 <Form
-                    // @ts-ignore
                     setProjects={setProjects}
                     projects={projects}
                     activeProject={activeProject}
                     data={activeProject ?? form}
+                    onProjectUpdate={handleProjectUpdate}
+                    onProjectCreate={handleProjectCreate}
                 />
             </div>
         </div>
