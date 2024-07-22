@@ -115,7 +115,7 @@ export async function getSkills() {
 
 export async function deleteProject(project_id: string) {
     const supabase = await createSupabaseServerClient();
-    const {  projectData, error: projectError } = await supabase
+    const { data: projectData, error: projectError } = await supabase
         .from("projects")
         .delete()
         .eq("id", project_id)
@@ -124,7 +124,7 @@ export async function deleteProject(project_id: string) {
     if (projectError) {
         return { error: projectError };
     }
-    return {  projectData };
+    return { projectData };
 }
 
 export async function createSkill(skill: any, fileOptions: { path: string }) {
@@ -143,12 +143,12 @@ export async function createSkill(skill: any, fileOptions: { path: string }) {
         return { error: skillError };
     }
 
-    return {  skillData };
+    return { skillData };
 }
 
 export async function updateSkill(skill: any, fileOptions: { path: string }) {
     const supabase = await createSupabaseServerClient();
-    const {  skillData, error: skillError } = await supabase
+    const { data: skillData, error: skillError } = await supabase
         .from("skills")
         .update({
             ...skill,
@@ -161,12 +161,12 @@ export async function updateSkill(skill: any, fileOptions: { path: string }) {
     if (skillError) {
         return { error: skillError };
     }
-    return {  skillData };
+    return { skillData };
 }
 
 export async function deleteSkill(skill_id: string) {
     const supabase = await createSupabaseServerClient();
-    const {  skillData, error: skillError } = await supabase
+    const { data: skillData, error: skillError } = await supabase
         .from("skills")
         .delete()
         .eq("id", skill_id)
@@ -175,7 +175,7 @@ export async function deleteSkill(skill_id: string) {
     if (skillError) {
         return { error: skillError };
     }
-    return {  skillData };
+    return { skillData };
 }
 
 export async function getEducation() {
@@ -242,7 +242,7 @@ export async function deleteProjectImage(project_id: string, image_id: string) {
     }
 
     // delete the image from storage
-    const {  storageData, error: storageError } = await supabase.storage
+    const { data: storageData, error: storageError } = await supabase.storage
         .from("projects")
         .remove([data.url]);
 

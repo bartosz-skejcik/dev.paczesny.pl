@@ -13,7 +13,7 @@ type Props = {};
 
 type FormData = Tables<"projects"> & {
     images?: Tables<"images">[];
-    skills: { name: string }[];
+    skills?: { name: string }[];
 };
 
 function Projects({}: Props) {
@@ -116,33 +116,40 @@ function Projects({}: Props) {
                             value={project.id}
                         >
                             {({ ref }) => (
-                                <div ref={ref}>
-                                    <span className="capitalize">
-                                        {project.title}
+                                <div
+                                    ref={ref}
+                                    className="flex w-full flex-row items-center justify-between gap-2"
+                                >
+                                    <span className="whitespace-nowrap capitalize">
+                                        {/* {project.title} */}
+                                        {/* if the title is too long, it will break the layout */}
+                                        {project.title.length > 25
+                                            ? project.title.slice(0, 25) + ".."
+                                            : project.title}
                                     </span>
                                     <button
                                         className="ml-2 text-secondary hover:text-primary"
                                         onClick={() => {
-                                            deleteProject(project.id).then(
-                                                (res) => {
-                                                    if (res.error) {
-                                                        console.error(
-                                                            "Error deleting project: ",
-                                                            res.error,
-                                                        );
-                                                        return;
-                                                    }
-                                                    setProjects(
-                                                        projects.filter(
-                                                            (p) =>
-                                                                p.id !==
-                                                                project.id,
-                                                        ),
-                                                    );
-                                                    setActiveProject(null);
-                                                    setActiveTab("");
-                                                },
-                                            );
+                                            // deleteProject(project.id).then(
+                                            //     (res) => {
+                                            //         if (res.error) {
+                                            //             console.error(
+                                            //                 "Error deleting project: ",
+                                            //                 res.error,
+                                            //             );
+                                            //             return;
+                                            //         }
+                                            //         setProjects(
+                                            //             projects.filter(
+                                            //                 (p) =>
+                                            //                     p.id !==
+                                            //                     project.id,
+                                            //             ),
+                                            //         );
+                                            //         setActiveProject(null);
+                                            //         setActiveTab("");
+                                            //     },
+                                            // );
                                         }}
                                     >
                                         <IconTrash className="h-5 w-5" />
@@ -155,12 +162,8 @@ function Projects({}: Props) {
             </aside>
             <div className="m-0 flex min-h-screen w-full items-center justify-center rounded-xl border border-neutral-800/70 bg-neutral-950/30 lg:m-4">
                 <Form
-                    setProjects={setProjects}
-                    projects={projects}
                     activeProject={activeProject}
                     data={activeProject ?? form}
-                    onProjectUpdate={handleProjectUpdate}
-                    onProjectCreate={handleProjectCreate}
                 />
             </div>
         </div>

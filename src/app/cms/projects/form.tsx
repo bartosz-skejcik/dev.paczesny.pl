@@ -16,29 +16,24 @@ import React, { useEffect, useState } from "react";
 
 type FormData = Tables<"projects"> & {
     images?: { file?: File; ext?: string; url: string }[];
-    skills: { name: string }[];
+    skills?: { name: string }[];
 };
 
 type Props = {
-    setProjects: (projects: FormData[]) => void;
-    projects: FormData[];
     activeProject: FormData | null;
-     FormData | null;
-    onProjectUpdate: (project: FormData) => Promise<void>;
-    onProjectCreate: (project: FormData) => Promise<void>;
+    data: FormData | null;
 };
 
-function Form({
-    setProjects,
-    projects,
-    activeProject,
-    data,
-    onProjectUpdate,
-    onProjectCreate,
-}: Props) {
+function Form({ activeProject, data }: Props) {
     const [form, setForm] = useState<FormData>(data!);
 
     const [skills, setSkills] = useState<Tables<"skills">[]>([]);
+    const [thumbnail, setThumbnail] = useState<File | null>(null);
+    const [images, setImages] = useState<File[]>([]);
+    const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(
+        null,
+    );
+    const [imagePreviews, setImagePreviews] = useState<string[]>([]);
 
     useEffect(() => {
         getSkills().then((skills: Tables<"skills">[]) => {
@@ -49,6 +44,17 @@ function Form({
     useEffect(() => {
         if (activeProject !== null && data !== null && data.id) {
             setForm(data);
+            if (data.thumbnail) {
+                if (data.thumbnail.startsWith("http")) {
+                    setThumbnailPreview(data.thumbnail);
+                } else {
+                    setThumbnailPreview(
+                        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/projects/${data.thumbnail}`,
+                    );
+                }
+            }
+            if (data.images)
+                setImagePreviews(data.images.map((image) => image.url));
         } else {
             setForm({
                 id: "",
@@ -61,17 +67,83 @@ function Form({
                 images: [],
                 skills: [],
             });
+            setThumbnailPreview(null);
+            setImagePreviews([]);
         }
     }, [data]);
 
     async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
         event.preventDefault();
+
+        // transformt the form data.images to be {file: File, ext: string}[]
+        // const transformedImages = images.map((image) => ({
+        //     file: image,
+        //     ext: image.name.split(".").pop()!,
+        // }));
+
+        // const transformedThumbnail = {
+        //     file: thumbnail!,
+        //     ext: thumbnail!.name.split(".").pop()!,
+        // };
+
         if (activeProject) {
-            await onProjectUpdate(form);
+            // Update
+            const { data, error } = await updateProject({
+                ...form,
+                // images: transformedImages,
+                // thumbnail: transformedThumbnail,
+            });
+
+            if (error) {
+                console.log(error);
+                return;
+            }
+
+            window.location.reload();
         } else {
-            await onProjectCreate(form);
+            // Create
+            const { error } = await createProject({
+                ...form,
+                // images: transformedImages,
+                // thumbnail: transformedThumbnail,
+            });
+
+            if (error) {
+                console.log(error);
+                return;
+            }
+
+            window.location.reload();
         }
     }
+
+    const handleThumbnailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        setThumbnail(file!);
+        if (file) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setThumbnailPreview(reader.result as string);
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    const handleImagesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(e.target.files || []);
+        const newImagePreviews: string[] = [];
+        setImages(files);
+        files.forEach((file) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                newImagePreviews.push(reader.result as string);
+                if (newImagePreviews.length === files.length) {
+                    setImagePreviews([...imagePreviews, ...newImagePreviews]);
+                }
+            };
+            reader.readAsDataURL(file);
+        });
+    };
 
     return (
         <form
@@ -88,7 +160,7 @@ function Form({
                     htmlFor={`thumbnail-${form.id}`}
                     className="mb-4 flex aspect-video cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-neutral-700 bg-neutral-800 p-6 text-center text-primary"
                 >
-                    {/* {thumbnailPreview ? (
+                    {thumbnailPreview ? (
                         <Image
                             src={thumbnailPreview}
                             alt="Thumbnail Preview"
@@ -126,33 +198,21 @@ function Form({
                                 format.
                             </p>
                         </>
-                    )} */}
+                    )}
                 </Label>
                 <Input
                     type="file"
                     id={`thumbnail-${form.id}`}
                     name={`thumbnail-${form.id}`}
                     accept="image/*"
+                    onChange={handleThumbnailChange}
                     className="hidden w-full"
-                    onChange={(e) => {
-                        if (e.target.files && e.target.files[0]) {
-                            setForm({
-                                ...form,
-                                thumbnail: {
-                                    file: e.target.files[0],
-                                    ext: e.target.files[0].name
-                                        .split(".")
-                                        .pop()!,
-                                },
-                            });
-                        }
-                    }}
                 />
             </div>
             <div className="col-span-2">
                 <Label htmlFor="images">Images</Label>
                 <div className="mb-2 flex flex-wrap gap-2">
-                    {/* {imagePreviews.map((src, index) => (
+                    {imagePreviews.map((src, index) => (
                         <div key={index} className="group relative p-1">
                             <Image
                                 width={160}
@@ -178,27 +238,15 @@ function Form({
                                 <X className="h-6 w-6" />
                             </button>
                         </div>
-                    ))} */}
+                    ))}
                 </div>
                 <Input
                     type="file"
                     accept="image/*"
                     name="images"
                     multiple
+                    onChange={handleImagesChange}
                     className="w-full"
-                    onChange={(e) => {
-                        if (e.target.files) {
-                            setForm({
-                                ...form,
-                                images: Array.from(e.target.files).map(
-                                    (file) => ({
-                                        file: file,
-                                        ext: file.name.split(".").pop()!,
-                                    }),
-                                ),
-                            });
-                        }
-                    }}
                 />
             </div>
             <InputWithLabel

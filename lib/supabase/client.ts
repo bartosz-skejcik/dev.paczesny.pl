@@ -59,7 +59,7 @@ export async function addProjectImage(
     }
 
     // upload the image to storage
-    const {  storageData, error: storageError } = await uploadImage(
+    const { data: storageData, error: storageError } = await uploadImage(
         project_id,
         {
             file: imageOptions.file,
@@ -79,12 +79,12 @@ export async function updateProject(
     project: any,
 ): Promise<{ data?: any; error?: any }> {
     const supabase = createSupabaseBrowerClient();
-    const { stack: skills, images, thumbnail, ...projectData } = project;
-    const {  projectDataResponse, error: projectError } = await supabase
+    const { skills, images, thumbnail, ...projectData } = project;
+    const { data: projectDataResponse, error: projectError } = await supabase
         .from("projects")
         .update({
             ...projectData,
-            thumbnail: `${project.id}/thumbnail.${thumbnail.ext}`,
+            // thumbnail: `${project.id}/thumbnail.${thumbnail.ext}`,
         })
         .eq("id", project.id)
         .select()
@@ -94,24 +94,33 @@ export async function updateProject(
         return { error: projectError };
     }
 
-    const {  thumbnailData, error: thumbnailError } = await uploadImage(
-        projectDataResponse.id,
-        {
-            file: thumbnail.file,
-            ext: thumbnail.ext,
-            id: "thumbnail",
-        },
-    );
+    // const { data: thumbnailData, error: thumbnailError } = await uploadImage(
+    //     projectDataResponse.id,
+    //     {
+    //         file: thumbnail.file,
+    //         ext: thumbnail.ext,
+    //         id: "thumbnail",
+    //     },
+    // );
 
-    if (thumbnailError) {
-        return { error: thumbnailError };
+    // if (thumbnailError) {
+    //     return { error: thumbnailError };
+    // }
+
+    const { error: skillsDeleteError } = await supabase
+        .from("stack")
+        .delete()
+        .eq("project_id", projectDataResponse.id);
+
+    if (skillsDeleteError) {
+        return { error: skillsDeleteError };
     }
 
-    skills.forEach(async (skill: any) => {
+    skills.forEach(async (skill: { name: string }) => {
         const { data, error } = await supabase
             .from("skills")
             .select("*")
-            .eq("name", skill)
+            .eq("name", skill.name)
             .single();
         if (error) {
             return { error };
@@ -119,7 +128,7 @@ export async function updateProject(
 
         const skillId = data.id;
 
-        const {  projectSkillData, error: projectSkillError } =
+        const { data: projectSkillData, error: projectSkillError } =
             await supabase.from("stack").upsert({
                 project_id: projectDataResponse.id,
                 skill_id: skillId,
@@ -129,7 +138,7 @@ export async function updateProject(
         }
     });
 
-    if (images.length > 0) {
+    if (images && images.length > 0) {
         for (const image of images) {
             if (typeof image === "string") {
                 continue;
@@ -148,14 +157,14 @@ export async function updateProject(
         console.log("No images");
     }
 
-    return {  projectDataResponse };
+    return { data: projectDataResponse };
 }
 
 export async function createProject(project: any) {
     const supabase = createSupabaseBrowerClient();
     const { id, skills, images, thumbnail, ...projectData } = project;
     console.log("Project  ", projectData);
-    const {  projectDataResponse, error: projectError } = await supabase
+    const { data: projectDataResponse, error: projectError } = await supabase
         .from("projects")
         .insert({
             ...projectData,
@@ -169,7 +178,7 @@ export async function createProject(project: any) {
         return { error: projectError };
     }
 
-    const {  thumbnailData, error: thumbnailError } = await uploadImage(
+    const { data: thumbnailData, error: thumbnailError } = await uploadImage(
         projectDataResponse.id,
         {
             file: thumbnail.file,
@@ -196,7 +205,7 @@ export async function createProject(project: any) {
 
         const skillId = data.id;
 
-        const {  projectSkillData, error: projectSkillError } =
+        const { data: projectSkillData, error: projectSkillError } =
             await supabase.from("stack").upsert({
                 project_id: projectDataResponse.id,
                 skill_id: skillId,
@@ -226,7 +235,7 @@ export async function createProject(project: any) {
         console.log("No images");
     }
 
-    return {  projectDataResponse };
+    return { data: projectDataResponse };
 }
 
 export async function uploadFile(
