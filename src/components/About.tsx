@@ -42,27 +42,26 @@ export default function About() {
 
             <div className="max-w-4xl">
                 <Paragraph className="mt-4">
-                    Jestem ambitnym, aspirującym Frontend Developerem po
-                    technikum informatycznym, który posiada wiedzę i
-                    umiejętności w zakresie zarówno frontendu, jak i backendu.
-                    Projektowałem aplikacje internetowe w Express.js i tworzyłem
-                    skrypty w Pythonie.
+                    I am an ambitious and aspiring Frontend Developer with a
+                    background in computer science from technical school,
+                    possessing knowledge and skills in both frontend and backend
+                    development. I have designed web applications using
+                    Express.js and created scripts in Python.
                 </Paragraph>
                 <Paragraph className="mt-4">
-                    Moje doświadczenie obejmuje projektowanie i tworzenie stron
-                    internetowych z użyciem React.js, TailwindCSS i Framer
-                    Motion. Osiągnąłem sukces w projektach szkolnych. Posiadam
-                    zdolności analityczne, znam technologie webowe, biblioteki i
-                    frameworki takie jak React czy Next.
+                    My experience includes designing and building websites with
+                    React.js, TailwindCSS, and Framer Motion. I have achieved
+                    success in school projects. I have analytical skills and am
+                    familiar with web technologies, libraries, and frameworks
+                    such as React and Next.
                 </Paragraph>
 
                 <Paragraph className="mt-4">
-                    Jako stażysta chciałbym zdobyć praktyczne doświadczenie w
-                    branży i rozwijać swoje umiejętności w profesjonalnym
-                    środowisku. Chcę pracować z zespołem, aby zdobyć wiedzę od
-                    doświadczonych programistów, którzy pomogą mi w zdobyciu
-                    nowych umiejętności i w przyszłości osiągnięciu moich celów
-                    zawodowych.
+                    As an intern, I aim to gain practical industry experience
+                    and develop my skills in a professional environment. I want
+                    to work with a team to learn from experienced developers who
+                    can help me acquire new skills and achieve my career goals
+                    in the future.
                 </Paragraph>
             </div>
         </div>
