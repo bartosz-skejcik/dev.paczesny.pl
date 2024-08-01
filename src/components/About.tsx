@@ -42,45 +42,27 @@ export default function About() {
 
             <div className="max-w-4xl">
                 <Paragraph className="mt-4">
-                    Lorem ipsum dolor, sit amet consectetur adipisicing elit.
-                    Expedita quaerat itaque cupiditate dolor sit ullam nostrum
-                    soluta voluptatem obcaecati earum!
+                    Jestem ambitnym, aspirującym Frontend Developerem po
+                    technikum informatycznym, który posiada wiedzę i
+                    umiejętności w zakresie zarówno frontendu, jak i backendu.
+                    Projektowałem aplikacje internetowe w Express.js i tworzyłem
+                    skrypty w Pythonie.
                 </Paragraph>
                 <Paragraph className="mt-4">
-                    Lorem ipsum dolor sit amet consectetur, adipisicing elit.
-                    Beatae doloremque magni dolore hic rem nam aspernatur totam
-                    tempore. Ex voluptates asperiores minus ipsam corporis
-                    quaerat cum distinctio qui, sit possimus!
+                    Moje doświadczenie obejmuje projektowanie i tworzenie stron
+                    internetowych z użyciem React.js, TailwindCSS i Framer
+                    Motion. Osiągnąłem sukces w projektach szkolnych. Posiadam
+                    zdolności analityczne, znam technologie webowe, biblioteki i
+                    frameworki takie jak React czy Next.
                 </Paragraph>
 
                 <Paragraph className="mt-4">
-                    Lorem ipsum dolor sit amet consectetur adipisicing elit.
-                    Quos mollitia illum quibusdam hic expedita nobis, odio rerum
-                    voluptatibus, voluptate optio officiis obcaecati repudiandae
-                    asperiores quo tempora enim libero accusantium quidem!
-                </Paragraph>
-                <Paragraph className="mt-4">
-                    Lorem ipsum dolor sit amet consectetur adipisicing elit. Ea
-                    animi eligendi laboriosam sequi, nihil pariatur autem dolore
-                    officia, et debitis illum quas quam. Laboriosam consectetur
-                    eligendi dolorum quis quidem ducimus!
-                </Paragraph>
-                <Paragraph className="mt-4">
-                    Lorem ipsum, dolor sit amet consectetur adipisicing elit.
-                    Iste, voluptate optio! Maxime, cumque iusto. Vitae mollitia
-                    aliquid, cum omnis neque veritatis dolorem laudantium!
-                    Incidunt dolore earum est porro impedit aspernatur.
-                </Paragraph>
-                <Paragraph className="mt-4">
-                    Lorem ipsum dolor, sit amet consectetur adipisicing elit.
-                    Sed at et illum iste, placeat ab nesciunt iure similique
-                    necessitatibus voluptatem exercitationem saepe totam
-                    provident velit, tenetur impedit incidunt perspiciatis
-                    deleniti.
-                </Paragraph>
-                <Paragraph className="mt-4">
-                    Lorem ipsum dolor sit amet consectetur adipisicing elit.
-                    Blanditiis labore accusamus.
+                    Jako stażysta chciałbym zdobyć praktyczne doświadczenie w
+                    branży i rozwijać swoje umiejętności w profesjonalnym
+                    środowisku. Chcę pracować z zespołem, aby zdobyć wiedzę od
+                    doświadczonych programistów, którzy pomogą mi w zdobyciu
+                    nowych umiejętności i w przyszłości osiągnięciu moich celów
+                    zawodowych.
                 </Paragraph>
             </div>
         </div>
