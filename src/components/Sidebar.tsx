@@ -18,6 +18,7 @@ import {
 } from "@tabler/icons-react";
 import { getUserProfile } from "@lib/supabase/client";
 import { adminLinks } from "@/constants/admin-links";
+import { useAnalytics } from "@/contexts/analytics";
 
 const isMobile = () => {
     if (typeof window === "undefined") return false;
@@ -101,13 +102,20 @@ export const Navigation = ({
 
     const isActive = (href: string) => pathname === href;
 
+    const { logEvent } = useAnalytics();
+
     return (
         <div className="relative z-[100] my-10 flex flex-col space-y-1">
             {navlinks.map((link: Navlink) => (
                 <Link
                     key={link.href}
                     href={link.href}
-                    onClick={() => isMobile() && setOpen(false)}
+                    onClick={() => {
+                        isMobile() && setOpen(false);
+                        logEvent("nav_link_click", {
+                            link: link.label,
+                        });
+                    }}
                     className={twMerge(
                         "flex items-center space-x-2 rounded-md px-2 py-2 text-sm text-secondary transition duration-200 hover:text-primary",
                         isActive(link.href!) &&

@@ -8,6 +8,7 @@ import { motion } from "framer-motion";
 import { Tables } from "@lib/database.types";
 import Link from "next/link";
 import { IconArrowLeft, IconArrowRight } from "@tabler/icons-react";
+import { useAnalytics } from "@/contexts/analytics";
 
 interface Project extends Tables<"projects"> {
     skills?: Tables<"skills">[];
@@ -16,6 +17,9 @@ interface Project extends Tables<"projects"> {
 
 export const SingleProduct = ({ project }: { project: Project }) => {
     const [activeImage, setActiveImage] = useState<string>(project.thumbnail!);
+
+    const { logEvent } = useAnalytics();
+
     return (
         <div className="py-10">
             <Link
@@ -94,6 +98,11 @@ export const SingleProduct = ({ project }: { project: Project }) => {
                 <Link
                     href={project.link || "#"}
                     target="__blank"
+                    onClick={() => {
+                        logEvent("view-project-live-preview", {
+                            projectId: project.id,
+                        });
+                    }}
                     className="group/button mt-4 inline-flex origin-left items-center gap-1 rounded-full bg-neutral-200 px-4 py-2 text-sm font-medium text-black shadow-lg shadow-white/20 ring-neutral-950/60 ring-offset-neutral-100 transition hover:scale-105 focus:outline-none focus-visible:ring-1 focus-visible:ring-offset-2 group-hover/button:scale-105 group-hover/button:bg-neutral-950/15 sm:backdrop-blur-sm"
                 >
                     Live Preview
@@ -104,6 +113,11 @@ export const SingleProduct = ({ project }: { project: Project }) => {
                 <Link
                     href={project.github || "#"}
                     target="__blank"
+                    onClick={() => {
+                        logEvent("view-project-github", {
+                            projectId: project.id,
+                        });
+                    }}
                     className="group/button ml-4 inline-flex origin-left items-center gap-1 rounded-full bg-neutral-200 px-4 py-2 text-sm font-medium text-black shadow-lg shadow-white/20 ring-neutral-950/60 ring-offset-neutral-100 transition hover:scale-105 focus:outline-none focus-visible:ring-1 focus-visible:ring-offset-2 group-hover/button:scale-105 group-hover/button:bg-neutral-950/15 sm:backdrop-blur-sm"
                 >
                     GitHub
