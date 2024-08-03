@@ -81,7 +81,10 @@ export const AnalyticsProvider: React.FC<AnalyticsProviderProps> = ({
 
             fetch(`${process.env.NEXT_PUBLIC_ANALYTICS_URL}/api/pageview`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                    "Content-Type": "application/json",
+                    "Access-Control-Allow-Origin": "*",
+                },
                 body: JSON.stringify(data),
             }).catch((error) => console.log("Analytics error:", error));
         };
@@ -109,7 +112,10 @@ export const AnalyticsProvider: React.FC<AnalyticsProviderProps> = ({
                 `${process.env.NEXT_PUBLIC_ANALYTICS_URL}/api/event`,
                 {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Access-Control-Allow-Origin": "*",
+                    },
                     body: JSON.stringify(eventData),
                 },
             );

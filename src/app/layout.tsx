@@ -6,6 +6,7 @@ import { Footer } from "@components/Footer";
 import { twMerge } from "tailwind-merge";
 import { getUser } from "@/actions/user";
 import { RootProviders } from "./providers";
+import { AnalyticsProvider } from "@/contexts/analytics";
 
 const inter = Inter({
     subsets: ["latin"],
@@ -32,13 +33,15 @@ export default async function RootLayout({
                     "flex h-screen overflow-hidden bg-neutral-950 antialiased",
                 )}
             >
-                <Sidebar user={data.user} />
-                <div className="flex-1 overflow-y-auto bg-neutral-950 lg:pl-2 lg:pt-2">
-                    <div className="min-h-screen flex-1 overflow-y-auto border border-transparent bg-neutral-900 lg:rounded-tl-xl lg:border-neutral-800">
-                        <RootProviders>{children}</RootProviders>
-                        <Footer />
+                <AnalyticsProvider>
+                    <Sidebar user={data.user} />
+                    <div className="flex-1 overflow-y-auto bg-neutral-950 lg:pl-2 lg:pt-2">
+                        <div className="min-h-screen flex-1 overflow-y-auto border border-transparent bg-neutral-900 lg:rounded-tl-xl lg:border-neutral-800">
+                            <RootProviders>{children}</RootProviders>
+                            <Footer />
+                        </div>
                     </div>
-                </div>
+                </AnalyticsProvider>
             </body>
         </html>
     );
