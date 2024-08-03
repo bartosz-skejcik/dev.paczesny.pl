@@ -1,10 +1,7 @@
-/* eslint-disable react-hooks/exhaustive-deps */
-// contexts/analytics.tsx
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import path from "path";
 
 interface AnalyticsContextType {
     logEvent: (name: string, data?: Record<string, any>) => void;
@@ -32,92 +29,98 @@ export const AnalyticsProvider: React.FC<AnalyticsProviderProps> = ({
     children,
 }) => {
     const [isInitialized, setIsInitialized] = useState(false);
+    const [clientIp, setClientIp] = useState<string | null>(null);
     const pathname = usePathname();
     const searchParams = useSearchParams();
-    const [clientIp, setClientIp] = useState("");
 
     useEffect(() => {
-        // Initialize analytics here if needed
-        setIsInitialized(true);
+        const fetchClientIp = async () => {
+            try {
+                const res = await fetch("https://api.ipify.org?format=json");
+                if (!res.ok) {
+                    throw new Error("Failed to fetch client IP");
+                }
+                const data = await res.json();
+                setClientIp(data.ip);
+                setIsInitialized(true);
+            } catch (error) {
+                console.error("Error fetching client IP:", error);
+                setIsInitialized(true); // Still set to initialized even if IP fetch fails
+            }
+        };
+
+        fetchClientIp();
     }, []);
 
     useEffect(() => {
         if (!isInitialized) return;
 
-        // Function to log page view
         const logPageView = async (url: string) => {
-            const res = await fetch("https://api.ipify.org?format=json");
+            try {
+                const data = {
+                    url,
+                    timestamp: new Date().toISOString(),
+                    user_agent: navigator.userAgent,
+                    ip: clientIp,
+                    referrer: document.referrer,
+                    os: navigator.platform,
+                    browser: navigator.userAgent,
+                };
 
-            if (!res.ok) {
-                console.error("Failed to fetch client IP");
-                return;
+                const response = await fetch(
+                    `${process.env.NEXT_PUBLIC_ANALYTICS_URL}/api/pageview`,
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify(data),
+                    },
+                );
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const responseData = await response.json();
+                console.log("Pageview logged successfully:", responseData);
+            } catch (error) {
+                console.error("Failed to log pageview:", error);
             }
-
-            const d = await res.json();
-            setClientIp(d.ip);
-
-            const data = {
-                url,
-                timestamp: new Date().toISOString(),
-                user_agent: navigator.userAgent,
-                ip: clientIp,
-                referrer: document.referrer,
-                os:
-                    (navigator.userAgent as any).platform ||
-                    navigator?.platform,
-                browser: navigator.userAgent,
-            };
-
-            // map over the data object to check if each value is not null
-
-            if (
-                Object.values(data).includes(null) ||
-                Object.values(data).length === 0 ||
-                Object.values(data).includes("")
-            ) {
-                console.error("Data is null");
-                return;
-            }
-
-            fetch(`${process.env.NEXT_PUBLIC_ANALYTICS_URL}/api/pageview`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    // "Access-Control-Allow-Origin": "*",
-                },
-                body: JSON.stringify(data),
-            }).catch((error) => console.log("Analytics error:", error));
         };
 
-        // Construct the full URL
         const url =
             pathname +
             (searchParams.toString() ? `?${searchParams.toString()}` : "");
-
-        // Log page view
         logPageView(url);
-    }, [pathname, searchParams, isInitialized]);
+    }, [pathname, searchParams, isInitialized, clientIp]);
 
-    const logEvent = (name: string, data: Record<string, any> = {}) => {
-        const eventData = {
-            name,
-            timestamp: new Date().toISOString(),
-            data,
-        };
+    const logEvent = async (name: string, data: Record<string, any> = {}) => {
+        try {
+            const eventData = {
+                name,
+                timestamp: new Date().toISOString(),
+                data,
+            };
 
-        fetch(`${process.env.NEXT_PUBLIC_ANALYTICS_URL}/api/event`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(eventData),
-        })
-            .then((response) => {
-                if (!response.ok) {
-                    throw new Error("Network response was not ok");
-                }
-                return response.json();
-            })
-            .then((data) => console.log(data))
-            .catch((error) => console.error("Analytics error:", error));
+            const response = await fetch(
+                `${process.env.NEXT_PUBLIC_ANALYTICS_URL}/api/event`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(eventData),
+                },
+            );
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const responseData = await response.json();
+            console.log("Event logged successfully:", responseData);
+        } catch (error) {
+            console.error("Failed to log event:", error);
+        }
     };
 
     return (
