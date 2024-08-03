@@ -83,7 +83,7 @@ export const AnalyticsProvider: React.FC<AnalyticsProviderProps> = ({
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    "Access-Control-Allow-Origin": "*",
+                    // "Access-Control-Allow-Origin": "*",
                 },
                 body: JSON.stringify(data),
             }).catch((error) => console.log("Analytics error:", error));
@@ -98,31 +98,26 @@ export const AnalyticsProvider: React.FC<AnalyticsProviderProps> = ({
         logPageView(url);
     }, [pathname, searchParams, isInitialized]);
 
-    const logEvent = async (name: string, data: Record<string, any> = {}) => {
-        if (!isInitialized) return;
-
+    const logEvent = (name: string, data: Record<string, any> = {}) => {
         const eventData = {
             name,
             timestamp: new Date().toISOString(),
             data,
         };
 
-        try {
-            const response = await fetch(
-                `${process.env.NEXT_PUBLIC_ANALYTICS_URL}/api/event`,
-                {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "Access-Control-Allow-Origin": "*",
-                    },
-                    body: JSON.stringify(eventData),
-                },
-            );
-            if (!response.ok) throw new Error("Failed to log event");
-        } catch (error) {
-            console.error("Analytics error:", error);
-        }
+        fetch(`${process.env.NEXT_PUBLIC_ANALYTICS_URL}/api/event`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(eventData),
+        })
+            .then((response) => {
+                if (!response.ok) {
+                    throw new Error("Network response was not ok");
+                }
+                return response.json();
+            })
+            .then((data) => console.log(data))
+            .catch((error) => console.error("Analytics error:", error));
     };
 
     return (
