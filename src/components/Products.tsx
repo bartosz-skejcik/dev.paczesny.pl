@@ -6,7 +6,6 @@ import Image from "next/image";
 import { Paragraph } from "./ui/Paragraph";
 import { motion } from "framer-motion";
 import { Tables } from "@lib/database.types";
-import { useAnalytics } from "@/contexts/analytics";
 
 type FormData = Tables<"projects"> & {
     images?: Tables<"images">[];
@@ -14,7 +13,6 @@ type FormData = Tables<"projects"> & {
 };
 
 export const Products = ({ products }: { products: FormData[] }) => {
-    const { logEvent } = useAnalytics();
     return (
         <div>
             <div className="grid grid-cols-1 gap-10">
@@ -39,7 +37,7 @@ export const Products = ({ products }: { products: FormData[] }) => {
                             }
                             key={product.id}
                             onClick={() => {
-                                logEvent("view-project", {
+                                window.logEvent("view-project", {
                                     projectId: product.id,
                                 });
                             }}

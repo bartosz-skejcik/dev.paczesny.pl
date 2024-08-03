@@ -8,7 +8,6 @@ import { motion } from "framer-motion";
 import { Tables } from "@lib/database.types";
 import Link from "next/link";
 import { IconArrowLeft, IconArrowRight } from "@tabler/icons-react";
-import { useAnalytics } from "@/contexts/analytics";
 
 interface Project extends Tables<"projects"> {
     skills?: Tables<"skills">[];
@@ -17,8 +16,6 @@ interface Project extends Tables<"projects"> {
 
 export const SingleProduct = ({ project }: { project: Project }) => {
     const [activeImage, setActiveImage] = useState<string>(project.thumbnail!);
-
-    const { logEvent } = useAnalytics();
 
     return (
         <div className="py-10">
@@ -99,7 +96,7 @@ export const SingleProduct = ({ project }: { project: Project }) => {
                     href={project.link || "#"}
                     target="__blank"
                     onClick={() => {
-                        logEvent("view-project-live-preview", {
+                        window.logEvent("view-project-live-preview", {
                             projectId: project.id,
                         });
                     }}
@@ -114,7 +111,7 @@ export const SingleProduct = ({ project }: { project: Project }) => {
                     href={project.github || "#"}
                     target="__blank"
                     onClick={() => {
-                        logEvent("view-project-github", {
+                        window.logEvent("view-project-github", {
                             projectId: project.id,
                         });
                     }}
