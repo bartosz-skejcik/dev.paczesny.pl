@@ -29,7 +29,7 @@ type Props = {
 const chartConfig = {
     hits: {
         label: "Hits",
-        color: "hsl(var(--chart-2))",
+        color: "hsl(var(--chart-1))",
     },
     label: {
         color: "hsl(var(--background))",
@@ -68,7 +68,7 @@ export default function Referrers({ data }: Props) {
     }
 
     return (
-        <Card className="col-span-1 h-fit">
+        <Card className="col-span-1 h-fit lg:col-span-2 2xl:col-span-3">
             <CardHeader>
                 <CardTitle>Referrers</CardTitle>
             </CardHeader>

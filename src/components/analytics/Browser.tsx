@@ -36,10 +36,10 @@ const chartConfig = {
     },
 } satisfies ChartConfig;
 
-export default function Pages({ data }: Props) {
+export default function Browser({ data }: Props) {
     const [chartData, setChartData] = useState<
         {
-            url: string;
+            browser: string;
             hits: number;
         }[]
     >([]);
@@ -48,14 +48,14 @@ export default function Pages({ data }: Props) {
         let d: any[] = [];
         data.forEach((item: any) => {
             // add a new item if it doesnt exist in d array
-            if (!d.find((i) => i.url === item.url)) {
+            if (!d.find((i) => i.browser === item.browser)) {
                 d.push({
-                    url: item.url,
+                    browser: item.browser,
                     hits: 1,
                 });
             } else {
                 // if it exists, increment the hits count
-                const index = d.findIndex((i) => i.url === item.url);
+                const index = d.findIndex((i) => i.browser === item.browser);
                 d[index].hits++;
             }
         });
@@ -68,9 +68,9 @@ export default function Pages({ data }: Props) {
     }
 
     return (
-        <Card className="col-span-1 h-fit lg:col-span-2 2xl:col-span-3">
+        <Card className="col-span-1 h-fit lg:col-span-2">
             <CardHeader>
-                <CardTitle>Pages</CardTitle>
+                <CardTitle>Browsers</CardTitle>
             </CardHeader>
             <CardContent>
                 <ChartContainer config={chartConfig}>
@@ -84,7 +84,7 @@ export default function Pages({ data }: Props) {
                     >
                         <CartesianGrid horizontal={false} />
                         <YAxis
-                            dataKey="url"
+                            dataKey="browser"
                             type="category"
                             tickLine={false}
                             tickMargin={10}
@@ -104,7 +104,7 @@ export default function Pages({ data }: Props) {
                             radius={4}
                         >
                             <LabelList
-                                dataKey="url"
+                                dataKey="browser"
                                 position="insideLeft"
                                 offset={8}
                                 className="fill-[--color-label]"

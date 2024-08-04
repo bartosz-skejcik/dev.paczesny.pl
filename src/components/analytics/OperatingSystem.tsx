@@ -29,7 +29,7 @@ type Props = {
 const chartConfig = {
     hits: {
         label: "Hits",
-        color: "hsl(var(--chart-2))",
+        color: "hsl(var(--chart-1))",
     },
     label: {
         color: "hsl(var(--background))",
@@ -68,9 +68,9 @@ export default function OperatingSystem({ data }: Props) {
     }
 
     return (
-        <Card className="col-span-1 h-fit">
+        <Card className="col-span-1 h-fit lg:col-span-2">
             <CardHeader>
-                <CardTitle>Countries</CardTitle>
+                <CardTitle>Operating Systems</CardTitle>
             </CardHeader>
             <CardContent>
                 <ChartContainer config={chartConfig}>

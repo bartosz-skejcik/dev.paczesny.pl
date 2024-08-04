@@ -1,3 +1,104 @@
+function getBrowserType() {
+    var isOpera =
+        (!!window.opr && !!opr.addons) ||
+        !!window.opera ||
+        navigator.userAgent.indexOf(" OPR/") >= 0;
+
+    // Internet Explorer 6-11
+    var isIE = /*@cc_on!@*/ false || !!document.documentMode;
+
+    // Chrome 1 - 79
+    var isChrome =
+        !!window.chrome &&
+        (!!window.chrome.webstore || !!window.chrome.runtime);
+
+    // Opera 8.0+
+    if (
+        (!!window.opr && !!opr.addons) ||
+        !!window.opera ||
+        navigator.userAgent.indexOf(" OPR/") >= 0
+    ) {
+        return "Opera";
+    }
+
+    // Safari 3.0+
+    if (
+        /constructor/i.test(window.HTMLElement) ||
+        (function (p) {
+            return p.toString() === "[object SafariRemoteNotification]";
+        })(
+            !window["safari"] ||
+                (typeof safari !== "undefined" && safari.pushNotification),
+        )
+    ) {
+        return "Safari";
+    }
+
+    // Internet Explorer 6-11
+    if (/*@cc_on!@*/ false || !!document.documentMode) {
+        return "Internet Explorer";
+    }
+
+    // Edge 20+
+    if (isIE !== undefined && !isIE && !!window.StyleMedia) {
+        return "Edge";
+    }
+
+    // Chrome 1 - 71
+    if (
+        !!window.chrome &&
+        (!!window.chrome.webstore || !!window.chrome.runtime)
+    ) {
+        return "Chrome";
+    }
+
+    // Blink engine detection
+    if ((isChrome || isOpera) && !!window.CSS) {
+        return "Blink";
+    }
+
+    return "Unknown";
+}
+
+function getOS(userAgent) {
+    const osMappings = [
+        { regex: /(Win16)/, os: "Windows 3.11" },
+        { regex: /(Windows 95)|(Win95)|(Windows_95)/, os: "Windows 95" },
+        { regex: /(Windows 98)|(Win98)/, os: "Windows 98" },
+        { regex: /(Windows NT 5.0)|(Windows 2000)/, os: "Windows 2000" },
+        { regex: /(Windows NT 5.1)|(Windows XP)/, os: "Windows XP" },
+        { regex: /(Windows NT 5.2)/, os: "Windows Server 2003" },
+        { regex: /(Windows NT 6.0)/, os: "Windows Vista" },
+        { regex: /(Windows NT 6.1)/, os: "Windows 7" },
+        { regex: /(Windows NT 6.2)/, os: "Windows 8" },
+        { regex: /(Windows NT 10.0)/, os: "Windows 10" },
+        {
+            regex: /(Windows NT 4.0)|(WinNT4.0)|(WinNT)|(Windows NT)/,
+            os: "Windows NT 4.0",
+        },
+        { regex: /(Windows ME)/, os: "Windows ME" },
+        { regex: /(OpenBSD)/, os: "Open BSD" },
+        { regex: /(SunOS)/, os: "Sun OS" },
+        { regex: /(Linux)|(X11)/, os: "Linux" },
+        { regex: /(Mac_PowerPC)|(Macintosh)/, os: "Mac OS" },
+        { regex: /(QNX)/, os: "QNX" },
+        { regex: /(BeOS)/, os: "BeOS" },
+        { regex: /(OS\/2)/, os: "OS/2" },
+        {
+            regex: /(nuhk)|(Googlebot)|(Yammybot)|(Openbot)|(Slurp)|(MSNBot)|(Ask Jeeves\/Teoma)|(ia_archiver)/,
+            os: "Search Bot",
+        },
+    ];
+
+    for (let i = 0; i < osMappings.length; i++) {
+        if (osMappings[i].regex.test(userAgent)) {
+            return osMappings[i].os;
+        }
+    }
+
+    return "Unknown OS";
+}
+
 (function () {
     const scriptTag = document.querySelector("script[data-analytics-url]");
     const analyticsUrl = scriptTag
@@ -37,11 +138,11 @@
             );
             const updatedSession = {
                 ...session,
-                referrer: document.referrer ?? null,
+                referrer: document.referrer ?? "Direct",
                 screen_width: window.innerWidth,
                 user_agent: navigator.userAgent,
-                os: navigator.platform,
-                browser: navigator.userAgent,
+                os: getOS(navigator.platform),
+                browser: getBrowserType(),
                 pages: {
                     ...session.pages,
                     [currentPageView.url]: [
@@ -104,7 +205,7 @@
                 timestamp: new Date().toISOString(),
                 data,
                 ip: session.ip,
-                userAgent: session.userAgent,
+                user_agent: session.user_agent ?? navigator.userAgent,
             };
 
             fetch(`${analyticsUrl}/api/event`, {
