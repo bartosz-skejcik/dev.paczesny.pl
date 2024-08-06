@@ -63,7 +63,7 @@ export default function Countries({ data }: Props) {
         setChartData(d);
     }
 
-    if (chartData.length === 0 && data) {
+    if (chartData.length === 0 && data && data.length > 0) {
         handleData(data);
     }
 

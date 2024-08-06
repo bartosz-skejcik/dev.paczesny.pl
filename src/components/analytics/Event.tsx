@@ -53,6 +53,8 @@ export default function Event({ data }: Props) {
     // we want to transform it into { name: string, count: string } where the count is the value of the data key
     // lets count the number of events per countibute and transform it into { name: "event_name: count (value of the key)", count: number }
     const chartDataByValue = useMemo(() => {
+        if (!data) return [];
+        if (data && data.length === 0) return [];
         const eventCounts = {};
 
         data.forEach((event) => {
@@ -77,18 +79,18 @@ export default function Event({ data }: Props) {
     }, [data]);
 
     const chartDataByName = useMemo(() => {
+        if (!data) return [];
+        if (data && data.length === 0) return [];
         const eventCounts = {};
 
         data.forEach((event) => {
             const { name, data: eventData } = event;
-            Object.entries(eventData).forEach(([key, value]) => {
-                const eventName = `${name}`;
-                if ((eventCounts as any)[eventName]) {
-                    (eventCounts as any)[eventName]++;
-                } else {
-                    (eventCounts as any)[eventName] = 1;
-                }
-            });
+            const eventName = `${name}`;
+            if ((eventCounts as any)[eventName]) {
+                (eventCounts as any)[eventName]++;
+            } else {
+                (eventCounts as any)[eventName] = 1;
+            }
         });
 
         return Object.entries(eventCounts)
