@@ -2,14 +2,14 @@ import { Container } from "@ui/Container";
 import { Heading } from "@components/ui/Heading";
 import { Highlight } from "@ui/Highlight";
 import { Paragraph } from "@ui/Paragraph";
-import { Products } from "@components/Products";
-import { TechStack } from "@components/TechStack";
-import { getProjects, getSkills } from "@lib/supabase/server";
+import { Projects } from "@components/Projects";
+//import { TechStack } from "@components/TechStack";
 import GithubStats from "@components/GithubStats";
+import { getProjects } from "@/sanity/lib/projects";
 
 export default async function Home() {
     const projects = await getProjects();
-    const skills = await getSkills();
+    //const skills = await getSkills();
 
     return (
         <Container maxWidth="max-w-5xl">
@@ -31,14 +31,14 @@ export default async function Home() {
                 <Highlight>accessibility</Highlight>.
             </Paragraph>
             <GithubStats />
-            <TechStack stack={skills} />
+            {/* <TechStack stack={skills} /> */}
             <Heading
                 as="h2"
                 className="mb-4 mt-20 text-lg font-black md:text-lg lg:text-lg"
             >
                 What I&apos;ve been working on
             </Heading>
-            <Products products={projects} />
+            <Projects projects={projects} />
         </Container>
     );
 }

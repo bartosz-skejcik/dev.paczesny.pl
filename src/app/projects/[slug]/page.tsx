@@ -1,23 +1,16 @@
+import { SingleProject } from "@/components/Project";
+import { getProjectById } from "@/sanity/lib/projects";
+import { SingleProjectQueryResult } from "@/sanity/types";
 import { Container } from "@ui/Container";
-import { SingleProduct } from "@/components/Product";
 import { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { getProject, getProjects } from "@lib/supabase/server";
-import { Tables } from "@lib/database.types";
-
 type Props = {
     params: { slug: string };
 };
 
-interface Project extends Tables<"projects"> {
-    skills?: Tables<"skills">[];
-    images?: Tables<"images">[];
-}
-
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const slug = params.slug;
-    const projects = await getProjects();
-    const project = projects.find((project) => project.id === slug);
+    const project: SingleProjectQueryResult = await getProjectById(slug);
 
     if (project) {
         return {
@@ -39,14 +32,15 @@ export default async function SingleProjectPage({
     params: { slug: string };
 }) {
     const slug = params.slug;
-    const project = await getProject(slug);
+    const project = await getProjectById(slug);
 
     if (!project) {
         redirect("/projects");
     }
+
     return (
         <Container>
-            <SingleProduct project={project as Project} />
+            <SingleProject project={project} />
         </Container>
     );
 }

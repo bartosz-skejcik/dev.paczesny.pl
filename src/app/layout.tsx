@@ -4,7 +4,6 @@ import { Inter } from "next/font/google";
 import { Sidebar } from "@components/Sidebar";
 import { Footer } from "@components/Footer";
 import { twMerge } from "tailwind-merge";
-import { getUser } from "@/actions/user";
 import { RootProviders } from "./providers";
 import Script from "next/script";
 
@@ -24,7 +23,6 @@ export default async function RootLayout({
 }: {
     children: React.ReactNode;
 }) {
-    const { data } = await getUser();
     return (
         <html lang="en">
             <body
@@ -39,7 +37,7 @@ export default async function RootLayout({
                     data-analytics-url={process.env.NEXT_PUBLIC_ANALYTICS_URL}
                 />
                 {/* <AnalyticsProvider> */}
-                <Sidebar user={data.user} />
+                <Sidebar />
                 <div className="flex-1 overflow-y-auto bg-neutral-950 lg:pl-2 lg:pt-2">
                     <div className="min-h-screen flex-1 overflow-y-auto border border-transparent bg-neutral-900 lg:rounded-tl-xl lg:border-neutral-800">
                         <RootProviders>{children}</RootProviders>

@@ -13,17 +13,19 @@ export const Heading = ({
     className,
     children,
     as: Tag = "h1",
+    clipBg = true,
 }: {
     className?: string;
     children: React.ReactNode;
     as?: keyof JSX.IntrinsicElements;
+    clipBg?: boolean;
 }) => {
     return (
         <Tag
             className={twMerge(
                 CalSans.className,
-                "text-base md:text-xl lg:text-4xl font-semibold bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary",
-                className
+                `text-base font-semibold md:text-xl lg:text-4xl ${clipBg ? "bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent" : "text-primary"}`,
+                className,
             )}
         >
             {children}
