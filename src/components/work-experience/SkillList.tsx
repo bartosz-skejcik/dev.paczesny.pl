@@ -8,13 +8,13 @@ type SkillListProps = {
 export function SkillList({ skills }: SkillListProps) {
     return (
         <div className="mt-3 flex flex-wrap gap-2">
-            {skills.map((skill) => (
+            {skills.map((skill, idx) => (
                 <Badge
-                    key={skill._id}
+                    key={idx}
                     variant="secondary"
                     className="bg-sky-900/50 text-sky-300 hover:bg-sky-900"
                 >
-                    {skill.name}
+                    {skill.name!}
                 </Badge>
             ))}
         </div>
