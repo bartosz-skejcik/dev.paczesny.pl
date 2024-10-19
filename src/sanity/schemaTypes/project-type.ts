@@ -16,7 +16,8 @@ export const projectType = {
         {
             name: "content",
             title: "Content",
-            type: "text",
+            type: "array",
+            of: [{ type: "block" }],
         },
         {
             name: "thumbnail",

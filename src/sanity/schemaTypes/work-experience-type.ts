@@ -30,7 +30,7 @@ export const workExperienceType = {
         },
         {
             name: "is_currently_working_here",
-            title: "Currently Working Here",
+            title: "Are You Currently Working Here",
             type: "boolean",
         },
         {
@@ -63,7 +63,8 @@ export const workExperienceType = {
         {
             name: "description",
             title: "Description",
-            type: "text",
+            type: "array",
+            of: [{ type: "block" }],
         },
         {
             name: "skills",

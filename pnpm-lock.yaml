@@ -17,6 +17,9 @@ importers:
       '@next/mdx':
         specifier: ^13.4.19
         version: 13.5.6(@mdx-js/loader@2.3.0(webpack@5.93.0(esbuild@0.21.5)))
+      '@portabletext/react':
+        specifier: ^3.1.0
+        version: 3.1.0(react@18.3.1)
       '@radix-ui/react-dialog':
         specifier: ^1.1.1
         version: 1.1.1(@types/react-dom@18.2.7)(@types/react@18.2.21)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)

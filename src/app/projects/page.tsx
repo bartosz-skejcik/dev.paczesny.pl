@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 export default async function ProjectsPage() {
     const projects = await getProjects();
     return (
-        <Container>
+        <Container maxWidth="max-w-5xl">
             <span className="text-4xl">⚡</span>
             <Heading className="mb-10 font-black">
                 {" "}

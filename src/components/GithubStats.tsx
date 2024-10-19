@@ -40,11 +40,11 @@ function GithubStats({}: Props) {
         <div>
             <Heading
                 as="h2"
-                className="font-black text-lg md:text-lg lg:text-lg mt-20 mb-4"
+                className="mb-4 mt-14 text-lg font-black md:text-lg lg:text-lg"
             >
                 Github Contributions
             </Heading>
-            <section className="calendar text-secondary flex mt-10 gap-6">
+            <section className="calendar mt-10 flex gap-6 text-secondary">
                 <GitHubCalendar
                     // @ts-ignore
                     theme={{ dark: colors }}
@@ -64,7 +64,7 @@ function GithubStats({}: Props) {
                                 <div
                                     ref={ref}
                                     onClick={onClick}
-                                    className="flex gap-2 items-center"
+                                    className="flex items-center gap-2"
                                 >
                                     <span className="capitalize">{year}</span>
                                 </div>

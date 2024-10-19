@@ -71,7 +71,24 @@
     * {
         @apply border-border;
     }
+
     body {
         @apply bg-background text-foreground;
+    }
+
+    .prose strong {
+        @apply text-inherit;
+    }
+
+    .prose p {
+        @apply my-2;
+    }
+
+    .prose li {
+        @apply my-1;
+    }
+
+    .prose ul {
+        @apply list-disc my-2;
     }
 }

@@ -11,6 +11,7 @@ import { SingleProjectQueryResult } from "@/sanity/types";
 import { client } from "@/sanity/lib/client";
 import imageUrlBuilder from "@sanity/image-url";
 import { SanityImageSource } from "@sanity/image-url/lib/types/types";
+import { PortableText } from "next-sanity";
 
 const { projectId, dataset } = client.config();
 
@@ -59,23 +60,24 @@ export const SingleProject = ({ project }: Props) => {
                     duration: 0.5,
                 }}
                 key={activeImage}
-                className="relative mt-6 sm:mt-8"
+                className="relative mt-6 w-full sm:mt-8"
             >
                 <Image
                     src={activeImage}
                     alt="thumbnail"
-                    height="1280"
-                    width="720"
-                    className="rounded-md object-contain"
+                    height="1920"
+                    width="1080"
+                    className="w-full rounded-md object-contain"
                 />
                 <div className="absolute bottom-0 h-40 w-full bg-gradient-to-b from-transparent to-neutral-900" />
             </motion.div>
             {project.images && (
-                <div className="my-8 flex flex-row flex-wrap justify-center">
+                <div className="mb-8 mt-12 flex flex-row flex-wrap items-start justify-start gap-y-4">
                     <button
                         onClick={() =>
                             setActiveImage(getImage(project.thumbnail!)!)
                         }
+                        className="focus-visible:outline-none"
                     >
                         <Image
                             src={
@@ -85,55 +87,58 @@ export const SingleProject = ({ project }: Props) => {
                             alt="product thumbnail"
                             height="1000"
                             width="1000"
-                            className="mb-r mr-4 h-14 w-16 rounded-lg border border-neutral-800 object-cover object-top md:h-40 md:w-60"
+                            className={`mb-r mr-4 h-14 w-16 rounded-lg border ${getImage(project!.thumbnail!) == activeImage ? "border-blue-500" : "border-neutral-800"} object-cover object-top transition-all duration-200 md:h-40 md:w-60`}
                         />
                     </button>
                     {project.images.map((image, idx) => (
                         <button
                             onClick={() => setActiveImage(getImage(image)!)}
                             key={`image-thumbnail-${idx}`}
+                            className="focus-visible:outline-none"
                         >
                             <Image
                                 src={
                                     image
-                                        ? urlFor(image)!
-                                              .width(1280)
-                                              .height(720)
-                                              .url()
+                                        ? (getImage(image) ??
+                                          "https://placehold.co/1280x720")
                                         : "https://placehold.co/1280x720"
                                 }
                                 alt="product thumbnail"
                                 height="1000"
                                 width="1000"
-                                className="mb-r mr-4 h-14 w-16 rounded-lg border border-neutral-800 object-cover object-top md:h-40 md:w-60"
+                                className={`mb-r mr-4 h-14 w-16 rounded-lg border ${getImage(image) == activeImage ? "border-blue-500" : "border-neutral-800"} object-cover object-top transition-all duration-200 md:h-40 md:w-60`}
                             />
                         </button>
                     ))}
                 </div>
             )}
-            <div className="mt-20 flex flex-col items-center justify-between lg:flex-row">
+            <div className="mt-14 flex flex-col items-center justify-between lg:flex-row">
                 <Heading className="mb-2 pb-1 font-black" clipBg={false}>
                     {" "}
                     {project.title}
                 </Heading>
             </div>
-            <div className="mt-2 flex space-x-2 md:mb-1 md:mt-0">
+            <div className="mt-4 flex space-x-2 md:mb-3 md:mt-2">
                 {project.technologies?.map((stack) => (
                     <span
                         key={stack.name}
-                        className="whitespace-nowrap rounded-sm bg-neutral-800 px-2 py-1 text-xs text-secondary md:text-xs lg:text-xs"
+                        className="whitespace-nowrap rounded-sm bg-neutral-800 px-2 py-1 text-xs text-secondary md:text-xs lg:text-sm"
                     >
                         {stack.name}
                     </span>
                 ))}
             </div>
-            <div className="mb-5">
-                <Paragraph className="mt-4 max-w-xl">
+            <div className="my-5">
+                <Paragraph className="mt-4 w-full text-neutral-200">
                     {project.description}
                 </Paragraph>
             </div>
-            <div className="prose prose-sm mb-5 max-w-none text-neutral-500 md:prose-base">
-                {project?.content}
+            <div className="prose prose-sm mb-5 max-w-none text-neutral-400 md:prose-base">
+                {project.content &&
+                    Array.isArray(project.content) &&
+                    project.content.map((block, idx) => (
+                        <PortableText value={block} key={idx} />
+                    ))}
             </div>
             {project.live_preview_url && (
                 <Link

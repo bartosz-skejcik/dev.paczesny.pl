@@ -39,7 +39,7 @@ export default async function SingleProjectPage({
     }
 
     return (
-        <Container>
+        <Container maxWidth="max-w-6xl">
             <SingleProject project={project} />
         </Container>
     );

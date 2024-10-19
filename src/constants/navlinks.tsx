@@ -1,5 +1,5 @@
 import { IconBolt, IconBriefcase2, IconMessage2 } from "@tabler/icons-react";
-import { GraduationCap } from "lucide-react";
+import { GraduationCap, SquareGanttChartIcon } from "lucide-react";
 
 export const navlinks = [
     {
@@ -15,11 +15,16 @@ export const navlinks = [
     {
         href: "/projects",
         label: "Projects",
-        icon: IconBriefcase2,
+        icon: SquareGanttChartIcon,
     },
     {
-        href: "/resume",
-        label: "Resume",
+        href: "/education",
+        label: "Education",
         icon: GraduationCap,
+    },
+    {
+        href: "/work",
+        label: "Work Experience",
+        icon: IconBriefcase2,
     },
 ];

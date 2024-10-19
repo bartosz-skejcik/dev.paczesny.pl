@@ -3,13 +3,15 @@ import { Heading } from "@components/ui/Heading";
 import { Highlight } from "@ui/Highlight";
 import { Paragraph } from "@ui/Paragraph";
 import { Projects } from "@components/Projects";
-//import { TechStack } from "@components/TechStack";
+import { TechStack } from "@components/TechStack";
 import GithubStats from "@components/GithubStats";
 import { getProjects } from "@/sanity/lib/projects";
+import { getSkillsByCategory } from "@/sanity/lib/skills";
+import Cta from "@/components/Cta";
 
 export default async function Home() {
     const projects = await getProjects();
-    //const skills = await getSkills();
+    const categories = await getSkillsByCategory();
 
     return (
         <Container maxWidth="max-w-5xl">
@@ -22,7 +24,7 @@ export default async function Home() {
                 <Highlight>love for creating</Highlight> with code. Exploring
                 new technologies and pushing boundaries.
             </Paragraph>
-            <Paragraph className="mt-4 max-w-xl">
+            <Paragraph className="mb-14 mt-4 max-w-xl">
                 I&apos;m a junior software engineer with{" "}
                 <Highlight>2 years of work experience</Highlight> folowed by{" "}
                 <Highlight>4 years of experience</Highlight> in coding. I&apos;m
@@ -30,8 +32,9 @@ export default async function Home() {
                 <Highlight>visual design</Highlight> and{" "}
                 <Highlight>accessibility</Highlight>.
             </Paragraph>
+            <Cta />
             <GithubStats />
-            {/* <TechStack stack={skills} /> */}
+            <TechStack categories={categories} />
             <Heading
                 as="h2"
                 className="mb-4 mt-20 text-lg font-black md:text-lg lg:text-lg"

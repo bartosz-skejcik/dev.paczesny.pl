@@ -94,7 +94,32 @@ export type WorkExperience = {
     end_date?: string;
     location_type?: "remote" | "hybrid" | "onsite";
     location?: string;
-    description?: string;
+    description?: Array<{
+        children?: Array<{
+            marks?: Array<string>;
+            text?: string;
+            _type: "span";
+            _key: string;
+        }>;
+        style?:
+            | "normal"
+            | "h1"
+            | "h2"
+            | "h3"
+            | "h4"
+            | "h5"
+            | "h6"
+            | "blockquote";
+        listItem?: "bullet" | "number";
+        markDefs?: Array<{
+            href?: string;
+            _type: "link";
+            _key: string;
+        }>;
+        level?: number;
+        _type: "block";
+        _key: string;
+    }>;
     skills?: Array<{
         _ref: string;
         _type: "reference";
@@ -111,18 +136,40 @@ export type Education = {
     _updatedAt: string;
     _rev: string;
     school_name?: string;
-    skills?: Array<{
-        _ref: string;
-        _type: "reference";
-        _weak?: boolean;
-        _key: string;
-        [internalGroqTypeReferenceTo]?: "skill";
-    }>;
+    skills?: string;
+    level?: string;
     start_date?: string;
     end_date?: string;
+    date?: string;
     currently_studying_here?: boolean;
     degree?: string;
     field_of_study?: string;
+    description?: Array<{
+        children?: Array<{
+            marks?: Array<string>;
+            text?: string;
+            _type: "span";
+            _key: string;
+        }>;
+        style?:
+            | "normal"
+            | "h1"
+            | "h2"
+            | "h3"
+            | "h4"
+            | "h5"
+            | "h6"
+            | "blockquote";
+        listItem?: "bullet" | "number";
+        markDefs?: Array<{
+            href?: string;
+            _type: "link";
+            _key: string;
+        }>;
+        level?: number;
+        _type: "block";
+        _key: string;
+    }>;
 };
 
 export type Project = {
@@ -133,7 +180,32 @@ export type Project = {
     _rev: string;
     title?: string;
     description?: string;
-    content?: string;
+    content?: Array<{
+        children?: Array<{
+            marks?: Array<string>;
+            text?: string;
+            _type: "span";
+            _key: string;
+        }>;
+        style?:
+            | "normal"
+            | "h1"
+            | "h2"
+            | "h3"
+            | "h4"
+            | "h5"
+            | "h6"
+            | "blockquote";
+        listItem?: "bullet" | "number";
+        markDefs?: Array<{
+            href?: string;
+            _type: "link";
+            _key: string;
+        }>;
+        level?: number;
+        _type: "block";
+        _key: string;
+    }>;
     thumbnail?: {
         asset?: {
             _ref: string;
@@ -264,9 +336,51 @@ export type AllSanitySchemaTypes =
     | SanityAssetSourceData
     | SanityImageMetadata;
 export declare const internalGroqTypeReferenceTo: unique symbol;
+// Source: ./src/sanity/lib/education.ts
+// Variable: educationQuery
+// Query: *[_type == "education"][]{_id, school_name, level, skills, start_date, end_date, date, currently_studying_here, degree, field_of_study, description}
+export type EducationQueryResult = Array<{
+    _id: string;
+    school_name: string | null;
+    level: string | null;
+    skills: string | null;
+    start_date: string | null;
+    end_date: string | null;
+    date: string | null;
+    currently_studying_here: boolean | null;
+    degree: string | null;
+    field_of_study: string | null;
+    description: Array<{
+        children?: Array<{
+            marks?: Array<string>;
+            text?: string;
+            _type: "span";
+            _key: string;
+        }>;
+        style?:
+            | "blockquote"
+            | "h1"
+            | "h2"
+            | "h3"
+            | "h4"
+            | "h5"
+            | "h6"
+            | "normal";
+        listItem?: "bullet" | "number";
+        markDefs?: Array<{
+            href?: string;
+            _type: "link";
+            _key: string;
+        }>;
+        level?: number;
+        _type: "block";
+        _key: string;
+    }> | null;
+}>;
+
 // Source: ./src/sanity/lib/projects.ts
 // Variable: projectsQuery
-// Query: *[_type == "project"]{_id, title, description, thumbnail, technologies->{name}}
+// Query: *[_type == "project"][]{_id, title, description, thumbnail, technologies[]->{name}}
 export type ProjectsQueryResult = Array<{
     _id: string;
     title: string | null;
@@ -282,10 +396,12 @@ export type ProjectsQueryResult = Array<{
         crop?: SanityImageCrop;
         _type: "image";
     } | null;
-    technologies: null;
+    technologies: Array<{
+        name: string | null;
+    }> | null;
 }>;
 // Variable: singleProjectQuery
-// Query: *[_type == "project" && _id == $id]{_id, ..., technologies->}[0]
+// Query: *[_type == "project" && _id == $id]{_id, ..., technologies[]->}[0]
 export type SingleProjectQueryResult = {
     _id: string;
     _type: "project";
@@ -294,7 +410,32 @@ export type SingleProjectQueryResult = {
     _rev: string;
     title?: string;
     description?: string;
-    content?: string;
+    content?: Array<{
+        children?: Array<{
+            marks?: Array<string>;
+            text?: string;
+            _type: "span";
+            _key: string;
+        }>;
+        style?:
+            | "blockquote"
+            | "h1"
+            | "h2"
+            | "h3"
+            | "h4"
+            | "h5"
+            | "h6"
+            | "normal";
+        listItem?: "bullet" | "number";
+        markDefs?: Array<{
+            href?: string;
+            _type: "link";
+            _key: string;
+        }>;
+        level?: number;
+        _type: "block";
+        _key: string;
+    }>;
     thumbnail?: {
         asset?: {
             _ref: string;
@@ -343,11 +484,89 @@ export type SingleProjectQueryResult = {
     github_url?: string;
 } | null;
 
+// Source: ./src/sanity/lib/skills.ts
+// Variable: skillsByCategoryQuery
+// Query: *[_type == "skill"] {  category,  _id,  name,  icon,  experience}
+export type SkillsByCategoryQueryResult = Array<{
+    category: "backend" | "frontend" | "other" | "soft_skills" | "tools" | null;
+    _id: string;
+    name: string | null;
+    icon: {
+        asset?: {
+            _ref: string;
+            _type: "reference";
+            _weak?: boolean;
+            [internalGroqTypeReferenceTo]?: "sanity.imageAsset";
+        };
+        hotspot?: SanityImageHotspot;
+        crop?: SanityImageCrop;
+        _type: "image";
+    } | null;
+    experience: string | null;
+}>;
+
+// Source: ./src/sanity/lib/work.ts
+// Variable: workQuery
+// Query: *[_type == "workExperience"][]{..., skills[]->{name}}
+export type WorkQueryResult = Array<{
+    _id: string;
+    _type: "workExperience";
+    _createdAt: string;
+    _updatedAt: string;
+    _rev: string;
+    title?: string;
+    employment_type?:
+        | "contract"
+        | "freelance"
+        | "fulltime"
+        | "internship"
+        | "parttime"
+        | "self-employed";
+    company?: string;
+    is_currently_working_here?: boolean;
+    start_date?: string;
+    end_date?: string;
+    location_type?: "hybrid" | "onsite" | "remote";
+    location?: string;
+    description?: Array<{
+        children?: Array<{
+            marks?: Array<string>;
+            text?: string;
+            _type: "span";
+            _key: string;
+        }>;
+        style?:
+            | "blockquote"
+            | "h1"
+            | "h2"
+            | "h3"
+            | "h4"
+            | "h5"
+            | "h6"
+            | "normal";
+        listItem?: "bullet" | "number";
+        markDefs?: Array<{
+            href?: string;
+            _type: "link";
+            _key: string;
+        }>;
+        level?: number;
+        _type: "block";
+        _key: string;
+    }>;
+    skills: Array<{
+        name: string | null;
+    }> | null;
+}>;
+
 // Query TypeMap
 import "@sanity/client";
 declare module "@sanity/client" {
     interface SanityQueries {
-        '*[_type == "project"]{_id, title, description, thumbnail, technologies->{name}}': ProjectsQueryResult;
-        '*[_type == "project" && _id == $id]{_id, ..., technologies->}[0]': SingleProjectQueryResult;
+        '*[_type == "education"][]{_id, school_name, level, skills, start_date, end_date, date, currently_studying_here, degree, field_of_study, description}': EducationQueryResult;
+        '*[_type == "project"][]{_id, title, description, thumbnail, technologies[]->{name}}': ProjectsQueryResult;
+        '*[_type == "project" && _id == $id]{_id, ..., technologies[]->}[0]': SingleProjectQueryResult;
+        '*[_type == "skill"] {\n  category,\n  _id,\n  name,\n  icon,\n  experience\n}': SkillsByCategoryQueryResult;
+        '*[_type == "workExperience"][]{..., skills[]->{name}}': WorkQueryResult;
     }
 }

@@ -11,8 +11,12 @@ export const educationType = {
         {
             name: "skills",
             title: "Skills Learned/Used",
-            type: "array",
-            of: [{ type: "reference", to: [{ type: "skill" }] }],
+            type: "string",
+        },
+        {
+            name: "level",
+            title: "Level",
+            type: "string",
         },
         {
             name: "start_date",
@@ -22,6 +26,11 @@ export const educationType = {
         {
             name: "end_date",
             title: "End Date",
+            type: "date",
+        },
+        {
+            name: "date",
+            title: "Singular Date",
             type: "date",
         },
         {
@@ -38,6 +47,12 @@ export const educationType = {
             name: "field_of_study",
             title: "Field of Study",
             type: "string",
+        },
+        {
+            name: "description",
+            title: "Description",
+            type: "array",
+            of: [{ type: "block" }],
         },
     ],
 };
