@@ -1,51 +1,39 @@
 import { Paragraph } from "@ui/Paragraph";
-import { Heading } from "@ui/Heading";
 import { IconCircleCheckFilled } from "@tabler/icons-react";
 import { getEducation } from "@/sanity/lib/education";
 import { EducationQueryResult } from "@/sanity/types";
-import { PortableText } from "next-sanity";
+import { format } from "date-fns";
+import { SkillList } from "./work-experience/SkillList";
+import { JobDescription } from "./work-experience/JobDescription";
+import { JobTitle } from "./work-experience/JobTitle";
 
 function formatDate(date: string, start_date: string, end_date: string) {
     const dateObject = new Date(date || "");
     const startDate = new Date(start_date || "");
     const endDate = new Date(end_date || "");
 
-    const months = [
-        "January",
-        "February",
-        "March",
-        "April",
-        "May",
-        "June",
-        "July",
-        "August",
-        "September",
-        "October",
-        "November",
-        "December",
-    ];
-
     if (start_date && end_date) {
+        const startFormatted = format(startDate, "MMM yyyy");
+        const endFormatted = endDate ? format(endDate, "MMM yyyy") : "Present";
+
         // check if the year diff is greater than or equal to 1 year
         const yearDiff = endDate.getFullYear() - startDate.getFullYear();
         if (yearDiff >= 1) {
             // return year - year
-            return `${startDate.getFullYear()} - ${endDate.getFullYear()}`;
+            return `${startFormatted} — ${endFormatted}`;
         } else {
             // return month - month
-            console.log(startDate.toLocaleString("en-PL"), endDate);
-            return `${months[Number(startDate.getMonth().toLocaleString("en-PL"))]} - ${months[endDate.getMonth()]} | ${endDate.getFullYear()}`;
+            const startMonth = format(startDate, "MMM yy");
+            const endMonth = format(endDate, "MMM yy");
+            return `${startMonth} — ${endMonth}`;
         }
     } else if (start_date && !end_date) {
         // return month, year - "currently"
-        return `${months[startDate.getMonth()]}, ${startDate.getFullYear()} - Currently`;
+        const startMonth = format(startDate, "MMM yyyy");
+        return `${startMonth} — Present`;
     } else {
         // return date
-        return dateObject.toLocaleDateString("en-PL", {
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-        });
+        return format(dateObject, "dd MMMM yyyy");
     }
 
     // return dateObject.toLocaleDateString("en-PL", {
@@ -57,21 +45,46 @@ function formatDate(date: string, start_date: string, end_date: string) {
 export const Education = async () => {
     const education: EducationQueryResult = await getEducation();
     return (
-        <div>
+        <div className="mt-16 grid grid-cols-1 gap-10">
             {education.map((item) => (
-                <div
-                    className="relative my-20 flex flex-col space-x-10 space-y-10 md:flex-row md:space-y-0"
-                    key={item._id}
-                >
-                    <Paragraph className="w-40 whitespace-nowrap capitalize">
-                        {formatDate(
-                            item.date!,
-                            item.start_date!,
-                            item.end_date!,
+                <div key={item._id} className="flex">
+                    <div className="w-56 flex-shrink-0 text-start">
+                        <span className="whitespace-nowrap text-sm text-sky-400">
+                            {formatDate(
+                                item.date!,
+                                item.start_date!,
+                                item.end_date!,
+                            )}
+                        </span>
+                    </div>
+                    <div className="flex-grow">
+                        {item.level && <JobTitle title={item.level} />}
+                        <div className="mt-1 text-sm text-neutral-400">
+                            {item.degree && item.field_of_study ? (
+                                <p>
+                                    {item.field_of_study} • {item.degree}
+                                </p>
+                            ) : (
+                                <p>{item.degree}</p>
+                            )}
+                            {item.school_name && <p>{item.school_name}</p>}
+                        </div>
+                        {item.description && (
+                            <JobDescription description={item.description} />
                         )}
-                    </Paragraph>
-                    <div>
-                        <Heading
+                        {item.skills && (
+                            <SkillList
+                                skills={item.skills
+                                    .split(", ")
+                                    .map((i, idx) => ({
+                                        _id: idx.toString(),
+                                        name: i.toUpperCase(),
+                                    }))}
+                            />
+                        )}
+                    </div>
+
+                    {/* <Heading
                             as="h5"
                             className="text-lg text-sky-500 md:text-lg lg:text-lg"
                         >
@@ -106,7 +119,7 @@ export const Education = async () => {
                                     <span className="capitalize">{skill}</span>
                                 </Step>
                             ))}
-                    </div>
+                    */}
                 </div>
             ))}
         </div>

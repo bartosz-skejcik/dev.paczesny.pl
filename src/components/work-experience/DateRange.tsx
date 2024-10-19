@@ -15,7 +15,7 @@ export function DateRange({ startDate, endDate }: DateRangeProps) {
     };
 
     return (
-        <div className="w-38 flex-shrink-0 pr-24 text-right">
+        <div className="w-56 flex-shrink-0 text-start">
             <span className="whitespace-nowrap text-sm text-sky-400">
                 {formatDateRange(startDate, endDate)}
             </span>
