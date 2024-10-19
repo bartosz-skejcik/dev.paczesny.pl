@@ -64,7 +64,7 @@ export const Projects = ({ projects }: Props) => {
                                 alt="thumbnail"
                                 height="720"
                                 width="1280"
-                                className="w-1/4 rounded-md"
+                                className="w-full rounded-md md:w-1/4"
                             />
                             <div className="flex flex-col justify-between">
                                 <div>
