@@ -1,6 +1,5 @@
-import React from "react";
-
 import localFont from "next/font/local";
+import { ReactNode } from "react";
 import { twMerge } from "tailwind-merge";
 
 // Font files can be colocated inside of `app`
@@ -16,7 +15,7 @@ export const Heading = ({
     clipBg = true,
 }: {
     className?: string;
-    children: React.ReactNode;
+    children: ReactNode;
     as?: keyof JSX.IntrinsicElements;
     clipBg?: boolean;
 }) => {
@@ -28,7 +27,7 @@ export const Heading = ({
                 className,
             )}
         >
-            {children}
+            {children?.toString()}
         </Tag>
     );
 };
