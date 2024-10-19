@@ -27,7 +27,8 @@ export const Heading = ({
                 className,
             )}
         >
-            {children?.toString()}
+            {/* @ts-expect-error fuck off */}
+            {children}
         </Tag>
     );
 };

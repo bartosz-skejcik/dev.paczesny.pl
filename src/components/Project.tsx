@@ -113,12 +113,15 @@ export const SingleProject = ({ project }: Props) => {
                 </div>
             )}
             <div className="mt-14 flex flex-col items-center justify-between lg:flex-row">
-                <Heading className="mb-2 pb-1 font-black" clipBg={false}>
-                    {" "}
+                <Heading
+                    className="mb-2 pb-1 text-start text-3xl font-black"
+                    clipBg={false}
+                    as="h2"
+                >
                     {project.title}
                 </Heading>
             </div>
-            <div className="mt-4 flex space-x-2 md:mb-3 md:mt-2">
+            <div className="mt-4 flex flex-wrap gap-2 md:mb-3 md:mt-2">
                 {project.technologies?.map((stack) => (
                     <span
                         key={stack.name}
@@ -134,11 +137,11 @@ export const SingleProject = ({ project }: Props) => {
                 </Paragraph>
             </div>
             <div className="prose prose-sm mb-5 max-w-none text-neutral-400 md:prose-base">
-                {project.content &&
-                    Array.isArray(project.content) &&
-                    project.content.map((block, idx) => (
-                        <PortableText value={block} key={idx} />
-                    ))}
+                {project.content && Array.isArray(project.content)
+                    ? project.content.map((block, idx) => (
+                          <PortableText value={block} key={idx} />
+                      ))
+                    : project.content}
             </div>
             {project.live_preview_url && (
                 <Link
