@@ -7,7 +7,7 @@ import About from "@/components/About";
 export const metadata: Metadata = {
     title: "About | Bartek Paczesny",
     description:
-        "Bartek Paczesny is a Polish front-end developer fueled by curiosity and a love for creating with code. Exploring new technologies and pushing boundaries. He's a junior software engineer with 2 years of work experience folowed by 4 years of experience in coding. A self-taught developer with a strong focus on visual design and accessibility.",
+        "A fullstack developer from Poland, obsessed with figuring out how stuff works and making cool things with code. Has been coding for 5 years, including a 2-month internship as a Junior Software Engineer. Self-taught in everything, focused on clean design and making sure builds work for everyone.",
 };
 
 export default function AboutPage() {

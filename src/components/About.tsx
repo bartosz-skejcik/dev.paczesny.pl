@@ -42,26 +42,29 @@ export default function About() {
 
             <div className="max-w-4xl">
                 <Paragraph className="mt-4">
-                    I am an ambitious and aspiring Frontend Developer with a
-                    background in computer science from technical school,
-                    possessing knowledge and skills in both frontend and backend
-                    development. I have designed web applications using
-                    Express.js and created scripts in Python.
+                    I’m Bartek, a fullstack developer and first-year Computer
+                    Science student at Vistula University in Poland. With 5
+                    years of coding experience and a hands-on approach, I’ve
+                    built projects ranging from AI-powered SaaS tools to Content
+                    Creator Tools for organizing and planning videos/streams
+                    with AI. I’ve also had the chance to sharpen my skills
+                    during internships, contributing to dynamic user interfaces
+                    and improving application performance.
                 </Paragraph>
                 <Paragraph className="mt-4">
-                    My experience includes designing and building websites with
-                    React.js, TailwindCSS, and Framer Motion. I have achieved
-                    success in school projects. I have analytical skills and am
-                    familiar with web technologies, libraries, and frameworks
-                    such as React and Next.
+                    Outside of coding, I’m a goalkeeper for my local football
+                    team, where we’ve placed in the top 3 in 4 out of 6
+                    tournaments. When I’m not on the pitch, I’m following
+                    Formula One and geeking out over race strategies and team
+                    dynamics.
                 </Paragraph>
 
                 <Paragraph className="mt-4">
-                    As an intern, I aim to gain practical industry experience
-                    and develop my skills in a professional environment. I want
-                    to work with a team to learn from experienced developers who
-                    can help me acquire new skills and achieve my career goals
-                    in the future.
+                    I’m always experimenting with new ideas in my side projects,
+                    whether it’s integrating AI into apps or creating tools that
+                    simplify workflows. These projects are my way of exploring
+                    what’s next in tech and turning ambitious ideas into
+                    reality.
                 </Paragraph>
             </div>
         </div>

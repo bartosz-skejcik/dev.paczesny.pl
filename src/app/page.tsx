@@ -20,17 +20,16 @@ export default async function Home() {
                 Hello there! I&apos;m Bartek
             </Heading>
             <Paragraph className="mt-4 max-w-xl">
-                I&apos;m a Polish front-end developer fueled by curiosity and a{" "}
-                <Highlight>love for creating</Highlight> with code. Exploring
-                new technologies and pushing boundaries.
+                Hey, I&apos;m a <Highlight>fullstack developer</Highlight> from
+                Poland. I’m obsessed with figuring out how stuff works and
+                making cool things with code
             </Paragraph>
             <Paragraph className="mb-14 mt-4 max-w-xl">
-                I&apos;m a junior software engineer with{" "}
-                <Highlight>2 years of work experience</Highlight> folowed by{" "}
-                <Highlight>4 years of experience</Highlight> in coding. I&apos;m
-                a self-taught developer with a strong focus on{" "}
-                <Highlight>visual design</Highlight> and{" "}
-                <Highlight>accessibility</Highlight>.
+                I&apos;ve been coding for 5 years, including a{" "}
+                <Highlight>2-month internship</Highlight> as a{" "}
+                <Highlight>Junior Software Engineer</Highlight>. I taught myself
+                everything, and I&apos;m all about clean design and making sure
+                what I build works for everyone.
             </Paragraph>
             <Cta />
             <GithubStats />

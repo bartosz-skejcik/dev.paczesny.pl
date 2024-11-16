@@ -36,7 +36,7 @@ export const TechStack = ({ categories }: Props) => {
             </Heading>
             <div className="mx-auto flex max-w-4xl flex-col space-y-4 sm:mt-10 md:flex-row md:space-x-2 md:space-y-0">
                 <div className="relative flex flex-row overflow-x-auto md:flex-col md:overflow-x-visible">
-                    <FallingBeam />
+                    {/**<FallingBeam />*/}
                     <Tabs
                         initialActiveTab={"frontend"}
                         onChange={(categoryName: string) =>
@@ -69,7 +69,7 @@ export const TechStack = ({ categories }: Props) => {
                 <div className="flex-1 md:pl-10">
                     <div className="flex w-full flex-col space-y-4">
                         <div
-                            className="grid w-full grid-cols-1 gap-4 p-4 lg:grid-cols-3"
+                            className="grid w-full grid-cols-1 gap-4 p-4 md:grid-cols-3"
                             style={{
                                 opacity: 1,
                                 transform: "none",
@@ -87,7 +87,7 @@ export const TechStack = ({ categories }: Props) => {
                                     .skills.map((skill) => (
                                         <div
                                             key={skill._id}
-                                            className="flex w-full items-center justify-start gap-2"
+                                            className="col-span-1 flex w-fit items-center justify-start gap-2"
                                         >
                                             <div className="flex aspect-square h-12 w-12 items-center justify-center rounded-md bg-neutral-700 p-1">
                                                 <Image
