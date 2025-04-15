@@ -16,6 +16,10 @@ const nextConfig = {
                 protocol: "https",
                 hostname: "**.googleusercontent.com",
             },
+            {
+                protocol: "https",
+                hostname: "cdn.discordapp.com"
+            },
             //{
             //    protocol: "https",
             //    hostname: "seeklogo.com",
