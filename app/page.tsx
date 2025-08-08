@@ -4,24 +4,24 @@ import { getAllProjects } from "@/lib/projects-data"
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-white dark:bg-black text-black dark:text-white font-mono text-sm leading-relaxed">
+    <div className="min-h-screen bg-neutral-200 dark:bg-neutral-900 text-neutral-900 dark:text-neutral-200 font-mono text-sm leading-relaxed">
       {/* Header */}
       <Header />
 
       <main className="max-w-4xl mx-auto p-4 space-y-8">
         {/* Introduction */}
-        <section className="border-2 border-black dark:border-white p-3 sm:p-4">
+        <section className="border-2 border-neutral-900 dark:border-neutral-200 p-3 sm:p-4">
           <div className="hidden sm:block">
             <pre className="whitespace-pre-wrap text-xs sm:text-sm">
               {`
- ██░ ██ ▓█████  ██▓     ██▓     ▒█████     ▄▄▄█████▓ ██░ ██ ▓█████  ██▀███  ▓█████ 
-▓██░ ██▒▓█   ▀ ▓██▒    ▓██▒    ▒██▒  ██▒   ▓  ██▒ ▓▒▓██░ ██▒▓█   ▀ ▓██ ▒ ██▒▓█   ▀ 
-▒██▀▀██░▒███   ▒██░    ▒██░    ▒██░  ██▒   ▒ ▓██░ ▒░▒██▀▀██░▒███   ▓██ ░▄█ ▒▒███   
-░▓█ ░██ ▒▓█  ▄ ▒██░    ▒██░    ▒██   ██░   ░ ▓██▓ ░ ░▓█ ░██ ▒▓█  ▄ ▒██▀▀█▄  ▒▓█  ▄ 
+ ██░ ██ ▓█████  ██▓     ██▓     ▒█████     ▄▄▄█████▓ ██░ ██ ▓█████  ██▀███  ▓█████
+▓██░ ██▒▓█   ▀ ▓██▒    ▓██▒    ▒██▒  ██▒   ▓  ██▒ ▓▒▓██░ ██▒▓█   ▀ ▓██ ▒ ██▒▓█   ▀
+▒██▀▀██░▒███   ▒██░    ▒██░    ▒██░  ██▒   ▒ ▓██░ ▒░▒██▀▀██░▒███   ▓██ ░▄█ ▒▒███
+░▓█ ░██ ▒▓█  ▄ ▒██░    ▒██░    ▒██   ██░   ░ ▓██▓ ░ ░▓█ ░██ ▒▓█  ▄ ▒██▀▀█▄  ▒▓█  ▄
 ░▓█▒░██▓░▒████▒░██████▒░██████▒░ ████▓▒░     ▒██▒ ░ ░▓█▒░██▓░▒████▒░██▓ ▒██▒░▒████▒
  ▒ ░░▒░▒░░ ▒░ ░░ ▒░▓  ░░ ▒░▓  ░░ ▒░▒░▒░      ▒ ░░    ▒ ░░▒░▒░░ ▒░ ░░ ▒▓ ░▒▓░░░ ▒░ ░
  ▒ ░▒░ ░ ░ ░  ░░ ░ ▒  ░░ ░ ▒  ░  ░ ▒ ▒░        ░     ▒ ░▒░ ░ ░ ░  ░  ░▒ ░ ▒░ ░ ░  ░
- ░  ░░ ░   ░     ░ ░     ░ ░   ░ ░ ░ ▒       ░       ░  ░░ ░   ░     ░░   ░    ░   
+ ░  ░░ ░   ░     ░ ░     ░ ░   ░ ░ ░ ▒       ░       ░  ░░ ░   ░     ░░   ░    ░
  ░  ░  ░   ░  ░    ░  ░    ░  ░    ░ ░               ░  ░  ░   ░  ░   ░        ░  ░
 
 I'M BARTEK - FULLSTACK DEVELOPER FROM POLAND
@@ -36,7 +36,7 @@ I'M BARTEK - FULLSTACK DEVELOPER FROM POLAND
         </section>
 
         {/* About */}
-        <section id="about" className="border border-black dark:border-white p-3 sm:p-4">
+        <section id="about" className="border border-neutral-900 dark:border-neutral-200 p-3 sm:p-4">
           <h2 className="text-xl font-bold mb-4 underline">ABOUT.TXT</h2>
           <div className="space-y-4">
             <p>{">"} Hello there! I&apos;m Bartek, a self-taught fullstack developer from Poland.</p>
@@ -57,14 +57,14 @@ I'M BARTEK - FULLSTACK DEVELOPER FROM POLAND
         </section>
 
         {/* Experience */}
-        <section id="experience" className="border border-black dark:border-white p-3 sm:p-4">
+        <section id="experience" className="border border-neutral-900 dark:border-neutral-200 p-3 sm:p-4">
           <h2 className="text-xl font-bold mb-4 underline">EXPERIENCE.LOG</h2>
           <div className="space-y-2">
-            <div className="border-l-4 border-black dark:border-white pl-4">
+            <div className="border-l-4 border-neutral-900 dark:border-neutral-200 pl-4">
               <p className="font-bold">CODING EXPERIENCE: 5+ YEARS</p>
               <p>Self-taught journey through modern web development</p>
             </div>
-            <div className="border-l-4 border-black dark:border-white pl-4">
+            <div className="border-l-4 border-neutral-900 dark:border-neutral-200 pl-4">
               <p className="font-bold">JUNIOR SOFTWARE ENGINEER (2 MONTHS)</p>
               <p>Professional internship experience</p>
             </div>
@@ -72,9 +72,9 @@ I'M BARTEK - FULLSTACK DEVELOPER FROM POLAND
         </section>
 
         {/* GitHub Contributions */}
-        <section className="border border-black dark:border-white p-3 sm:p-4">
+        <section className="border border-neutral-900 dark:border-neutral-200 p-3 sm:p-4">
           <h2 className="text-xl font-bold mb-4 underline">GITHUB.ACTIVITY</h2>
-          <div className="bg-black dark:bg-white text-white dark:text-black p-4 font-mono text-xs">
+          <div className="bg-neutral-900 dark:bg-neutral-200 text-neutral-200 dark:text-neutral-900 p-4 font-mono text-xs">
             <p>{">"} git log --oneline --graph</p>
             <div className="mt-2 space-y-1">
               <p>* a1b2c3d Latest project updates</p>
@@ -88,7 +88,7 @@ I'M BARTEK - FULLSTACK DEVELOPER FROM POLAND
         </section>
 
         {/* Tech Stack */}
-        <section id="tech" className="border border-black dark:border-white p-3 sm:p-4">
+        <section id="tech" className="border border-neutral-900 dark:border-neutral-200 p-3 sm:p-4">
           <h2 className="text-lg sm:text-xl font-bold mb-4 underline">TECH.STACK</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
@@ -126,7 +126,7 @@ I'M BARTEK - FULLSTACK DEVELOPER FROM POLAND
         </section>
 
         {/* Projects */}
-        <section id="projects" className="border border-black dark:border-white p-3 sm:p-4">
+        <section id="projects" className="border border-neutral-900 dark:border-neutral-200 p-3 sm:p-4">
           <h2 className="text-xl font-bold mb-4 underline">FEATURED.PROJECTS</h2>
 
           <div className="space-y-6">
@@ -138,7 +138,7 @@ I'M BARTEK - FULLSTACK DEVELOPER FROM POLAND
           </div>
 
           {/* View All Projects Link */}
-          <div className="mt-6 text-center border-t border-black dark:border-white pt-4">
+          <div className="mt-6 text-center border-t border-neutral-900 dark:border-neutral-200 pt-4">
             <a href="/projects" className="underline hover:no-underline text-lg">
               [VIEW ALL PROJECTS →]
             </a>
@@ -146,7 +146,7 @@ I'M BARTEK - FULLSTACK DEVELOPER FROM POLAND
         </section>
 
         {/* Contact */}
-        <section id="contact" className="border border-black dark:border-white p-3 sm:p-4">
+        <section id="contact" className="border border-neutral-900 dark:border-neutral-200 p-3 sm:p-4">
           <h2 className="text-xl font-bold mb-4 underline">CONTACT.INFO</h2>
           <div className="space-y-2">
             <p>{">"} Ready to collaborate? Let&apos;s build something amazing together.</p>
@@ -174,7 +174,7 @@ I'M BARTEK - FULLSTACK DEVELOPER FROM POLAND
         </section>
 
         {/* Footer */}
-        <footer className="border-t-2 border-black dark:border-white pt-4 text-center">
+        <footer className="border-t-2 border-neutral-900 dark:border-neutral-200 pt-4 text-center">
           <p>© 2024 BARTEK.DEV - BUILT WITH PASSION AND CODE</p>
           <p className="text-xs mt-2">LAST UPDATED: {new Date().toLocaleDateString()}</p>
         </footer>

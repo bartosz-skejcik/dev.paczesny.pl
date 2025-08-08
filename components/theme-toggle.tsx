@@ -45,7 +45,7 @@ export default function ThemeToggle() {
   return (
     <button
       onClick={cycleTheme}
-      className="border border-black dark:border-white px-2 py-1 text-xs font-mono hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black transition-colors"
+      className="border border-neutral-900 dark:border-neutral-200 px-2 py-1 text-xs font-mono hover:bg-neutral-900 hover:text-neutral-200 dark:hover:bg-neutral-200 dark:hover:text-neutral-900 transition-colors"
       aria-label={`Switch to ${getNextTheme().toLowerCase()} mode`}
       title={`Current: ${getButtonText()} | Click for ${getNextTheme()}`}
     >

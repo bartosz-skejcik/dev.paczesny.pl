@@ -7,13 +7,13 @@ export default function ProjectCard({
   isOnHomePage = false,
 }: { project: Project; index: number; isOnHomePage?: boolean }) {
   return (
-    <div className="border border-black dark:border-neutral-100 p-3 sm:p-4">
+    <div className="border border-neutral-900 dark:border-neutral-100 p-3 sm:p-4">
       <div className="flex flex-row justify-between items-start mb-2 gap-2">
         <h3 className="text-base sm:text-lg font-bold">
           {project.emoji} {project.title}
         </h3>
         {isOnHomePage == false && (
-          <span className="text-xs bg-black dark:bg-neutral-100 text-neutral-100 dark:text-black px-2 py-1 self-start">
+          <span className="text-xs bg-neutral-900 dark:bg-neutral-100 text-neutral-100 dark:text-neutral-900 px-2 py-1 self-start">
             #{String(index + 1).padStart(2, "0")}
           </span>
         )}
@@ -29,7 +29,7 @@ export default function ProjectCard({
         <div className="flex flex-wrap gap-1">
           {project.technicalStack.flatMap((stack) =>
             stack.items.slice(0, 4).map((tech, techIndex) => (
-              <span key={techIndex} className="text-xs border border-black dark:border-neutral-100 px-1 py-0.5">
+              <span key={techIndex} className="text-xs border border-neutral-900 dark:border-neutral-100 px-1 py-0.5">
                 {tech.split(" ")[0]}
               </span>
             )),
@@ -50,7 +50,7 @@ export default function ProjectCard({
             <div className="text-xs">
               <span className="font-bold">STATUS:</span> {project.projectLinks.status}
               {project.title === "MOSIEDLE" && (
-                <span className="ml-2 bg-black dark:bg-neutral-100 text-neutral-100 dark:text-black px-1 py-0.5">🏆 AWARD</span>
+                <span className="ml-2 bg-neutral-900 dark:bg-neutral-100 text-neutral-100 dark:text-neutral-900 px-1 py-0.5">🏆 AWARD</span>
               )}
             </div>
             <div className="flex flex-wrap gap-2">
