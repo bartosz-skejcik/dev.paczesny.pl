@@ -34,7 +34,7 @@ export async function generateMetadata({ params }: PageProps) {
       title: post.metadata.title,
       description: post.metadata.description,
       card: "summary_large_image",
-      creator: "@nexxeln",
+      creator: "@_j5on",
       images: [
         `https://dev.paczesny.pl/og/blog?title=${post.metadata.title}&top=${publishedTime}`,
       ],
@@ -62,13 +62,13 @@ export default async function Post({ params }: PageProps) {
             datePublished: post.metadata.date,
             dateModified: post.metadata.date,
             description: post.metadata.description,
-            image: `https://nexxel.dev/og/blog?title=${
+            image: `https://dev.paczesny.pl/og/blog?title=${
               post.metadata.title
             }&top=${formatDate(post.metadata.date)}`,
-            url: `https://nexxel.dev/blog/${post.slug}`,
+            url: `https://dev.paczesny.pl/blog/${post.slug}`,
             author: {
               "@type": "Person",
-              name: "Shoubhit Dash",
+              name: "Bartłomiej Paczesny",
             },
           }),
         }}

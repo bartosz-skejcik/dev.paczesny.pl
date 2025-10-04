@@ -19,7 +19,7 @@ async function loadGoogleFont(font: string, text: string) {
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
-  const title = searchParams.get("title") ?? "nexxel's blog"
+  const title = searchParams.get("title") ?? "bpaczesny's blog"
 
   return new ImageResponse(
     (
@@ -38,7 +38,7 @@ export async function GET(request: Request) {
         }}
       >
         <img
-          src="https://dev.paczesny.pl/nexxel.jpg"
+          src="https://dev.paczesny.pl/bpaczesny.jpg"
           style={{
             position: "absolute",
             bottom: "40px",
