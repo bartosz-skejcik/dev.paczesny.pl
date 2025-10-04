@@ -19,6 +19,12 @@ const nextConfig: NextConfig = {
         port: "",
         pathname: "/a/09ir0bgwfb/**",
       },
+      {
+        protocol: "https",
+        hostname: "scontent-waw2-2.xx.fbcdn.net",
+        port: "",
+        pathname: "/**",
+      },
     ],
   },
 }
