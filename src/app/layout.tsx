@@ -10,7 +10,7 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://www.nexxel.dev"),
+  metadataBase: new URL("https://dev.paczesny.pl"),
   title: {
     default: "Bartek Paczesny",
     template: "%s | Bartek Paczesny",

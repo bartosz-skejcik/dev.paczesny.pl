@@ -38,7 +38,7 @@ export async function GET(request: Request) {
         }}
       >
         <img
-          src="https://www.nexxel.dev/nexxel.jpg"
+          src="https://dev.paczesny.pl/nexxel.jpg"
           style={{
             position: "absolute",
             bottom: "40px",

@@ -47,7 +47,7 @@ body {
 }
 
 .prose code:not(pre code) {
-  @apply px-1 py-0.5 text-sm border border-gray-700 rounded text-gray-200;
+  @apply px-1 py-0.5 text-sm border border-neutral-700 rounded text-neutral-200;
 }
 
 .prose code:not(pre code)::before,
@@ -62,5 +62,5 @@ body {
 }
 
 .prose code span {
-  @apply font-medium text-gray-200;
+  @apply font-medium text-neutral-200;
 }

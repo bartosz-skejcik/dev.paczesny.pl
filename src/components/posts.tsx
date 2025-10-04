@@ -17,7 +17,7 @@ export function Posts({ posts }: PostsProps) {
   const selectedItemRef = useRef<HTMLDivElement>(null)
 
   const filteredPosts = posts.filter((item) =>
-    item.metadata.title.toLowerCase().includes(searchQuery.toLowerCase()),
+    item.metadata.title.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
   useEffect(() => {
@@ -59,8 +59,8 @@ export function Posts({ posts }: PostsProps) {
               ? prev + 1
               : prev
             : prev > 0
-              ? prev - 1
-              : prev
+            ? prev - 1
+            : prev
 
           scrollSelectedIntoView()
           return newIndex
@@ -77,8 +77,8 @@ export function Posts({ posts }: PostsProps) {
   return (
     <>
       {isSearching && (
-        <div className="fixed bottom-4 left-4 right-4 max-w-2xl mx-auto bg-black/50 backdrop-blur-sm border border-gray-800 p-2">
-          <div className="flex items-center text-gray-400">
+        <div className="fixed bottom-4 left-4 right-4 max-w-2xl mx-auto bg-black/50 backdrop-blur-sm border border-neutral-800 p-2">
+          <div className="flex items-center text-neutral-400">
             <span className="text-accent mr-2">/</span>
             <input
               type="text"

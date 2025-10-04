@@ -4,89 +4,74 @@ import { Metadata } from "next"
 
 const projects = [
   {
-    title: "create-t3-app",
-    description:
-      "cli tool to bootstrap full-stack type-safe next.js applications",
-    role: "creator and maintainer",
-    period: "jun 2022 - present",
+    title: "pile app",
+    description: "diary, journal, and notes app in one for android",
+    role: "creator",
+    period: "aug 2025 - present",
     achievements: [
-      "grew project to 24k+ github stars",
-      "wrote education blog posts with over 100k views",
-      "maintained comprehensive, up-to-date documentation",
+      "designed and implemented a user-friendly interface for seamless note-taking and journaling",
+      "integrated AI features to enhance user experience and productivity",
+      "managed app deployment and updates on the Google Play Store",
+    ],
+    technologies: ["jetpack compose", "groq-ai", "java", "kotlin"],
+    href: "https://github.com/bartosz-skejcik/pile-android",
+    status: "beta",
+  },
+  {
+    title: "go analytics",
+    description:
+      "a privacy-focused web analytics backend service for tracking user sessions, page views, and custom events without invasive tracking",
+    role: "creator",
+    period: "2024",
+    achievements: [
+      "built a lightweight REST API backend with Go achieving high performance and low resource usage",
+      "implemented privacy-focused anonymous tracking using cryptographic hashing with daily rotation",
+      "integrated IP-based geolocation for visitor insights across 15+ data points (country, region, city, timezone)",
+      "designed and implemented PostgreSQL database schema with optimized indexes for analytics queries",
+      "configured serverless deployment on Vercel with CORS support for cross-origin requests",
+      "developed flexible custom event logging system with JSON data storage for business metrics",
+    ],
+    technologies: ["go", "gin", "postgresql", "docker", "vercel", "rest api"],
+    href: "https://github.com/bartosz-skejcik/go-analytics",
+    status: "prod",
+  },
+  {
+    title: "mosiedle",
+    description: "award-winning community management system",
+    role: "creator",
+    period: "2024",
+    achievements: [
+      "designed a comprehensive platform for community management in residential complexes, neighborhoods, and housing communities",
+      "facilitated communication, resource sharing, and administrative tasks for modern living communities",
+      "created an award-winning user experience and technical implementation for real-world community management challenges",
     ],
     technologies: [
-      "typescript",
-      "next.js",
-      "trpc",
-      "prisma",
-      "tailwind css",
-      "auth.js",
+      "typeScript",
+      "tailwindcss",
+      "framer motion",
+      "php",
+      "mysql",
+      "docker",
+      "git",
+      "restful api",
     ],
-    href: "https://create.t3.gg",
+    href: "https://github.com/bartosz-skejcik/mosiedle",
+    status: "prod",
   },
   {
-    title: "mini-git",
-    description: "a simplified implementation of git built from scratch",
-    role: "creator",
-    period: "jul 2024",
-    achievements: [
-      "successfully implemented core git commands",
-      "implemented efficient blob storage and compression",
-      "learned about git's internal object model and data structures like merkle trees",
-    ],
-    technologies: ["go", "sha-1"],
-    href: "https://github.com/nexxeln/mini-git",
-  },
-  {
-    title: "license-generator",
-    description: "cli tool to create licenses for your projects",
-    role: "creator and maintainer",
-    period: "mar 2022 - present",
-    achievements: [
-      "grew project to over 3.2k downloads",
-      "built a robust cli interface with fuzzy search",
-      "added support for all github licenses with auto-filling",
-    ],
-    technologies: ["rust", "github api"],
-    href: "https://github.com/nexxeln/license-generator",
-  },
-  {
-    title: "spotify-voice-control",
-    description: "voice control for spotify through the terminal",
-    role: "creator",
-    period: "feb 2022",
-    achievements: [
-      "integrated spotify web api for seamless, real-time music control",
-      "built voice command system for comprehensive music control including playback, search, and playlist management",
-    ],
-    technologies: ["python", "spotify api"],
-    href: "https://github.com/nexxeln/spotify-voice-control",
-  },
-  {
-    title: "text2regex",
+    title: "content planner",
     description:
-      "convert natural language text into validated regular expressions",
+      "a simple tool to help you plan and organize your social media content ideas",
     role: "creator",
-    period: "jul 2024",
+    period: "2024",
     achievements: [
-      "implemented a self-correcting llm-powered regex generator",
-      "built a easy-to-use cli to generate regex patterns",
+      "developed a user-friendly interface for easy content planning and organization",
+      "implemented features for scheduling and tracking content ideas",
+      "ensured cross-platform compatibility and smooth performance",
     ],
-    technologies: ["typescript", "openai"],
-    href: "https://github.com/nexxeln/text2regex",
-  },
-  {
-    title: "fp_",
-    description: "a functional programming library for typescript",
-    role: "creator",
-    period: "feb 2023",
-    achievements: [
-      "implemented a comprehensive set of functional programming constructs",
-      "wrote documentation and examples to help developers understand and use the library",
-      "published to deno package registry",
-    ],
-    technologies: ["typescript"],
-    href: "https://github.com/nexxeln/fp",
+    technologies: ["tauri", "react", "typescript", "rust", "tailwindcss"],
+    href: "https://github.com/bartosz-skejcik/content-planner",
+    status: "dev",
   },
 ]
 
@@ -98,11 +83,34 @@ export default function ProjectsPage() {
         <ScrambleText text="projects" />
       </h1>
 
-      <p className="text-gray-400 mb-12 leading-relaxed">
+      <p className="text-neutral-400 mb-12 leading-relaxed">
         here are some of the projects i&apos;ve worked on. i love building tools
         that make developers&apos; lives easier and exploring new technologies
         along the way.
       </p>
+
+      <section className="mb-12">
+        <div className="bg-neutral-950 text-neutral-300 p-4 font-mono text-xs rounded-md">
+          <p>{"$"} ls -la projects/</p>
+          <div className="mt-2 space-y-1">
+            <p>total {projects.length} projects</p>
+            <p>
+              drwxr-xr-x{" "}
+              {projects.filter((p) => p.status.includes("prod")).length}{" "}
+              production-ready
+            </p>
+            <p>
+              drwxr-xr-x{" "}
+              {projects.filter((p) => p.status.includes("beta")).length} in-beta
+            </p>
+            <p>
+              drwxr-xr-x{" "}
+              {projects.filter((p) => p.status.includes("dev")).length}{" "}
+              in-development
+            </p>
+          </div>
+        </div>
+      </section>
 
       <div className="space-y-12">
         {projects.map((project) => (
@@ -119,7 +127,7 @@ export const metadata: Metadata = {
   openGraph: {
     images: [
       {
-        url: "https://www.nexxel.dev/og/home?title=projects",
+        url: "https://dev.paczesny.pl/og/home?title=projects",
       },
     ],
   },

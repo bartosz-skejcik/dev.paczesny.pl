@@ -10,7 +10,7 @@ export function Header() {
           <ScrambleText text="bartek paczesny" />
         </span>
       </h1>
-      <div className="flex flex-col gap-2 text-gray-400">
+      <div className="flex flex-col gap-2 text-neutral-400">
         <div className="flex items-center gap-2">
           <MapPin className="w-4 h-4" />
           warsaw, poland
@@ -24,7 +24,7 @@ export function Header() {
         i&apos;m a {age} y/o cs undergrad student. i love building things and
         solving problems. i enjoy language design, theoretical computer science
         and i live on the terminal. if i&apos;m not coding, i&apos;m probably
-        doing cardistry, watching movies or obsessing over mechanical keyboards.
+        playing football, reading the wither series or skateboarding.
       </p>
     </header>
   )

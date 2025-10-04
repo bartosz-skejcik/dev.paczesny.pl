@@ -16,25 +16,25 @@ export default async function BlogPage() {
         <ScrambleText text="blog" />
       </h1>
 
-      <p className="hidden sm:block text-sm text-gray-400 mb-8">
+      <p className="hidden sm:block text-sm text-neutral-400 mb-8">
         press{" "}
-        <kbd className="px-1 py-0.5 text-xs border border-gray-700 rounded">
+        <kbd className="px-1 py-0.5 text-xs border border-neutral-700 rounded">
           /
         </kbd>{" "}
         to search • use{" "}
-        <kbd className="px-1 py-0.5 text-xs border border-gray-700 rounded">
+        <kbd className="px-1 py-0.5 text-xs border border-neutral-700 rounded">
           ctrl / ⌘ j
         </kbd>{" "}
         and{" "}
-        <kbd className="px-1 py-0.5 text-xs border border-gray-700 rounded">
+        <kbd className="px-1 py-0.5 text-xs border border-neutral-700 rounded">
           ctrl / ⌘ k
         </kbd>{" "}
         or{" "}
-        <kbd className="px-1 py-0.5 text-xs border border-gray-700 rounded">
+        <kbd className="px-1 py-0.5 text-xs border border-neutral-700 rounded">
           ↑
         </kbd>{" "}
         and{" "}
-        <kbd className="px-1 py-0.5 text-xs border border-gray-700 rounded">
+        <kbd className="px-1 py-0.5 text-xs border border-neutral-700 rounded">
           ↓
         </kbd>{" "}
         to navigate
@@ -51,7 +51,7 @@ export const metadata: Metadata = {
   openGraph: {
     images: [
       {
-        url: "https://www.nexxel.dev/og/home?title=blog",
+        url: "https://dev.paczesny.pl/og/home?title=blog",
       },
     ],
   },

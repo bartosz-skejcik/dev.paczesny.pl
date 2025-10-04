@@ -22,7 +22,7 @@ function ViewCounter({
   const views = allViews.find((view) => view.slug === slug)?.views ?? 0
 
   return (
-    <span className="text-sm text-gray-400">
+    <span className="text-sm text-neutral-400">
       {views.toLocaleString()} views
     </span>
   )
@@ -31,7 +31,7 @@ function ViewCounter({
 export function ViewCounterSkeleton() {
   return (
     <div className="animate-pulse">
-      <div className="h-[17px] w-[70px] bg-gray-800/50 rounded-sm" />
+      <div className="h-[17px] w-[70px] bg-neutral-800/50 rounded-sm" />
     </div>
   )
 }

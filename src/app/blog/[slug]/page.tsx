@@ -23,10 +23,10 @@ export async function generateMetadata({ params }: PageProps) {
       description: post.metadata.description,
       publishedTime,
       type: "article",
-      url: `https://www.nexxel.dev/blog/${post.slug}`,
+      url: `https://dev.paczesny.pl/blog/${post.slug}`,
       images: [
         {
-          url: `https://www.nexxel.dev/og/blog?title=${post.metadata.title}`,
+          url: `https://dev.paczesny.pl/og/blog?title=${post.metadata.title}`,
         },
       ],
     },
@@ -36,7 +36,7 @@ export async function generateMetadata({ params }: PageProps) {
       card: "summary_large_image",
       creator: "@nexxeln",
       images: [
-        `https://www.nexxel.dev/og/blog?title=${post.metadata.title}&top=${publishedTime}`,
+        `https://dev.paczesny.pl/og/blog?title=${post.metadata.title}&top=${publishedTime}`,
       ],
     },
   }
@@ -79,7 +79,7 @@ export default async function Post({ params }: PageProps) {
         {post.metadata.title}
       </h1>
 
-      <div className="mb-8 flex items-center justify-between text-sm text-gray-400">
+      <div className="mb-8 flex items-center justify-between text-sm text-neutral-400">
         <span>{formatDate(post.metadata.date)}</span>
       </div>
 

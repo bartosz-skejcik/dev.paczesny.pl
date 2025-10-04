@@ -18,11 +18,11 @@ export function PostItem({ post, isSelected }: PostItemProps) {
       <Link
         href={`/blog/${post.slug}`}
         prefetch={true}
-        className="text-gray-200 hover:text-accent transition-colors duration-200"
+        className="text-neutral-200 hover:text-accent transition-colors duration-200"
       >
         {post.metadata.title.toLowerCase()}
       </Link>
-      <div className="flex items-center text-sm text-gray-400 shrink-0">
+      <div className="flex items-center text-sm text-neutral-400 shrink-0">
         <span>
           {new Date(post.metadata.date)
             .toLocaleDateString("en-US", {

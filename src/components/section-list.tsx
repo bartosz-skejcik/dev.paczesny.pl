@@ -34,10 +34,10 @@ export function SectionList({
               <h3 className="text-xl font-semibold mb-1 text-white group-hover:text-accent transition-colors duration-200">
                 {item.title}
               </h3>
-              <p className="text-sm text-gray-400 mb-2">
+              <p className="text-sm text-neutral-400 mb-2">
                 {item.role} {item.period && `(${item.period})`}
               </p>
-              <p className="text-gray-300">{item.description}</p>
+              <p className="text-neutral-300">{item.description}</p>
             </Link>
           </div>
         ))}

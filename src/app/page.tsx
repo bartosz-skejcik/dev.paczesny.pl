@@ -5,51 +5,58 @@ import { LinksSection } from "@/components/links-section"
 
 const workItems: Item[] = [
   {
-    title: "mocha",
+    title: "MGW",
+    role: "IT specialist",
+    period: "aug 2025 - present",
+    description:
+      "maintaining and developing internal systems, providing technical support to employees, and managing IT infrastructure",
+    href: "https://1943.pl",
+  },
+  {
+    title: "varsit",
     role: "co-founder and cto",
     period: "jul 2025 - present",
-    description: "building an ai native email client designed for speed and ease of use",
-    href: "https://mocha.email",
+    description:
+      "building custom websites and web applications for clients, focusing on modern design and user experience",
+    href: "https://varsit.pl",
   },
   {
-    title: "ENS labs",
-    role: "software engineer",
-    period: "feb 2025 - jul 2025",
+    title: "bearly.io",
+    role: "frontend developer intern",
+    period: "may 2023 - jun 2023",
     description:
-      "helped migrate ensjs to namechain and optimized ci for the manager app",
-    href: "https://ens.domains",
+      "worked on the frontend of a online gaming server hosting platform using React and TypeScript",
+    href: "https://bearly.io",
   },
   {
-    title: "leapflow",
-    role: "co-founder and cto",
-    period: "may 2024 - jun 2025",
+    title: "devapo sp. z o.o.",
+    role: "frontend developer intern",
+    period: "may 2022 - jun 2022",
     description:
-      "headed engineering to develop ai agents that automate repetitive workflows in existing software",
-    href: "https://leapflow.tech",
-  },
-  {
-    title: "dimension",
-    role: "full-stack engineer",
-    period: "nov 2023 - jan 2024",
-    description:
-      "contributed to a large-scale t3 stack app. worked on real-time presence and chat features",
-    href: "https://dimension.dev",
+      "worked on the frontend of an internal tool for absence management",
+    href: "https://devapo.io",
   },
 ]
 
 const projectItems = [
   {
-    title: "create-t3-app",
+    title: "pile app",
     role: "creator and maintainer",
-    description:
-      "open-source project for initializing full-stack next.js apps. 24k+ stars, 200+ contributors",
-    href: "https://create.t3.gg",
+    description: "diary, journal, and notes app in one for android",
+    href: "https://github.com/bartosz-skejcik/pile-android",
   },
   {
-    title: "mini-git",
+    title: "go analytics",
+    description:
+      "a privacy-focused web analytics backend service for tracking user sessions, page views, and custom events without invasive tracking",
+    role: "creator and main",
+    href: "https://github.com/bartosz-skejcik/go-analytics",
+  },
+  {
+    title: "mosiedle",
+    description: "award-winning community management system",
     role: "creator",
-    description: "simplified version of git from scratch",
-    href: "https://github.com/nexxeln/mini-git",
+    href: "https://github.com/bartosz-skejcik/mosiedle",
   },
 ]
 
