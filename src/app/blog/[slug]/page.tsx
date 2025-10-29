@@ -49,6 +49,8 @@ export default async function Post({ params }: PageProps) {
     notFound()
   }
 
+  const timeToRead = (post.content.split(" ").length / 166).toFixed(0)
+
   return (
     <section className="animate-fade-in-up">
       <script
@@ -79,7 +81,9 @@ export default async function Post({ params }: PageProps) {
         {post.metadata.title}
       </h1>
 
-      <div className="mb-8 flex items-center justify-between text-sm text-neutral-400">
+      <div className="mb-8 flex items-center justify-start gap-4 text-sm text-neutral-400">
+        <span>{timeToRead} min read</span>
+        <span className="font-black">•</span>
         <span>{formatDate(post.metadata.date)}</span>
       </div>
 
