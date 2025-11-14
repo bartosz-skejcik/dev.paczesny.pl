@@ -1,0 +1,149 @@
+---
+title: Proxmox - przygodę czas zacząć
+description: jakiś tam opis
+date: "2025-11-14T12:00:00.000Z"
+---
+
+## Wprowadzenie
+
+Ogółem to będę stawiać Proxmoxa. Obejrzałem spoko tutorial na YT dla takich osób, co dopiero zaczynają z Proxmoxem. Gościu tam pokazał 2 rodzaje maszyn wirtualnych. Jedna to po prostu VM-ka, która jest w pełni emulowana, ma swój kernel, storage, itp. itd. Drugi rodzaj to Linux Container (LXC), który różni się od VM-ki tym, że współdzieli kernel i podzespoły z hostem (Proxmox). Przez to jest prostszy i szybszy w uruchomieniu, ale jest za to mniej bezpieczny i posiada jakieś restrykcje co do syscalli. Nie można też na nim stawiać innych systemów operacyjnych niż Linux (bo współdzieli kernel).
+
+Wydaje mi się, że najlepszym rozwiązaniem jak na początek przygody z tym cackiem zdecyduję się na zwykłe maszyny wirtualne, ewentualnie z Dockerem na pokładzie dla lepszej organizacji i zarządzania dostępną mocą obliczeniową i RAM-em.
+
+### Cel
+
+Jako cel ustaliłem sobie 7 rzeczy:
+- Stworzyć VM-kę z Ubuntu Server i uruchomić na niej Dockera z moją stroną internetową
+- Skonfigurować DDNS dla sieci domowej
+- Podpiąć domenę do mojego portfolio hostowanego na tej VM-ce
+- Uruchomić codzienne backupy
+- Na kolejnych VM-kach / kontenerach postawić Passbolta i OpenVPN
+- Na Ubuntu Server uruchomić DNS i dodać domenkę `proxmox`, żeby kierowała, jak nazwa wskazuje, do Proxmoxa
+- Postawić Immich-a
+
+## Instalacja Proxmoxa
+
+Kurwa...
+
+Po zainstalowaniu Proxmoxa razem z kolegą postanowiliśmy zformatować drugi dysk `/dev/sda` i stworzyć nowy thinpool dla VM-ek. Najpierw podpiąłem ten dysk do LVM, zmieniliśmy zdanie i podczas niszczenia `More > Destroy` dysku z listy dysków dla LVM... Coś długo to trwało, postanowiłem, że zrobię szybkiego reboota, myśląc, że się zacięło po prostu. Teraz jak chcę stworzyć nowy thinpool, dostaję błąd z bcache....
+
+```bash
+root@proxmox:~# lsblk
+NAME               MAJ:MIN RM  SIZE RO TYPE MOUNTPOINTS
+sda                  8:0    0    0B  0 disk
+sdb                  8:16   0 29.8G  0 disk
+├─sdb1               8:17   0 1007K  0 part
+├─sdb2               8:18   0  512M  0 part
+└─sdb3               8:19   0 28.5G  0 part
+  ├─pve-swap       252:0    0  3.5G  0 lvm  [SWAP]
+  ├─pve-root       252:1    0 12.5G  0 lvm  /
+  ├─pve-data_tmeta 252:2    0    1G  0 lvm
+  │ └─pve-data     252:4    0 10.5G  0 lvm
+  └─pve-data_tdata 252:3    0 10.5G  0 lvm
+    └─pve-data     252:4    0 10.5G  0 lvm
+root@proxmox:~#
+```
+
+Ogółem dysk powinien mieć 120 GB xd
+
+Pierwsze, co zrobię, to usunę konfigurację LVM dla tego dysku i usunę go ze wszystkich mapperów urządzeń. Taktyczny reboot i patrzymy, co dalej.
+
+Nie bootuje się xddd. Przeinstalowałem Proxmoxa, ale w trakcie instalacji już zauważyłem, że nie pokazuje się ten 120-gigowy dysk. Zobaczę, może są jakieś narzędzia do naprawiania dysków.
+
+Dobra, taktyczny [System Rescue](https://www.system-rescue.org/) i lecimy.
+
+Poddaję się. Nigdzie nie ma tego dysku. Wezmę, podłączę nowy i tyle :(
+
+Dobra. Ogarnąłem 750 GB dysk, podłączyłem, działa. Note to self: nie przerywać procesu tworzenia dysku w Proxmoxie 😅.
+
+Jako że nie mam miejsca w szafce z routerem, a chciałbym pobrać i skonfigurować sterowniki do karty sieciowej na USB (TP-Link), to podłączyłem PC-ta do laptopa. Na laptopie na interfejsie eth ustawiłem w nmtui jako `Shared` i teraz laptop działa jako taki router, a na Proxmoxie mam neta po kablu. Pobieram sterowniki i biorę się za Immich.
+
+## Stawianie Immich-a
+
+Zacząłem od stworzenia lekkiej maszynki specjalnie pod Dockera, bo tego będę używał do postawienia Immicha (nie ma innej opcji w moim przypadku).
+
+```bash 
+bash -c \"$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/docker.sh)\"
+```
+
+Tą komendą tworzę kontener. Skrypt jest bardzo intuitywny. Nie stawiałem Portainera i eksponuję wszystkie porty :D
+
+![screenshot ct 100](/assets/images/ct-100.png)
+
+Po wejściu na VM-kę tą komendą:
+
+```bash
+pct enter 100
+```
+
+Podążam zgodnie z instrukcją w [dokumentacji Immicha](https://docs.immich.app/overview/quick-start/).
+
+1. Tworzę folder, w którym będą pliki `docker-compose.yml` i `.env`:
+
+```bash
+mkdir ./immich-app
+cd ./immich-app
+```
+
+2. Pobieram pliki:
+
+```bash
+wget -O docker-compose.yml https://github.com/immich-app/immich/releases/latest/download/docker-compose.yml
+wget -O .env https://github.com/immich-app/immich/releases/latest/download/example.env
+```
+
+3. Konfiguruję `.env`.
+
+> Jako że ten 750-gigowy dysk podzieliłem na 2 partycje:
+> - Pierwsza ma 250 G i jest to partycja na storage Immicha.
+> - Druga ma 100 G i jest ona na VM-ki na Proxmoxie.
+> 
+> Reszta jest jako `unallocated`, bo po co więcej na razie.
+
+> To zmapuję tą pierwszą partycję do FS-a tej VM-ki i użyję tej przestrzeni na file storage i Postgres-a :D
+
+> HA!
+> Nie mogę stworzyć folderów `/mnt/immich-storage/library` oraz `.../postgres`. Okazuje się, że nieuprzywilejowane kontenery LXC korzystają z mapowania UID/GID ze względów bezpieczeństwa — użytkownik root (UID 0) w kontenerze jest w rzeczywistości mapowany na UID 100000 na hoście. Podczas mountowania katalogu przez powiązanie, kontener widzi wartości UID/GID hosta, ale może uzyskać do nich dostęp tylko wtedy, gdy mapowanie jest zgodne.
+
+```bash
+# na Proxmoxie
+chown -R 100000:100000 /mnt/immich-storage/
+chmod -R 755 /mnt/immich-storage/
+```
+
+4. Odpalam Dockera.
+
+Oooops. Zapomniałem, że Docker też potrzebuje miejsca na dysku, żeby kontenery mieć hahah.
+
+```bash
+# na Proxmoxie
+pct resize 100 rootfs +11G
+```
+
+I już mamy 15 G.
+
+Przy próbie uruchomienia kontenera z Immichem dostałem błąd z containerd.io (wersja 2.x.x) związany z `ip_unprivileged_port_start` i AppArmor. Problem okazał się być [świeżym bugiem](https://forum.proxmox.com/threads/docker-inside-lxc-net-ipv4-ip_unprivileged_port_start-error.175437/) w Proxmoxie 9.0. Rozwiązaniem było zrobienie downgrade'a containerd, ale zanim w ogóle mogłem cokolwiek zrobić, musiałem najpierw naprawić dostęp do internetu w LXC.
+
+Kontener nie ma dostępu do neta, mimo że jest ping z laptopa. 
+
+Problem był w konfiguracji routingu – używam WiFi na Proxmoxie zamiast kabla Ethernet, więc musiałem skonfigurować proxy ARP z SNAT i dodać odpowiednie reguły iptables FORWARD. Po dodaniu specyficznej trasy dla IP kontenera (`ip route add 192.168.1.100/32 dev vmbr0`) wszystko zadziałało. Docker się uruchomił, Immich wstał i jest dostępny pod `http://192.168.1.100:2283`...
+
+No prawie. Okazało się, że z samego kontenera i Proxmoxa Immich odpowiada (404 to normalna odpowiedź na `/`), ale z laptopa w sieci domowej – cisza. Docker w LXC z konfiguracją proxy ARP + SNAT + routed WiFi network nie chciał przepuszczać ruchu TCP na port 2283 z zewnątrz, mimo że ping działał bez zarzutu. Próbowałem różnych kombinacji reguł iptables FORWARD, `network_mode: host` (co zepsuło DNS między kontenerami Dockera – `immich-server` nie mógł znaleźć `redis` ani `database`), bindowania do `0.0.0.0:2283` – nic nie działało. Pakiety w ogóle nie docierały do vmbr0.
+
+Ostatecznie zrobiłem port forwarding na Proxmoxie z IP hosta (192.168.1.10) do kontenera (192.168.1.100):
+
+```bash
+iptables -t nat -A PREROUTING -d 192.168.1.10 -p tcp --dport 2283 -j DNAT --to 192.168.1.100:2283
+iptables -A FORWARD -p tcp -d 192.168.1.100 --dport 2283 -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT
+```
+
+I teraz Immich jest dostępny pod `http://192.168.1.10:2283/` z każdego urządzenia w sieci domowej. Nie jest to idealne rozwiązanie (wolałbym mieć dedykowane IP dla kontenera), ale działa stabilnie i to jest najważniejsze.
+
+JA PIERDOLĘ! I na chuj mi to kurwa było???
+
+> Telefon przez ten cały kurwa czas miał IP `192.168.1.100`
+
+KURWAAAAAAAAAAAA
+
+## Linki
+- [https://youtu.be/lFzWDJcRsqo?si=2yiDTdhfHh3uUQSx](https://youtu.be/lFzWDJcRsqo?si=2yiDTdhfHh3uUQSx)
