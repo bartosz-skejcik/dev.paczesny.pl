@@ -2,6 +2,7 @@ import { MDXRemote } from "next-mdx-remote/rsc"
 import Link from "next/link"
 import { Children, createElement, isValidElement } from "react"
 import { codeToHtml } from "shiki"
+import { CopyButton } from "@/components/copy-button"
 
 function Table({ data }: { data: { headers: string[]; rows: string[][] } }) {
   let headers = data.headers.map((header, index) => (
@@ -58,7 +59,7 @@ async function Pre({
 }: React.HtmlHTMLAttributes<HTMLPreElement>) {
   // Extract className from the children code tag
   const codeElement = Children.toArray(children).find(
-    (child) => isValidElement(child) && child.type === "code",
+    (child) => isValidElement(child) && child.type === "code"
   ) as React.ReactElement<HTMLPreElement> | undefined
 
   const className = codeElement?.props?.className ?? ""
@@ -72,7 +73,9 @@ async function Pre({
       return <code {...props}>{children}</code>
     }
 
-    const html = await codeToHtml(String(codeElement?.props.children), {
+    const codeContent = String(codeElement?.props.children)
+
+    const html = await codeToHtml(codeContent, {
       lang,
       themes: {
         dark: "vesper",
@@ -80,7 +83,12 @@ async function Pre({
       },
     })
 
-    return <div dangerouslySetInnerHTML={{ __html: html }} />
+    return (
+      <div className="relative group">
+        <CopyButton text={codeContent} />
+        <div dangerouslySetInnerHTML={{ __html: html }} />
+      </div>
+    )
   }
 
   // If not, return the component as is
@@ -110,7 +118,7 @@ function createHeading(level: number) {
           key: `link-${slug}`,
           className: "anchor",
         },
-        children,
+        children
       ),
     ])
   }
