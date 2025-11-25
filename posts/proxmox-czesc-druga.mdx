@@ -1,0 +1,327 @@
+---
+title: Proxmox - część druga
+description: Jakiś tam opis
+date: "2025-11-15T18:00:00.000Z"
+---
+
+## Wprowadzenie
+
+Witam w części drugiej pierwszych zmagań z proxmoxem :D.
+Dla tych co są tu po raz pierwszy to zachęcam przeczytać sobie najpierw [część pierwszą](https://dev.paczesny.pl/blog/proxmox-first-install).
+
+
+Jako że były pewne komplikacje z adresami IP itd to przeszedłem na konfiguracje z macvlan'em. [Tutaj](https://ipwithease.com/what-is-macvlan/) macie fajnie opisane co to i po co to ;)
+Tak jak już wspomniałem wcześniej, dzisiaj na warsztat biorę OpenVPN ale poza tym chce jeszcze skonfigurować DDNS aby mieć możliwość dostępu do czego kolwiek z poza sieci domowej.
+
+
+Poniżej dla przypomnienia mam liste rzeczy, które chciałbym zrobić z tym proxmoxem
+
+### Cele
+
+Jako cel ustaliłem sobie 6 rzeczy:
+- Stworzyć VM-kę z Ubuntu Server i uruchomić na niej Dockera z moją stroną internetową
+- **Skonfigurować DDNS dla sieci domowej**
+- Podpiąć domenę do mojego portfolio hostowanego na tej VM-ce
+- Uruchomić codzienne backupy
+- **Na kolejnych VM-kach / kontenerach postawić vaultwardena i OpenVPN**
+- [x] Postawić Immich-a
+
+
+## Konfiguracja DDNS
+
+---
+
+### Wymagane elementy
+
+Znalazłem [zarąbisty tutorial](https://www.youtube.com/watch?v=rI-XxnyWFnM), w którym gościu pokazuje jak skonfigurować ddns za pomocą cloudflare'a i tam jakiegoś rpi (w moim przypadku bedzie to po prostu home server). Wymagana będzie oprócz tego jeszcze domenka, której na ten moment nie posiadam więc bedzie trzeba coś znaleźć.
+
+Dobra, domenka już kupiona. Teraz pora na konfigurację skryptu na proxmoxie, który będzie aktualizować cloudflare z moim aktualnym ip domowym.
+
+> Ale zanim to, to musiałem dodać domenke w cloudflare
+
+Stworzyłem sobie małą LVM'ke: 1GB RAM'u, 4GB dysku, 1vCPU
+
+1. Tworzę folder w którym będą sie dane zapisywać:
+```bash
+mkdir data
+chown 1000 -R data
+chmod u+r+w+x -R data
+```
+
+2. Aktualizuje plik `data/config.json` pod Cloudflare'a
+
+3. Tworze `docker-compose.yml`
+```yml
+version: "3.8"
+
+services:
+  ddns-updater:
+    image: qmcgaw/ddns-updater
+    container_name: ddns-updater
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/updater/data
+    environment:
+      - TZ=Europe/Warsaw
+      - LOG_LEVEL=info
+      - HEALTH_SERVER_ADDRESS=127.0.0.1:9999
+```
+
+4. Odpalam kontener dockera:
+```bash
+docker compose up -d
+```
+
+No i klasa. Spojrzałem w rekordy DNS na cloudflarze i rekord A został zmieniony na moje *aktualne* publiczne ip :D
+
+## Stawianie LXC z Nginx i Let's Encrypt jako reverse proxy dla Immich i innych usług
+
+Mam już świeżutkiego Immicha na LXC z IP `192.168.1.100`, dostępny po HTTP pod portem 2283. Domena `immich.blonie.cloud` jest podpięta w Cloudflare jako `CNAME` i jest proxied, ale niestety póki co działa tylko HTTP — bo Immich nie ma SSL'a. Czas to ogarnąć, bo bez SSL Cloudflare wywala błąd 525. Robię więc osobny LXC, który będzie frontalnym reverse proxy na HTTPS z certyfikatem Let's Encrypt. To on będzie się jebał z Cloudflarem, a Immich zobaczy ruch już normalnie po HTTP.
+
+---
+
+### Przygotowanie LXC na Proxmoxie
+
+Mam gotowy, świeży LXC. Wybrałem Ubuntu Server 22.04, bo jest stabilny i ma wszystko, czego potrzebuję.
+
+Wchodzę do środka:
+
+```bash
+pct enter 200
+```
+
+Aktualizuję system, bo zawsze lepiej mieć świeże repa:
+
+```bash
+apt update && apt upgrade -y
+```
+
+Instaluję Nginx'a i certbota (program do zdobywania certyfikatów Let's Encrypt):
+
+```bash
+apt install -y nginx certbot python3-certbot-nginx vim
+```
+
+---
+
+### Konfiguracja Nginxa jako reverse proxy dla Immich
+
+Teraz konfiguruję Nginx, żeby odbierał ruch na porcie 80 i 443 dla mojej domeny i proxował go do Immicha na HTTP.
+
+Tworzę plik konfiguracyjny dla nginx:
+
+```bash
+vim /etc/nginx/sites-available/immich.conf
+```
+
+Wklejam taką konfigurację:
+
+```nginx
+server {
+    listen 80;
+    server_name immich.blonie.cloud;
+
+    location / {
+        proxy_pass http://192.168.1.100:2283;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Let's Encrypt challenge location
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+}
+```
+
+Aktywuję witrynę:
+
+```bash
+ln -s /etc/nginx/sites-available/immich.conf /etc/nginx/sites-enabled/
+```
+
+Tworzę katalog do wyzwań certbota:
+
+```bash
+mkdir -p /var/www/certbot
+```
+
+Sprawdzam poprawność konfiguracji nginx i restartuję:
+
+```bash
+nginx -t && systemctl reload nginx
+```
+
+---
+
+### Ogarnięcie certyfikatu Let's Encrypt
+
+Teraz najważniejsze: odpalam certbota, który połączy się z Let's Encrypt i wyeksponuje tymczasowo pliki w `.well-known/acme-challenge` na porcie 80.
+
+W konsoli LXC wpisuję:
+
+```bash
+certbot certonly --webroot -w /var/www/certbot -d immich.blonie.cloud
+```
+
+Podążam za instrukcjami certbota. Jeśli wszystko pójdzie dobrze, certyfikat trafia do `/etc/letsencrypt/live/immich.blonie.cloud/`.
+
+Po zdaniu certyfikatu, włączam SSL w Nginx:
+
+```bash
+vim /etc/nginx/sites-available/immich.conf
+```
+
+Modyfikuję plik aby wyglądał tak:
+
+```nginx
+server {
+    listen 80;
+    server_name immich.blonie.cloud;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name immich.blonie.cloud;
+
+    ssl_certificate /etc/letsencrypt/live/immich.blonie.cloud/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/immich.blonie.cloud/privkey.pem;
+    ssl_trusted_certificate /etc/letsencrypt/live/immich.blonie.cloud/chain.pem;
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+
+    location / {
+        proxy_pass http://192.168.1.100:2283;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+Sprawdzam i restartuję nginx:
+
+```bash
+nginx -t && systemctl reload nginx
+```
+
+---
+
+### Automatyczne odnawianie certyfikatu
+
+Certyfikaty Let's Encrypt ważne są tylko 90 dni, więc konfiguruję autoodnawianie:
+
+Dodaję crontab:
+
+```bash
+crontab -e
+```
+
+Dodaję linijkę:
+
+```bash
+0 3 * * * certbot renew --quiet && systemctl reload nginx
+```
+
+Każdego dnia o 3:00 system będzie próbował odnowić certyfikaty i przeładować nginx, jeśli coś się zmieni oczywiście.
+
+---
+
+### Konfiguracja routera i Cloudflare
+
+- Na routerze przekierowuje port 443 do proksy LXC z Nginx (np. 192.168.1.20:443) oraz ustawiam regułę NAT/PAT.
+- W Cloudflare SSL ustawiam na „Full (Strict)”, bo od teraz mam cert na serwerze.
+- Sprawdzam, czy w Cloudflare rekord CNAME dla immich.blonie.cloud jest proxied.
+
+---
+
+### Testowanie
+
+Na telefonie i innym urządzeniu uruchamiam:
+
+```bash
+curl -I https://immich.blonie.cloud
+```
+
+Dostaje odpowiedź z serwera Immich (200 lub inny kod), ale już po HTTPS.
+
+---
+
+> ### Bonusowe uwagi
+> 
+> - Teraz mogę używać tego LXC'ka z Nginx'em do innych LXC działających z różnymi usługami, po prostu dodam kolejne pliki konfiguracyjne z innymi domenami i portami.
+> - Można też rozważyć Traefik lub Caddy, które mają certyfikaty wbudowane i mniej konfiguracji ręcznej ale to może innym razem.
+
+## Konfiguracja OpenVPN
+
+Klasycznie, tworzymy nowe `LXC`, 4GB dysku, 2vCPU, 2GB RAM'u. Po stworzeniu maszynki zaczynam od konfiguracji TUN.
+
+### Konfiguracja TUN:
+
+```bash
+vim /etc/pve/lxc/102.conf
+
+# Na końcu dodaje:
+# lxc.cgroup2.devices.allow: c 10:200 rwm
+# lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file
+```
+
+> Jeżeli nie dodam tych linijek to mi wypierdala błąd przy stawianiu dockera :D
+> 
+> ```bash
+> Error response from daemon: error gathering device information while adding custom device "/dev/net/tun": no such file or directory
+> ```
+
+> Oraz, trzeba jeszcze dodać w moim przypadku:
+> 
+> ```bash
+> lxc.apparmor.profile: unconfined
+> ```
+> Bo inaczej wywala coś takiego:
+> 
+> ```bash
+> Error response from daemon: failed to create task for container: failed to create shim task: OCI runtime create failed: runc create failed: unable to start container process: error during container init: open sysctl net.ipv4.ip_unprivileged_port_start file: reopen fd 8: permission denied
+> ```
+
+Po tym jak maszynka uruchomi się ponownie, loguję się do niej za pomocą komendy `pct enter 102` i tworze folder `openvpn-as` (OpenVPN Access Server):
+
+```bash
+mkdir openvpn-as
+cd openvpn-as
+```
+
+Następnie, konfiguruję plik `docker-compose.yml`:
+
+```yaml
+version: '3.8'
+
+services:
+  openvpn-as:
+    image: openvpn/openvpn-as
+    container_name: openvpn-as
+    devices:
+      - /dev/net/tun
+    cap_add:
+      - MKNOD
+      - NET_ADMIN
+    ports:
+      - "943:943"
+      - "443:443"
+      - "1194:1194/udp"
+    volumes:
+      - <path to data>:/openvpn
+    restart: unless-stopped
+```
+
+KLASYCZNIE, odpalamy kontenerek i wchodzimy na `https://192.168.1.102:943/admin`
+
+### Podsumowanie
+
+Po wejściu na dashboard admina stworzylem nowego użytkownika. Na telefonie pobrałem profil `.ovpn`, załadowałem go w aplikacji i TADAAA, działa!
