@@ -32,7 +32,7 @@ export function Header() {
         i&apos;m a {age} y/o cs undergrad student. i love building things and
         solving problems. i enjoy language design, theoretical computer science
         and i live on the terminal. if i&apos;m not coding, i&apos;m probably
-        playing football, reading the wither series or skateboarding.
+        playing football, reading the Witcher series or skateboarding.
       </p>
     </header>
   )
