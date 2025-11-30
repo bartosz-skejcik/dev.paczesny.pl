@@ -36,10 +36,7 @@ async function getRecentCommits(
 ): Promise<CommitsResponse | null> {
   try {
     const res = await fetch(
-      `https://katib.blonie.cloud/v2/commits/latest?username=${username}&limit=${limit}`,
-      {
-        next: { revalidate: 3600 }, // Cache for 1 hour
-      }
+      `https://katib.blonie.cloud/v2/commits/latest?username=${username}&limit=${limit}`
     )
 
     if (!res.ok) {
