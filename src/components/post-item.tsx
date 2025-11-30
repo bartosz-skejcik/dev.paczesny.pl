@@ -1,6 +1,9 @@
 import { type MDXFileData } from "@/lib/blog"
 import Link from "next/link"
 
+// @ts-ignore
+import { ViewTransition } from "react"
+
 type PostItemProps = {
   post: MDXFileData
   isSelected?: boolean
@@ -20,18 +23,22 @@ export function PostItem({ post, isSelected }: PostItemProps) {
         prefetch={true}
         className="text-neutral-200 hover:text-accent transition-colors duration-200"
       >
-        {post.metadata.title.toLowerCase()}
+        <ViewTransition name={`post-title-${post.slug}`}>
+          <span>{post.metadata.title.toLowerCase()}</span>
+        </ViewTransition>
       </Link>
       <div className="flex items-center text-sm text-neutral-400 shrink-0">
-        <span>
-          {new Date(post.metadata.date)
-            .toLocaleDateString("en-US", {
-              month: "short",
-              day: "numeric",
-              year: "numeric",
-            })
-            .toLowerCase()}
-        </span>
+        <ViewTransition name={`post-date-${post.slug}`}>
+          <span>
+            {new Date(post.metadata.date)
+              .toLocaleDateString("en-US", {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              })
+              .toLowerCase()}
+          </span>
+        </ViewTransition>
       </div>
     </div>
   )

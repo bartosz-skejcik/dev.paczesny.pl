@@ -2,6 +2,7 @@
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useEffect } from "react"
+import Path from "@/components/path"
 
 export function Navbar() {
   const router = useRouter()
@@ -36,6 +37,7 @@ export function Navbar() {
 
   return (
     <nav className="flex items-center justify-between mb-12 text-sm">
+      <Path />
       <div className="flex space-x-4">
         <Link
           href="/"

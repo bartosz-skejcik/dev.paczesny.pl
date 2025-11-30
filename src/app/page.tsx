@@ -4,6 +4,9 @@ import { BlogSection } from "@/components/blog-section"
 import { LinksSection } from "@/components/links-section"
 import { EducationSection } from "@/components/education-section"
 
+// @ts-ignore
+import { ViewTransition } from "react"
+
 const workItems: Item[] = [
   {
     title: "MGW",
@@ -63,7 +66,7 @@ const projectItems = [
 
 export default function HomePage() {
   return (
-    <>
+    <ViewTransition>
       <Header />
       <SectionList title="work" items={workItems} />
       <BlogSection />
@@ -75,6 +78,6 @@ export default function HomePage() {
       />
       <EducationSection />
       <LinksSection />
-    </>
+    </ViewTransition>
   )
 }

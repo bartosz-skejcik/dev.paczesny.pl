@@ -2,6 +2,9 @@ import Link from "next/link"
 import { ArrowUpRight } from "lucide-react"
 import { getPosts } from "@/lib/blog"
 
+// @ts-ignore
+import { ViewTransition } from "react"
+
 const posts = getPosts()
   .sort(
     (a, b) =>
@@ -27,11 +30,15 @@ export function BlogSection() {
               href={`/blog/${post.slug}`}
               className="text-neutral-200 hover:text-accent transition-colors duration-200"
             >
-              {post.metadata.title.toLowerCase()}
+              <ViewTransition name={`post-title-${post.slug}`}>
+                <span>{post.metadata.title.toLowerCase()}</span>
+              </ViewTransition>
             </Link>
-            <span className="text-sm text-neutral-400">
-              {formatDate(post.metadata.date)}
-            </span>
+            <ViewTransition name={`post-date-${post.slug}`}>
+              <span className="text-sm text-neutral-400">
+                {formatDate(post.metadata.date)}
+              </span>
+            </ViewTransition>
           </div>
         ))}
       </div>
