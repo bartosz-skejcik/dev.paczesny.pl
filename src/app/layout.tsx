@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 import { Geist_Mono } from "next/font/google"
 import "./globals.css"
 import { Navbar } from "../components/navbar"
+import { Footer } from "../components/footer"
 import { Analytics } from "@vercel/analytics/next"
 import { SpeedInsights } from "@vercel/speed-insights/next"
 
@@ -54,6 +55,7 @@ export default function RootLayout({
         <div className="max-w-4xl mx-auto px-4 py-8">
           <Navbar />
           {children}
+          <Footer username="bartosz-skejcik" />
           <Analytics />
           <SpeedInsights />
         </div>

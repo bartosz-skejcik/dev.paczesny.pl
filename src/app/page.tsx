@@ -1,8 +1,8 @@
 import { Header } from "@/components/header"
 import { Item, SectionList } from "@/components/section-list"
 import { BlogSection } from "@/components/blog-section"
-import { LinksSection } from "@/components/links-section"
 import { EducationSection } from "@/components/education-section"
+import { GitHubActivity } from "@/components/github-activity"
 
 // @ts-ignore
 import { ViewTransition } from "react"
@@ -70,6 +70,7 @@ export default function HomePage() {
       <Header />
       <SectionList title="work" items={workItems} />
       <BlogSection />
+      <GitHubActivity username="bartosz-skejcik" limit={5} />
       <SectionList
         title="projects"
         items={projectItems}
@@ -77,7 +78,6 @@ export default function HomePage() {
         viewAllText="all projects"
       />
       <EducationSection />
-      <LinksSection />
     </ViewTransition>
   )
 }
