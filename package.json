@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "translate:top": "tsx scripts/pretranslate.ts"
+    "translate:top": "tsx scripts/pretranslate.ts",
+    "translate:post": "tsx scripts/translate.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^2.0.76",
