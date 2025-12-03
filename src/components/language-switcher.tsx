@@ -21,6 +21,12 @@ export function LanguageSwitcher({
 
   const toggle = () => setIsOpen((prev) => !prev)
   const close = () => setIsOpen(false)
+  const handleLanguageSelect = (lang: SupportedLang) => () => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("preferredLang", lang)
+    }
+    close()
+  }
   const handleFocusExit = (event: {
     relatedTarget: EventTarget | null
     currentTarget: EventTarget & Node
@@ -58,11 +64,12 @@ export function LanguageSwitcher({
       <button
         type="button"
         onClick={toggle}
-        className="flex items-center gap-2 rounded-full border border-neutral-800 px-3 py-1 text-sm text-neutral-200 hover:border-neutral-600"
+        className="flex items-center gap-2 rounded-sm border border-neutral-800 px-3 py-1 text-sm text-neutral-200 hover:border-neutral-600"
         aria-haspopup="true"
         aria-expanded={isOpen}
       >
-        <span>{currentLang.toUpperCase()}</span>
+        Language:
+        <span aria-hidden>{currentLang.toUpperCase()}</span>
         <ChevronDown className="h-4 w-4" />
       </button>
 
@@ -93,7 +100,7 @@ export function LanguageSwitcher({
                 <li key={lang}>
                   <Link
                     href={`/blog/${lang}/${slug}`}
-                    onClick={close}
+                    onClick={handleLanguageSelect(lang)}
                     className={`${baseClasses} ${
                       isActive
                         ? "bg-neutral-800 text-white"

@@ -1,5 +1,6 @@
 "use client"
 
+import { SUPPORTED_LANGS } from "@/lib/i18n"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useMemo } from "react"
@@ -10,7 +11,12 @@ export default function Breadcrumbs() {
   const breadcrumbs = useMemo(() => {
     if (!pathname) return []
 
-    return pathname.split("/").filter(Boolean).slice(0, 4) // match your Svelte slice
+    const items = pathname
+      .split("/")
+      .filter((item) => SUPPORTED_LANGS.includes(item as any) === false)
+      .filter(Boolean)
+
+    return items
   }, [pathname])
 
   return (

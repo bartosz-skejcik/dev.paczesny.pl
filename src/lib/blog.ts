@@ -21,6 +21,8 @@ export type FrontmatterParseResult = {
 export type MDXFileData = FrontmatterParseResult & {
   slug: string
   lang: SupportedLang
+  availableLangs?: SupportedLang[]
+  localizedMetadata?: Partial<Record<SupportedLang, Metadata>>
 }
 
 const POSTS_ROOT = path.join(process.cwd(), "content", "posts")
@@ -47,7 +49,27 @@ export function getPostBySlug(
     return null
   }
   const { metadata, content } = readMDXFile(filePath)
-  return { metadata, content, slug, lang }
+  const availableLangs = getAvailableLanguages(slug)
+  const localizedMetadataEntries: Array<[SupportedLang, Metadata]> = [
+    [lang, metadata],
+  ]
+
+  availableLangs
+    .filter((availableLang) => availableLang !== lang)
+    .forEach((availableLang) => {
+      const alternativePath = getPostFilePath(slug, availableLang)
+      if (!alternativePath) {
+        return
+      }
+      const { metadata: alternativeMetadata } = readMDXFile(alternativePath)
+      localizedMetadataEntries.push([availableLang, alternativeMetadata])
+    })
+
+  const localizedMetadata = Object.fromEntries(
+    localizedMetadataEntries
+  ) as Partial<Record<SupportedLang, Metadata>>
+
+  return { metadata, content, slug, lang, availableLangs, localizedMetadata }
 }
 
 export function getCanonicalPost(slug: string) {
