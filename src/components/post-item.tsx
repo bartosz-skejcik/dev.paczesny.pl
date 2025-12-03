@@ -19,7 +19,7 @@ export function PostItem({ post, isSelected }: PostItemProps) {
       }`}
     >
       <Link
-        href={`/blog/${post.slug}`}
+        href={`/blog/${post.lang}/${post.slug}`}
         prefetch={true}
         className="text-neutral-200 hover:text-accent transition-colors duration-200"
       >
@@ -28,6 +28,9 @@ export function PostItem({ post, isSelected }: PostItemProps) {
         </ViewTransition>
       </Link>
       <div className="flex items-center text-sm text-neutral-400 shrink-0">
+        <span className="mr-3 rounded-full border border-neutral-700 px-2 py-0.5 text-xs uppercase text-neutral-300">
+          {post.lang}
+        </span>
         <ViewTransition name={`post-date-${post.slug}`}>
           <span>
             {new Date(post.metadata.date)

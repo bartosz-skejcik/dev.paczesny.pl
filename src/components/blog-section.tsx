@@ -27,7 +27,7 @@ export function BlogSection() {
         {posts.map((post, index) => (
           <div key={index} className="flex justify-between items-center group">
             <Link
-              href={`/blog/${post.slug}`}
+              href={`/blog/${post.lang}/${post.slug}`}
               className="text-neutral-200 hover:text-accent transition-colors duration-200"
             >
               <ViewTransition name={`post-title-${post.slug}`}>
@@ -35,7 +35,10 @@ export function BlogSection() {
               </ViewTransition>
             </Link>
             <ViewTransition name={`post-date-${post.slug}`}>
-              <span className="text-sm text-neutral-400">
+              <span className="flex items-center gap-3 text-sm text-neutral-400">
+                <span className="rounded-full border border-neutral-700 px-2 py-0.5 text-xs uppercase text-neutral-300">
+                  {post.lang}
+                </span>
                 {formatDate(post.metadata.date)}
               </span>
             </ViewTransition>

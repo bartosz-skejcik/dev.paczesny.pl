@@ -1,5 +1,11 @@
 import fs from "fs"
 import path from "path"
+import {
+  CANONICAL_LANG,
+  DEFAULT_FALLBACK_LANG,
+  SUPPORTED_LANGS,
+  type SupportedLang,
+} from "@/lib/i18n"
 
 export type Metadata = {
   title: string
@@ -14,17 +20,71 @@ export type FrontmatterParseResult = {
 
 export type MDXFileData = FrontmatterParseResult & {
   slug: string
+  lang: SupportedLang
 }
 
-export function getPosts(): MDXFileData[] {
-  return getMDXData(path.join(process.cwd(), "posts"))
+const POSTS_ROOT = path.join(process.cwd(), "content", "posts")
+const SUPPORTED_EXTENSIONS = [".mdx", ".md"]
+
+export function getPosts(
+  preferredLang: SupportedLang = DEFAULT_FALLBACK_LANG
+): MDXFileData[] {
+  return getPostSlugs()
+    .map(
+      (slug) =>
+        getPostBySlug(slug, preferredLang) ??
+        getPostBySlug(slug, CANONICAL_LANG)
+    )
+    .filter((post): post is MDXFileData => Boolean(post))
 }
 
-export function getPostBySlug(slug: string): MDXFileData | null {
-  return getPosts().find((post) => post.slug === slug) ?? null
+export function getPostBySlug(
+  slug: string,
+  lang: SupportedLang
+): MDXFileData | null {
+  const filePath = getPostFilePath(slug, lang)
+  if (!filePath) {
+    return null
+  }
+  const { metadata, content } = readMDXFile(filePath)
+  return { metadata, content, slug, lang }
 }
 
-function parseFrontmatter(fileContent: string): FrontmatterParseResult {
+export function getCanonicalPost(slug: string) {
+  return getPostBySlug(slug, CANONICAL_LANG)
+}
+
+export function getPostSlugs(): string[] {
+  if (!fs.existsSync(POSTS_ROOT)) {
+    return []
+  }
+
+  return fs
+    .readdirSync(POSTS_ROOT)
+    .filter((entry) => fs.statSync(path.join(POSTS_ROOT, entry)).isDirectory())
+}
+
+export function getAvailableLanguages(slug: string): SupportedLang[] {
+  return SUPPORTED_LANGS.filter((lang) => Boolean(getPostFilePath(slug, lang)))
+}
+
+export function getPostFilePath(slug: string, lang: string): string | null {
+  const dir = path.join(POSTS_ROOT, slug)
+  if (!fs.existsSync(dir)) {
+    return null
+  }
+
+  for (const extension of SUPPORTED_EXTENSIONS) {
+    const candidate = path.join(dir, `${lang}${extension}`)
+    if (fs.existsSync(candidate)) {
+      return candidate
+    }
+  }
+
+  return null
+}
+
+export function parseFrontmatter(fileContent: string): FrontmatterParseResult {
   const frontmatterRegex = /---\s*([\s\S]*?)\s*---/
   const match = frontmatterRegex.exec(fileContent)
 
@@ -45,7 +105,7 @@ function parseFrontmatter(fileContent: string): FrontmatterParseResult {
   frontmatterLines.forEach((line) => {
     const [key, ...values] = line.split(": ")
     let value = values.join(": ").trim()
-    value = value.replace(/^['"](.*)['"]$/, "$1") // Remove quotes
+    value = value.replace(/^['"](.*)['"]$/, "$1")
     if (key && value) {
       metadata[key.trim() as keyof Metadata] = value
     }
@@ -54,27 +114,7 @@ function parseFrontmatter(fileContent: string): FrontmatterParseResult {
   return { metadata: metadata as Metadata, content }
 }
 
-function getMDXFiles(dir: string): string[] {
-  return fs.readdirSync(dir).filter((file) => path.extname(file) === ".mdx")
-}
-
 function readMDXFile(filePath: string): FrontmatterParseResult {
   const rawContent = fs.readFileSync(filePath, "utf-8")
-
   return parseFrontmatter(rawContent)
-}
-
-function getMDXData(dir: string): MDXFileData[] {
-  const mdxFiles = getMDXFiles(dir)
-
-  return mdxFiles.map((file) => {
-    const { metadata, content } = readMDXFile(path.join(dir, file))
-    const slug = path.basename(file, path.extname(file))
-
-    return {
-      metadata,
-      slug,
-      content,
-    }
-  })
 }

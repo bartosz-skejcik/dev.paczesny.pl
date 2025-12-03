@@ -66,7 +66,8 @@ export function Posts({ posts }: PostsProps) {
           return newIndex
         })
       } else if (isSearching && e.key === "Enter" && filteredPosts.length > 0) {
-        router.push(`/blog/${filteredPosts[selectedIndex].slug}`)
+        const target = filteredPosts[selectedIndex]
+        router.push(`/blog/${target.lang}/${target.slug}`)
       }
     }
 

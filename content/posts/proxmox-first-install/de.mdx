@@ -1,0 +1,133 @@
+---
+title: Proxmox - ein Weg durch die Hölle
+description: Die Geschichte eines Kampfes mit Proxmox, der mit einem epischen Plot-Twist endet. Die Installation von Immich in LXC, das Debuggen von Netzwerken, das Töten von Festplatten und die Stunden, die mit iptables verbracht werden - all das nur, um herauszufinden, dass das Telefon die ganze Zeit über die IP des Containers besetzt hatte.
+date: 2025-11-14T12:00:00.000Z
+---
+
+## Einführung
+
+Ich werde Proxmox installieren. Ich habe ein Tutorial auf YouTube für Anfänger mit Proxmox angesehen. Der Typ hat zwei Arten von virtuellen Maschinen gezeigt. Die eine ist einfach eine VM, die vollständig emuliert ist, ihren eigenen Kernel, Speicher usw. hat. Die andere Art ist ein Linux-Container (LXC), der sich von der VM dadurch unterscheidet, dass er den Kernel und die Hardware-Komponenten mit dem Host (Proxmox) teilt. Dadurch ist er einfacher und schneller zu starten, aber auch weniger sicher und hat einige Einschränkungen bei den Systemaufrufen. Es ist auch nicht möglich, andere Betriebssysteme als Linux darauf zu installieren (da er den Kernel teilt).
+
+Ich denke, dass die beste Lösung für den Anfang meiner Abenteuer mit diesem Teil ist, auf herkömmliche virtuelle Maschinen zu setzen, eventuell mit Docker an Bord, um die verfügbare Rechenleistung und den RAM besser zu organisieren und zu verwalten.
+
+### Ziele
+
+Ich habe mir 6 Ziele gesetzt:
+- Eine VM mit Ubuntu Server erstellen und darauf Docker mit meiner Website installieren
+- DDNS für mein Heimnetzwerk konfigurieren
+- Meine Domain an mein Portfolio anhängen, das auf dieser VM gehostet wird
+- Tägliche Backups einrichten
+- Auf weiteren VMs/Containern Vaultwarden und OpenVPN installieren
+- Immich installieren
+
+## Proxmox-Installation
+
+Verdammt...
+
+Nach der Installation von Proxmox haben mein Kumpel und ich beschlossen, die zweite Festplatte `/dev/sda` zu formatieren und einen neuen Thinpool für VMs zu erstellen. Zuerst habe ich die Festplatte an LVM angeschlossen, dann haben wir unsere Meinung geändert und während des Löschens der Festplatte aus der LVM-Liste... Irgendwas hat lange gedauert, also habe ich beschlossen, einen schnellen Neustart durchzuführen, dachte, es sei einfach ein Hänger. Jetzt, wenn ich einen neuen Thinpool erstellen will, erhalte ich einen Fehler mit bcache....
+
+```bash
+root@proxmox:~# lsblk
+NAME               MAJ:MIN RM  SIZE RO TYPE MOUNTPOINTS
+sda                  8:0    0    0B  0 disk
+sdb                  8:16   0 29.8G  0 disk
+├─sdb1               8:17   0 1007K  0 part
+├─sdb2               8:18   0  512M  0 part
+└─sdb3               8:19   0 28.5G  0 part
+  ├─pve-swap       252:0    0  3.5G  0 lvm  [SWAP]
+  ├─pve-root       252:1    0 12.5G  0 lvm  /
+  ├─pve-data_tmeta 252:2    0    1G  0 lvm
+  │ └─pve-data     252:4    0 10.5G  0 lvm
+  └─pve-data_tdata 252:3    0 10.5G  0 lvm
+    └─pve-data     252:4    0 10.5G  0 lvm
+root@proxmox:~#
+```
+
+Die Festplatte sollte insgesamt 120 GB haben, lol.
+
+Zuerst werde ich die LVM-Konfiguration für diese Festplatte löschen und sie aus allen Gerätemappern entfernen. Taktischer Neustart und schauen, was dann passiert.
+
+Es bootet nicht, xddd. Ich habe Proxmox neu installiert, aber während der Installation habe ich bereits bemerkt, dass diese 120-GB-Festplatte nicht angezeigt wird. Ich werde mal schauen, ob es Tools zum Reparieren von Festplatten gibt.
+
+Okay, taktisches [System Rescue](https://www.system-rescue.org/) und los.
+
+Ich gebe auf. Die Festplatte ist nirgendwo zu finden. Ich werde eine neue Festplatte nehmen und das war's :(
+
+Okay, ich habe eine 750-GB-Festplatte genommen, angeschlossen, und sie funktioniert. Notiz an mich selbst: Den Prozess der Festplatten-Erstellung in Proxmox nicht unterbrechen 😅.
+
+Da ich in meinem Router-Schrank keinen Platz habe und ich die Treiber für die USB-Netzwerkkarte (TP-Link) herunterladen und konfigurieren möchte, habe ich meinen PC an meinen Laptop angeschlossen. Auf meinem Laptop habe ich im eth-Interface in nmtui als "Shared" eingestellt, und jetzt funktioniert mein Laptop als Router, und ich habe auf Proxmox Internet per Kabel. Ich lade die Treiber herunter und beginne mit Immich.
+
+## Immich-Installation
+
+Ich habe angefangen, eine leichte Maschine speziell für Docker zu erstellen, da ich diese für die Installation von Immich verwenden werde (es gibt keine andere Option in meinem Fall).
+
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/docker.sh)"
+```
+
+Mit diesem Befehl erstelle ich den Container. Das Skript ist sehr intuitiv. Ich habe Portainer nicht installiert und expose alle Ports :D
+
+![screenshot ct 100](/assets/images/ct-100.png)
+
+Nach dem Einloggen in die VM mit diesem Befehl:
+
+```bash
+pct enter 100
+```
+
+Folge ich den Anweisungen in der [Immich-Dokumentation](https://docs.immich.app/overview/quick-start/).
+
+1. Ich erstelle einen Ordner, in dem die Dateien `docker-compose.yml` und `.env` liegen werden:
+
+```bash
+mkdir ./immich-app
+cd ./immich-app
+```
+
+2. Ich lade die Dateien herunter:
+
+```bash
+wget -O docker-compose.yml https://github.com/immich-app/immich/releases/latest/download/docker-compose.yml
+wget -O .env https://github.com/immich-app/immich/releases/latest/download/example.env
+```
+
+3. Ich konfiguriere die `.env`-Datei.
+
+> Da ich diese 750-GB-Festplatte in zwei Partitionen aufgeteilt habe:
+> - Die erste hat 250 GB und ist die Partition für den Immich-Speicher.
+> - Die zweite hat 100 GB und ist für die VMs auf Proxmox.
+> 
+> Der Rest ist unzugewiesen, weil ich vorerst nicht mehr benötige.
+
+> Ich werde also diese erste Partition an das Dateisystem dieser VM anhängen und diese Speicherplatz für den Dateispeicher und Postgres verwenden :D
+
+> HA!
+> Ich kann die Ordner `/mnt/immich-storage/library` und `.../postgres` nicht erstellen. Es stellt sich heraus, dass nicht privilegierte LXC-Container aufgrund von Sicherheitsgründen die UID/GID-Zuordnung vom Host verwenden - der Benutzer root (UID 0) im Container wird tatsächlich auf UID 100000 auf dem Host abgebildet. Beim Mounten eines Verzeichnisses durch Binden sieht der Container die UID/GID-Werte des Hosts, kann aber nur darauf zugreifen, wenn die Zuordnung übereinstimmt.
+
+```bash
+# auf Proxmox
+chown -R 100000:100000 /mnt/immich-storage/
+chmod -R 755 /mnt/immich-storage/
+```
+
+4. Ich starte Docker.
+
+Ups. Ich habe vergessen, dass Docker auch Speicherplatz auf der Festplatte benötigt, um die Container zu speichern, hahah.
+
+```bash
+# auf Proxmox
+pct resize 100 rootfs +11G
+```
+
+Und jetzt habe ich 15 GB.
+
+Beim Versuch, den Immich-Container zu starten, erhielt ich einen Fehler mit containerd.io (Version 2.x.x) im Zusammenhang mit `ip_unprivileged_port_start` und AppArmor. Das Problem stellte sich als [ein frischer Bug](https://forum.proxmox.com/threads/docker-inside-lxc-net-ipv4-ip_unprivileged_port_start-error.175437/) in Proxmox 9.0 heraus. Die Lösung bestand darin, containerd herunterzustufen, aber bevor ich überhaupt etwas tun konnte, musste ich zuerst den Internetzugang in LXC reparieren.
+
+Der Container hat keinen Internetzugang, obwohl ich von meinem Laptop aus pingen kann. 
+
+Das Problem lag in der Routing-Konfiguration - ich verwende WiFi auf Proxmox anstelle von Ethernet, also musste ich einen Proxy-ARP mit SNAT konfigurieren und entsprechende iptables-FORWARD-Regeln hinzufügen. Nachdem ich eine spezifische Route für die IP des Containers (`ip route add 192.168.1.100/32 dev vmbr0`) hinzugefügt hatte, funktionierte alles. Docker startete, Immich wurde gestartet und ist unter `http://192.168.1.100:2283` verfügbar...
+
+Nein, fast. Es stellte sich heraus, dass das Telefon die ganze Zeit über die IP des Containers besetzt hatte.
+
+## Links
+- [https://youtu.be/lFzWDJcRsqo?si=2yiDTdhfHh3uUQSx](https://youtu.be/lFzWDJcRsqo?si=2yiDTdhfHh3uUQSx)
