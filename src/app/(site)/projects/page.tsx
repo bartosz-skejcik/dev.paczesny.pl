@@ -3,6 +3,7 @@ import { ScrambleText } from "@/components/scramble-text"
 import { ProjectCard } from "@/components/project-card"
 import { DEFAULT_FALLBACK_LANG } from "@/lib/i18n"
 import { buildLocalizedMetadata } from "@/lib/seo"
+import { buildProjectsItemList, createJsonLd } from "@/lib/structured-data"
 
 const projects = [
   {
@@ -77,9 +78,29 @@ const projects = [
   },
 ]
 
+const projectsJsonLd = createJsonLd(
+  buildProjectsItemList(
+    projects.map((project) => ({
+      title: project.title,
+      description: project.description,
+      href: project.href,
+      technologies: project.technologies,
+      role: project.role,
+      status: project.status,
+    }))
+  )
+)
+
 export default function ProjectsPage() {
   return (
     <main className="animate-fade-in-up">
+      <script
+        type="application/ld+json"
+        suppressHydrationWarning
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(projectsJsonLd),
+        }}
+      />
       <h1 className="text-4xl font-bold mb-8 text-white">
         <span className="text-accent mr-2">*</span>
         <ScrambleText text="projects" />

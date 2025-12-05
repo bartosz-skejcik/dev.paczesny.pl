@@ -1,12 +1,7 @@
 import type { Metadata } from "next"
 import { notFound, redirect } from "next/navigation"
 import { MDX } from "./mdx"
-import {
-  getAvailableLanguages,
-  getPostBySlug,
-  getPostSlugs,
-  type MDXFileData,
-} from "@/lib/blog"
+import { getAvailableLanguages, getPostBySlug, getPostSlugs } from "@/lib/blog"
 import {
   DEFAULT_FALLBACK_LANG,
   getLanguageConfig,
@@ -14,6 +9,11 @@ import {
   type SupportedLang,
 } from "@/lib/i18n"
 import { absoluteUrl, buildLocalizedMetadata } from "@/lib/seo"
+import {
+  buildArticleSchema,
+  buildBreadcrumbSchema,
+  createJsonLd,
+} from "@/lib/structured-data"
 import { LanguageSwitcher } from "@/components/language-switcher"
 
 // @ts-ignore
@@ -94,7 +94,14 @@ export default async function Post({ params }: PageProps) {
     Math.round(post.content.split(/\s+/).length / 180)
   )
 
-  const articleSchema = buildArticleSchema(post, slug)
+  const articleJsonLd = createJsonLd(
+    buildArticleSchema(post, slug),
+    buildBreadcrumbSchema([
+      { name: "Home", path: "/" },
+      { name: "Blog", path: "/blog" },
+      { name: post.metadata.title, path: `/blog/${post.lang}/${slug}` },
+    ])
+  )
 
   return (
     <ViewTransition>
@@ -103,7 +110,7 @@ export default async function Post({ params }: PageProps) {
           type="application/ld+json"
           suppressHydrationWarning
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify(articleSchema),
+            __html: JSON.stringify(articleJsonLd),
           }}
         />
 
@@ -135,32 +142,6 @@ export default async function Post({ params }: PageProps) {
       </section>
     </ViewTransition>
   )
-}
-
-function buildArticleSchema(post: MDXFileData, slug: string) {
-  const basePath = `/blog/${post.lang}/${slug}`
-  const baseUrl = absoluteUrl(basePath)
-  const ogImage = absoluteUrl(
-    `/og/blog?title=${encodeURIComponent(post.metadata.title)}&lang=${
-      post.lang
-    }`
-  )
-  return {
-    "@context": "https://schema.org",
-    "@type": "Article",
-    headline: post.metadata.title,
-    description: post.metadata.description,
-    datePublished: post.metadata.date,
-    dateModified: post.metadata.date,
-    inLanguage: post.lang,
-    image: ogImage,
-    mainEntityOfPage: baseUrl,
-    url: baseUrl,
-    author: {
-      "@type": "Person",
-      name: "Bartłomiej Paczesny",
-    },
-  }
 }
 
 function formatDate(date: string, lang: SupportedLang) {

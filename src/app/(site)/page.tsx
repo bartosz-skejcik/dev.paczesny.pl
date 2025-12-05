@@ -6,6 +6,11 @@ import { EducationSection } from "@/components/education-section"
 import { GitHubActivity } from "@/components/github-activity"
 import { buildLocalizedMetadata, DEFAULT_SEO_DESCRIPTION } from "@/lib/seo"
 import { DEFAULT_FALLBACK_LANG } from "@/lib/i18n"
+import {
+  buildPersonSchema,
+  buildWebsiteSchema,
+  createJsonLd,
+} from "@/lib/structured-data"
 
 // @ts-ignore
 import { ViewTransition } from "react"
@@ -67,9 +72,24 @@ const projectItems = [
   },
 ]
 
+const homepageJsonLd = createJsonLd(
+  buildPersonSchema(),
+  buildWebsiteSchema({
+    description: DEFAULT_SEO_DESCRIPTION,
+    path: "/",
+  })
+)
+
 export default function HomePage() {
   return (
     <ViewTransition>
+      <script
+        type="application/ld+json"
+        suppressHydrationWarning
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(homepageJsonLd),
+        }}
+      />
       <Header />
       <SectionList title="work" items={workItems} />
       <BlogSection />

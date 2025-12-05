@@ -4,15 +4,38 @@ import { PostsList } from "@/components/posts-list"
 import { getPosts } from "@/lib/blog"
 import { DEFAULT_FALLBACK_LANG } from "@/lib/i18n"
 import { buildLocalizedMetadata } from "@/lib/seo"
+import { buildCollectionPageSchema, createJsonLd } from "@/lib/structured-data"
 
 const posts = getPosts().sort(
   (a, b) =>
     new Date(b.metadata.date).getTime() - new Date(a.metadata.date).getTime()
 )
 
+const blogCollectionJsonLd = createJsonLd(
+  buildCollectionPageSchema({
+    name: "Blog",
+    description: "Writings on programming, computer science, and more.",
+    path: "/blog",
+    items: posts.map((post) => ({
+      name: post.metadata.title,
+      description: post.metadata.description,
+      path: `/blog/${post.lang}/${post.slug}`,
+      lang: post.lang,
+      datePublished: post.metadata.date,
+    })),
+  })
+)
+
 export default async function BlogPage() {
   return (
     <main className="animate-fade-in-up relative">
+      <script
+        type="application/ld+json"
+        suppressHydrationWarning
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(blogCollectionJsonLd),
+        }}
+      />
       <h1 className="text-4xl font-bold mb-8 text-white">
         <span className="text-accent mr-2">*</span>
         <ScrambleText text="blog" />
