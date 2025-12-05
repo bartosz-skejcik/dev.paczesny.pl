@@ -15,3 +15,22 @@ stack: next.js, tailwindcss, typescript, mdx, vercel
 - Every route rendered from `src/app/(site)` inherits language metadata from `LocalizedSection`, which sets both `lang` (BCP-47) and `dir` attributes. Nested layouts such as `src/app/(site)/blog/[lang]/layout.tsx` override the wrapper so translated blog posts ship with server-rendered attributes (no client-side mutation required).
 - Use `buildLocalizedMetadata` from `src/lib/seo.ts` inside each page or route to emit locale-aware `<title>`, `<meta name="description">`, Open Graph, Twitter, and `hreflang` alternates. Pass the route path (`/blog`, `/projects`, etc.) and an optional `openGraphImagePath`; the helper resolves canonical URLs via `https://dev.paczesny.pl`.
 - Blog posts derive alternates automatically by inspecting `getAvailableLanguages(slug)`. Each detected translation becomes a canonical URL of the form `https://dev.paczesny.pl/blog/{lang}/{slug}` with `hreflang` codes populated from `getLanguageConfig`. Adding or removing a `[lang].mdx` file instantly updates the sitemap, metadata, and `<link rel="alternate">` output with no extra wiring.
+
+## Structured Data
+
+- Reusable builders in [src/lib/structured-data.ts](src/lib/structured-data.ts) output JSON-LD nodes for `Person`, `WebSite`, `CollectionPage`, `BlogPosting`, `BreadcrumbList`, and the projects `ItemList`. Import helpers such as `buildPersonSchema()` and wrap them with `createJsonLd()` before inlining via `<script type="application/ld+json">`.
+- The homepage publishes a combined `Person` and `WebSite` graph so Google can associate `dev.paczesny.pl` with Bartek Paczesny as the primary author.
+- `/blog` exports a `CollectionPage` that enumerates every localized post from `getPosts()`, while each article renders a `BlogPosting` plus `BreadcrumbList` to reinforce canonical paths.
+- `/projects` shares the portfolio as an `ItemList` of `CreativeWork`/`SoftwareApplication` entries so the same schema can power future feeds (RSS/JSON) without duplicating logic.
+
+## Sitemap & Robots
+
+- `src/app/sitemap.ts` emits static routes (`/`, `/blog`, `/projects`) plus every MDX slug under `content/posts/**`. Each post entry collapses `hreflang` alternates via `getAvailableLanguages` so Google sees a single node with localized variants instead of fragmented URLs.
+- A shared helper (`src/lib/runtime-url.ts`) keeps sitemap links environment-aware: production always points at `https://dev.paczesny.pl`, Vercel preview builds use their ephemeral host, and local dev falls back to `http://localhost:3000` (or anything passed via `NEXT_PUBLIC_SITE_URL`).
+- `src/app/robots.ts` references the sitemap and blocks crawling whenever `VERCEL_ENV` is not `production`, preventing preview/local URLs from being indexed while still exposing the same XML for parity testing.
+
+### Local verification
+
+1. `NEXT_PUBLIC_SITE_URL=http://localhost:3000 bun dev`
+2. Visit `http://localhost:3000/sitemap.xml` to inspect generated URLs and `hreflang` alternates.
+3. Visit `http://localhost:3000/robots.txt` (expect `Disallow: /` locally). Set `VERCEL_ENV=production` and rerun `bun dev` to preview the production robots output referencing the public sitemap URL.
