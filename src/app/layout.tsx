@@ -1,10 +1,12 @@
 import type { Metadata } from "next"
+import type { ReactNode } from "react"
 import { Geist_Mono } from "next/font/google"
 import "./globals.css"
-import { Navbar } from "../components/navbar"
-import { Footer } from "../components/footer"
+import { Navbar } from "@/components/navbar"
+import { Footer } from "@/components/footer"
 import { Analytics } from "@vercel/analytics/next"
 import { SpeedInsights } from "@vercel/speed-insights/next"
+import { DEFAULT_SEO_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/seo"
 
 const geistMono = Geist_Mono({
   subsets: ["latin"],
@@ -13,23 +15,12 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://dev.paczesny.pl"),
+  metadataBase: new URL(SITE_URL),
   title: {
-    default: "Bartek Paczesny",
-    template: "%s | Bartek Paczesny",
+    default: SITE_NAME,
+    template: `%s | ${SITE_NAME}`,
   },
-  description:
-    'Developer, IT Specialist and the "I can fix your computer" guy.',
-  openGraph: {
-    title: "Bartek Paczesny",
-    description:
-      'Developer, IT Specialist and the "I can fix your computer" guy.',
-    url: "https://dev.paczesny.pl",
-    siteName: "Bartek Paczesny",
-    locale: "en_US",
-    type: "website",
-    images: ["https://dev.paczesny.pl/og/home"],
-  },
+  description: DEFAULT_SEO_DESCRIPTION,
   robots: {
     index: true,
     follow: true,
@@ -37,20 +28,11 @@ export const metadata: Metadata = {
     "max-image-preview": "large",
     "max-snippet": -1,
   },
-  twitter: {
-    title: "Bartek Paczesny",
-    card: "summary_large_image",
-    creator: "@j5on",
-  },
 }
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={geistMono.className}>
+    <html className={geistMono.className}>
       <body className={`antialiased min-h-screen`}>
         <div className="max-w-4xl mx-auto px-4 py-8">
           <Navbar />

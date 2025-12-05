@@ -1,6 +1,8 @@
+import type { Metadata } from "next"
 import { ScrambleText } from "@/components/scramble-text"
 import { ProjectCard } from "@/components/project-card"
-import { Metadata } from "next"
+import { DEFAULT_FALLBACK_LANG } from "@/lib/i18n"
+import { buildLocalizedMetadata } from "@/lib/seo"
 
 const projects = [
   {
@@ -121,14 +123,10 @@ export default function ProjectsPage() {
   )
 }
 
-export const metadata: Metadata = {
+export const metadata: Metadata = buildLocalizedMetadata({
+  lang: DEFAULT_FALLBACK_LANG,
   title: "Projects",
   description: "Some of the projects I've worked on.",
-  openGraph: {
-    images: [
-      {
-        url: "https://dev.paczesny.pl/og/home?title=projects",
-      },
-    ],
-  },
-}
+  path: "/projects",
+  openGraphImagePath: "/og/home?title=projects",
+})

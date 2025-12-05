@@ -1,7 +1,9 @@
+import type { Metadata } from "next"
 import { ScrambleText } from "@/components/scramble-text"
 import { PostsList } from "@/components/posts-list"
 import { getPosts } from "@/lib/blog"
-import { Metadata } from "next"
+import { DEFAULT_FALLBACK_LANG } from "@/lib/i18n"
+import { buildLocalizedMetadata } from "@/lib/seo"
 
 const posts = getPosts().sort(
   (a, b) =>
@@ -45,14 +47,10 @@ export default async function BlogPage() {
   )
 }
 
-export const metadata: Metadata = {
+export const metadata: Metadata = buildLocalizedMetadata({
+  lang: DEFAULT_FALLBACK_LANG,
   title: "Blog",
   description: "Writings on programming, computer science, and more.",
-  openGraph: {
-    images: [
-      {
-        url: "https://dev.paczesny.pl/og/home?title=blog",
-      },
-    ],
-  },
-}
+  path: "/blog",
+  openGraphImagePath: "/og/home?title=blog",
+})

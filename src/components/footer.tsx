@@ -25,8 +25,21 @@ async function getLatestCommit(username: string): Promise<string | null> {
       return null
     }
 
-    const data: LatestCommitResponse = await res.json()
-    return data.oid || null
+    const contentType = res.headers.get("content-type") ?? ""
+
+    if (!contentType.includes("application/json")) {
+      const preview = await res.text()
+      console.warn("Unexpected latest commit payload", preview.slice(0, 200))
+      return null
+    }
+
+    try {
+      const data: LatestCommitResponse = await res.json()
+      return data.oid || null
+    } catch (parseError) {
+      console.error("Error parsing latest commit payload", parseError)
+      return null
+    }
   } catch (error) {
     console.error("Error fetching latest commit:", error)
     return null

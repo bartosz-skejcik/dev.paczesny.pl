@@ -9,9 +9,11 @@ import {
 } from "@/lib/blog"
 import {
   DEFAULT_FALLBACK_LANG,
-  SUPPORTED_LANGS,
+  getLanguageConfig,
+  normalizeLang,
   type SupportedLang,
 } from "@/lib/i18n"
+import { absoluteUrl, buildLocalizedMetadata } from "@/lib/seo"
 import { LanguageSwitcher } from "@/components/language-switcher"
 
 // @ts-ignore
@@ -44,49 +46,30 @@ export async function generateMetadata({
   }
 
   const available = getAvailableLanguages(slug)
-  const canonicalUrl = `https://dev.paczesny.pl/blog/${post.lang}/${slug}`
   const publishedTime = new Date(post.metadata.date).toISOString()
-  const alternateLanguages = Object.fromEntries(
-    available.map((language) => [
-      language,
-      `https://dev.paczesny.pl/blog/${language}/${slug}`,
-    ])
+  const ogImagePath = `/og/blog?title=${encodeURIComponent(
+    post.metadata.title
+  )}&lang=${post.lang}`
+  const alternates = available.reduce<Record<string, string>>(
+    (map, language) => {
+      const { hrefLang } = getLanguageConfig(language)
+      map[hrefLang] = absoluteUrl(`/blog/${language}/${slug}`)
+      return map
+    },
+    {}
   )
 
-  return {
+  return buildLocalizedMetadata({
+    lang: post.lang,
     title: post.metadata.title,
     description: post.metadata.description,
-    alternates: {
-      canonical: canonicalUrl,
-      languages: alternateLanguages,
-    },
-    openGraph: {
-      title: post.metadata.title,
-      description: post.metadata.description,
-      publishedTime,
-      locale: post.lang,
-      type: "article",
-      url: canonicalUrl,
-      images: [
-        {
-          url: `https://dev.paczesny.pl/og/blog?title=${encodeURIComponent(
-            post.metadata.title
-          )}&lang=${post.lang}`,
-        },
-      ],
-    },
-    twitter: {
-      title: post.metadata.title,
-      description: post.metadata.description,
-      card: "summary_large_image",
-      creator: "@_j5on",
-      images: [
-        `https://dev.paczesny.pl/og/blog?title=${encodeURIComponent(
-          post.metadata.title
-        )}&lang=${post.lang}`,
-      ],
-    },
-  }
+    path: `/blog/${post.lang}/${slug}`,
+    openGraphImagePath: ogImagePath,
+    publishedTime,
+    type: "article",
+    alternates,
+    twitterHandle: "@_j5on",
+  })
 }
 
 export default async function Post({ params }: PageProps) {
@@ -155,7 +138,13 @@ export default async function Post({ params }: PageProps) {
 }
 
 function buildArticleSchema(post: MDXFileData, slug: string) {
-  const baseUrl = `https://dev.paczesny.pl/blog/${post.lang}/${slug}`
+  const basePath = `/blog/${post.lang}/${slug}`
+  const baseUrl = absoluteUrl(basePath)
+  const ogImage = absoluteUrl(
+    `/og/blog?title=${encodeURIComponent(post.metadata.title)}&lang=${
+      post.lang
+    }`
+  )
   return {
     "@context": "https://schema.org",
     "@type": "Article",
@@ -164,9 +153,7 @@ function buildArticleSchema(post: MDXFileData, slug: string) {
     datePublished: post.metadata.date,
     dateModified: post.metadata.date,
     inLanguage: post.lang,
-    image: `https://dev.paczesny.pl/og/blog?title=${encodeURIComponent(
-      post.metadata.title
-    )}&lang=${post.lang}`,
+    image: ogImage,
     mainEntityOfPage: baseUrl,
     url: baseUrl,
     author: {
@@ -176,20 +163,9 @@ function buildArticleSchema(post: MDXFileData, slug: string) {
   }
 }
 
-function normalizeLang(lang: string): SupportedLang {
-  const candidate = lang?.toLowerCase() as SupportedLang
-  return SUPPORTED_LANGS.includes(candidate) ? candidate : DEFAULT_FALLBACK_LANG
-}
-
 function formatDate(date: string, lang: SupportedLang) {
-  const locales: Record<SupportedLang, string> = {
-    pl: "pl-PL",
-    en: "en-US",
-    de: "de-DE",
-    fr: "fr-FR",
-    es: "es-ES",
-  }
-  return new Date(date).toLocaleDateString(locales[lang], {
+  const { locale } = getLanguageConfig(lang)
+  return new Date(date).toLocaleDateString(locale, {
     year: "numeric",
     month: "long",
     day: "numeric",

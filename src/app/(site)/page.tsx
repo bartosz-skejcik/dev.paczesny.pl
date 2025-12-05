@@ -1,8 +1,11 @@
+import type { Metadata } from "next"
 import { Header } from "@/components/header"
 import { Item, SectionList } from "@/components/section-list"
 import { BlogSection } from "@/components/blog-section"
 import { EducationSection } from "@/components/education-section"
 import { GitHubActivity } from "@/components/github-activity"
+import { buildLocalizedMetadata, DEFAULT_SEO_DESCRIPTION } from "@/lib/seo"
+import { DEFAULT_FALLBACK_LANG } from "@/lib/i18n"
 
 // @ts-ignore
 import { ViewTransition } from "react"
@@ -81,3 +84,11 @@ export default function HomePage() {
     </ViewTransition>
   )
 }
+
+export const metadata: Metadata = buildLocalizedMetadata({
+  lang: DEFAULT_FALLBACK_LANG,
+  title: "Bartek Paczesny",
+  description: DEFAULT_SEO_DESCRIPTION,
+  path: "/",
+  openGraphImagePath: "/og/home",
+})
