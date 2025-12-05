@@ -1,0 +1,14 @@
+**Queued Work**
+
+- **Multi-Locale HTML & Metadata** – Ensure every route emits correct `lang` and `dir` attributes plus locale-aware `<title>/<meta>` tags so Google indexes Polish/German/French/Spanish content accurately. Move `lang` management out of layout.tsx and into per-route layouts; document how blog posts derive `alternates` and canonical URLs.
+- **Sitemap & Robots Automation** – Create `src/app/sitemap.ts` to enumerate all blog slugs with their `hreflang` alternates and expose static pages; add `src/app/robots.ts` that references the sitemap and respects staging vs prod URLs. Include instructions for running locally.
+- **Structured Data Expansion** – Augment homepage with `Person` + `WebSite` JSON-LD, blog index with `CollectionPage`, posts with `BreadcrumbList`, and projects with `SoftwareApplication`/`CreativeWork`. Document schema generation helpers and where to import them.
+- **Image & Accessibility Polish** – Audit key components (header.tsx, hero sections, `PostItem`) to ensure descriptive `alt`, labelled controls, and accessible keyboard UX for the search modal. Provide test steps (e.g., Lighthouse a11y).
+- **Content Taxonomy & Archives** – Extend MDX front matter (tags, cover image, reading time override), update `getPosts` to parse them, show tags in `PostItem`, and add `/blog/tags/[tag]` listing pages. Include migration instructions for existing files under `content/posts/**`.
+- **Related Content Module** – Build a related-posts section at the end of page.tsx using shared tags or cosine similarity; include fallback copy, analytics hooks, and tests to keep navigation fast.
+- **RSS/JSON Feed Delivery** – Add `/feed.xml` and `/feed.json` routes that reuse `getPosts`, include multi-language entries, and document how to validate via Feedly/W3C. Promote feeds via header/footer links.
+- **Localized Static Pages** – Internationalize home/projects/about with existing translation scripts (pretranslate.ts, translate.ts). Outline folder structure, how to store translated copy, and how to switch locales in navigation.
+- **Engagement CTAs & Newsletter** – Design a reusable CTA block (email capture or consultation) that can sit on home, projects, and after blog posts. Specify integration plan (e.g., Buttondown API) and tracking expectations.
+- **Distribution & Monitoring Tooling** – Add a script/CI workflow that, after publishing, pings social cards (using `src/app/og/**`) and logs metrics (keywords, Lighthouse SEO). Document how to run locally and what env vars are required.
+
+Feel free to start with the top three—they unblock search engines fastest, and the rest layer on engagement and reach.
