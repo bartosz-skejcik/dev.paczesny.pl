@@ -7,7 +7,7 @@ import { SUPPORTED_LANGS, type SupportedLang } from "@/lib/i18n"
 
 loadEnvConfig(process.cwd())
 
-const DESCRIPTION_MODEL = "llama-3.3-70b-versatile"
+const DESCRIPTION_MODEL = "openai/gpt-oss-20b"
 const MIN_CHAR_LENGTH = 150
 const MAX_CHAR_LENGTH = 220
 const MAX_BODY_CHARS = 6000
@@ -216,7 +216,6 @@ async function generateDescription({
 
     const { text } = await generateText({
       model: describer,
-      temperature: 0.4,
       prompt,
     })
 
@@ -261,7 +260,8 @@ function buildPrompt({
 
 Requirements:
 - 1-2 sentences between ${MIN_CHAR_LENGTH} and ${MAX_CHAR_LENGTH} characters inclusive (spaces count).
-- Use active voice with a clear benefit for the reader but write the description in first person and describe what I, the author, offer and shortly explain what the post is about.
+- Use active voice with a clear benefit for the reader.
+- Write in first person.
 - Make it engaging and clickable in search results while accurately reflecting the post content.
 - Do not reuse or paraphrase any existing description.
 ${tagInstruction}
