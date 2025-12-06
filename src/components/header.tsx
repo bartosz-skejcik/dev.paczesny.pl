@@ -9,9 +9,11 @@ export function Header() {
       <h1 className="text-4xl font-bold mb-4 animate-fade-in text-white">
         <Image
           src="/profile.jpg"
-          alt="logo"
+          alt="Portrait of Bartek Paczesny"
           width={45}
           height={45}
+          priority
+          sizes="45px"
           className="inline-block mr-4 rounded-full align-middle"
         />
         <span className="inline-block">
@@ -20,11 +22,11 @@ export function Header() {
       </h1>
       <div className="flex flex-col gap-2 text-neutral-400">
         <div className="flex items-center gap-2">
-          <MapPin className="w-4 h-4" />
+          <MapPin className="w-4 h-4" aria-hidden="true" focusable="false" />
           warsaw, poland
         </div>
         <div className="flex items-center gap-2">
-          <Building2 className="w-4 h-4" />
+          <Building2 className="w-4 h-4" aria-hidden="true" focusable="false" />
           IT Specialist @ MGW
         </div>
       </div>

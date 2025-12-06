@@ -23,6 +23,13 @@ stack: next.js, tailwindcss, typescript, mdx, vercel
 - `/blog` exports a `CollectionPage` that enumerates every localized post from `getPosts()`, while each article renders a `BlogPosting` plus `BreadcrumbList` to reinforce canonical paths.
 - `/projects` shares the portfolio as an `ItemList` of `CreativeWork`/`SoftwareApplication` entries so the same schema can power future feeds (RSS/JSON) without duplicating logic.
 
+## Accessibility QA
+
+1. `bun dev` and open both `/` and `/blog` in separate tabs so Lighthouse can evaluate the hero/Header and the search workflow.
+2. In Chrome DevTools, run a Lighthouse report scoped to Accessibility; expect 100 and verify the "Image alt" audit cites the portrait text `Portrait of Bartek Paczesny`.
+3. Use only the keyboard to activate the "Search posts" button (or press `/`), ensure focus moves into the dialog, navigate results with `↑/↓` or `Ctrl/⌘ + J/K`, hit `Enter` to open a post, and press `Esc` to close—focus should return to the trigger.
+4. With VoiceOver/NVDA, read a `PostItem` while the dialog is open; confirm screen readers announce the publication date plus available languages via the hidden metadata line.
+
 ## Sitemap & Robots
 
 - `src/app/sitemap.ts` emits static routes (`/`, `/blog`, `/projects`) plus every MDX slug under `content/posts/**`. Each post entry collapses `hreflang` alternates via `getAvailableLanguages` so Google sees a single node with localized variants instead of fragmented URLs.

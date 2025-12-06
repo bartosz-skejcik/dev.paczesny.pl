@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 import type { MDXFileData } from "@/lib/blog"
-import { PostItem } from "./post-item"
+import { PostItem, buildPostDomId } from "./post-item"
 import { SUPPORTED_LANGS, type SupportedLang } from "@/lib/i18n"
 
 type PostsProps = {
@@ -18,9 +18,53 @@ export function PostsList({ posts }: PostsProps) {
   const router = useRouter()
   const selectedItemRef = useRef<HTMLDivElement>(null)
 
-  const filteredPosts = posts.filter((item) =>
-    item.metadata.title.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  const normalizedQuery = searchQuery.trim().toLowerCase()
+
+  const filteredPosts = posts.filter((item) => {
+    if (!normalizedQuery) {
+      return true
+    }
+
+    const searchable = new Set<string>()
+    const addMetadata = (meta?: MDXFileData["metadata"]) => {
+      if (!meta) {
+        return
+      }
+      searchable.add(meta.title)
+      searchable.add(meta.description)
+    }
+
+    if (preferredLang && item.localizedMetadata?.[preferredLang]) {
+      addMetadata(item.localizedMetadata[preferredLang])
+    }
+
+    addMetadata(item.metadata)
+
+    if (item.localizedMetadata) {
+      Object.entries(item.localizedMetadata).forEach(([lang, localized]) => {
+        if (!localized) {
+          return
+        }
+        if (preferredLang && lang === preferredLang) {
+          return
+        }
+        addMetadata(localized)
+      })
+    }
+
+    searchable.add(item.slug)
+    searchable.add(item.slug.replace(/[-_]/g, " "))
+
+    for (const value of searchable) {
+      if (value.toLowerCase().includes(normalizedQuery)) {
+        return true
+      }
+    }
+
+    return false
+  })
+  const searchResultsId = "post-search-results"
+  const searchResultsSummaryId = "post-search-results-summary"
 
   useEffect(() => {
     setSelectedIndex(0)
@@ -106,9 +150,11 @@ export function PostsList({ posts }: PostsProps) {
   return (
     <>
       {isSearching && (
-        <div className="fixed bottom-4 left-4 right-4 max-w-2xl mx-auto bg-black/50 backdrop-blur-sm border border-neutral-800 p-2">
+        <div className="fixed bottom-4 left-4 right-4 mx-auto max-w-2xl border border-neutral-800 bg-black/50 p-2 backdrop-blur-sm">
           <div className="flex items-center text-neutral-400">
-            <span className="text-accent mr-2">/</span>
+            <span className="mr-2 text-accent" aria-hidden="true">
+              /
+            </span>
             <input
               type="text"
               value={searchQuery}
@@ -117,12 +163,13 @@ export function PostsList({ posts }: PostsProps) {
               autoFocus
               placeholder="search posts..."
               aria-label="Search posts"
+              aria-describedby={searchResultsSummaryId}
               role="searchbox"
               aria-expanded={filteredPosts.length > 0}
-              aria-controls="search-results"
+              aria-controls={searchResultsId}
               aria-activedescendant={
                 isSearching && filteredPosts.length > 0
-                  ? `post-${filteredPosts[selectedIndex].slug}`
+                  ? buildPostDomId(filteredPosts[selectedIndex])
                   : undefined
               }
             />
@@ -130,10 +177,21 @@ export function PostsList({ posts }: PostsProps) {
         </div>
       )}
 
-      <div className="space-y-8 sm:space-y-4">
+      <p id={searchResultsSummaryId} className="sr-only" aria-live="polite">
+        {`${filteredPosts.length} ${
+          filteredPosts.length === 1 ? "result" : "results"
+        } available`}
+      </p>
+
+      <div
+        id={searchResultsId}
+        role={isSearching ? "listbox" : undefined}
+        aria-label="Blog posts"
+        className="space-y-8 sm:space-y-4"
+      >
         {filteredPosts.map((item, index) => (
           <div
-            key={item.slug}
+            key={`${item.slug}-${item.lang}`}
             ref={
               isSearching && index === selectedIndex ? selectedItemRef : null
             }
@@ -142,6 +200,7 @@ export function PostsList({ posts }: PostsProps) {
               post={item}
               isSelected={isSearching && index === selectedIndex}
               preferredLang={preferredLang}
+              searchContext={isSearching}
             />
           </div>
         ))}

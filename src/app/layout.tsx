@@ -7,12 +7,15 @@ import { Footer } from "@/components/footer"
 import { Analytics } from "@vercel/analytics/next"
 import { SpeedInsights } from "@vercel/speed-insights/next"
 import { DEFAULT_SEO_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/seo"
+import { DEFAULT_FALLBACK_LANG, getLanguageConfig } from "@/lib/i18n"
 
 const geistMono = Geist_Mono({
   subsets: ["latin"],
   display: "swap",
   variable: "--font-geist-mono",
 })
+
+const fallbackLocale = getLanguageConfig(DEFAULT_FALLBACK_LANG)
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -32,7 +35,12 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html className={geistMono.className}>
+    <html
+      lang={fallbackLocale.htmlLang}
+      dir={fallbackLocale.dir}
+      data-locale={DEFAULT_FALLBACK_LANG}
+      className={geistMono.className}
+    >
       <body className={`antialiased min-h-screen`}>
         <div className="max-w-4xl mx-auto px-4 py-8">
           <Navbar />
