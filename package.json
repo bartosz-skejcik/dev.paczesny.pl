@@ -9,7 +9,8 @@
     "lint": "next lint",
     "translate:top": "tsx scripts/pretranslate.ts",
     "translate:post": "tsx scripts/translate.ts",
-    "describe:post": "tsx scripts/describe.ts"
+    "describe:post": "tsx scripts/describe.ts",
+    "test": "vitest run"
   },
   "dependencies": {
     "@ai-sdk/openai": "^2.0.76",
@@ -33,7 +34,8 @@
     "postcss": "^8",
     "tailwindcss": "^4.1.11",
     "tsx": "^4.21.0",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^2.1.4"
   },
   "packageManager": "bun@1.2.5"
 }

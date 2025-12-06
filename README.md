@@ -64,6 +64,12 @@ stack: next.js, tailwindcss, typescript, mdx, vercel
 
 - Programmatically, use `getTagSummaries()`/`getTagSummaryBySlug()` for tag clouds, `getPostsByTag()` for related content, and `getTagsForPost()` or `<TagBadge>` when you need linked UI chips.
 
+## Related Content
+
+- Recommendation logic lives in [src/lib/related-posts.ts](src/lib/related-posts.ts). `resolveRelatedPosts(post, { preferredLang, limit })` ranks candidates via tag overlap, cosine similarity on titles/descriptions, and a publication date boost. Pass `candidates` when you want to unit-test custom pools or reuse the scorer outside the blog page.
+- UI + analytics rendering lives in [src/components/related-posts.tsx](src/components/related-posts.tsx). The section ships SEO-friendly headings, localized fallback copy, and emits `related_posts_impression` plus `related_post_click` events through [src/lib/analytics.ts](src/lib/analytics.ts). The helper gracefully degrades to a custom DOM event when no tracker is present.
+- Tests run with `bun test` (wrapper around Vitest). Exercising [src/lib/related-posts.test.ts](src/lib/related-posts.test.ts) keeps navigation fast by locking in scoring weights, fallback ordering, and the “never recommend the current slug” rule. Extend the suite before tweaking weights so regressions stay visible.
+
 ## Accessibility QA
 
 1. `bun dev` and open both `/` and `/blog` in separate tabs so Lighthouse can evaluate the hero/Header and the search workflow.

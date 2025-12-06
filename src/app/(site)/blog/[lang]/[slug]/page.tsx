@@ -23,7 +23,9 @@ import {
   buildBreadcrumbSchema,
   createJsonLd,
 } from "@/lib/structured-data"
+import { resolveRelatedPosts } from "@/lib/related-posts"
 import { LanguageSwitcher } from "@/components/language-switcher"
+import { RelatedPostsSection } from "@/components/related-posts"
 import { TagBadge } from "@/components/tag-badge"
 
 // @ts-ignore
@@ -116,6 +118,10 @@ export default async function Post({ params }: PageProps) {
   const tags = resolvePostTags(post)
   const tagHeadingLabel = getTagHeadingLabel(post.lang)
   const descriptionCopy = resolvePostDescription(post)
+  const relatedPosts = resolveRelatedPosts(post, {
+    preferredLang: post.lang,
+    limit: 4,
+  })
 
   const articleJsonLd = createJsonLd(
     buildArticleSchema(post, slug),
@@ -181,6 +187,15 @@ export default async function Post({ params }: PageProps) {
         <article className="prose prose-invert max-w-none prose-headings:text-white prose-a:text-white hover:prose-a:underline">
           <MDX source={post.content} />
         </article>
+
+        {relatedPosts.items.length > 0 && (
+          <RelatedPostsSection
+            currentSlug={post.slug}
+            currentLang={post.lang}
+            items={relatedPosts.items}
+            usedFallback={relatedPosts.usedFallback}
+          />
+        )}
       </section>
     </ViewTransition>
   )
