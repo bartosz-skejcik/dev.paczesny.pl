@@ -10,6 +10,12 @@ stack: next.js, tailwindcss, typescript, mdx, vercel
 - Run `bun run translate:top` (powered by `scripts/pretranslate.ts`) during CI/CD to prebuild `TOP_PREBUILD_LANGS` so that the most popular languages are statically generated.
 - Blog pages automatically redirect to `/blog/en/[slug]` whenever a requested locale is missing. A language switcher renders links for every supported language and disables untranslated ones for clarity.
 
+## Meta Descriptions
+
+- Generate or refresh MDX `description` front matter with `bun run describe:post --slug proxmox-first-install --lang de`. The script in `scripts/describe.ts` uses the same `GROQ_API_KEY` to call Groq's `llama-3.3-70b-versatile` model and enforces friendly copy between 150–220 characters.
+- Add `--dry-run` (or `-d`) to preview the proposed text and character count without touching the file, then rerun without the flag to persist changes once you're satisfied.
+- Skip `--lang` to rewrite every localized version available for that slug; the script inspects `content/posts/[slug]` and iterates through each `[lang].mdx` it finds.
+
 ## SEO & Localization
 
 - Every route rendered from `src/app/(site)` inherits language metadata from `LocalizedSection`, which sets both `lang` (BCP-47) and `dir` attributes. Nested layouts such as `src/app/(site)/blog/[lang]/layout.tsx` override the wrapper so translated blog posts ship with server-rendered attributes (no client-side mutation required).

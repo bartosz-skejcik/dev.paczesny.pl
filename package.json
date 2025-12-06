@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "translate:top": "tsx scripts/pretranslate.ts",
-    "translate:post": "tsx scripts/translate.ts"
+    "translate:post": "tsx scripts/translate.ts",
+    "describe:post": "tsx scripts/describe.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^2.0.76",
