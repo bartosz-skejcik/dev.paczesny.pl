@@ -35,7 +35,10 @@ describe("resolveRelatedPosts", () => {
 
   it("falls back to recent posts when similarity is too low", () => {
     const base = createPost({ slug: "base" })
-    const older = createPost({ slug: "older", date: "2024-01-01T00:00:00.000Z" })
+    const older = createPost({
+      slug: "older",
+      date: "2024-01-01T00:00:00.000Z",
+    })
     const latest = createPost({
       slug: "latest",
       date: "2025-08-01T00:00:00.000Z",

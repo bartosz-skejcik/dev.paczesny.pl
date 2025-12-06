@@ -1,4 +1,9 @@
-import { getPosts, type MDXFileData, getTagsForPost, type Metadata } from "@/lib/blog"
+import {
+  getPosts,
+  type MDXFileData,
+  getTagsForPost,
+  type Metadata,
+} from "@/lib/blog"
 import { DEFAULT_FALLBACK_LANG, type SupportedLang } from "@/lib/i18n"
 import { DEFAULT_SEO_DESCRIPTION } from "@/lib/seo"
 import { createTagSlug } from "@/lib/tags"

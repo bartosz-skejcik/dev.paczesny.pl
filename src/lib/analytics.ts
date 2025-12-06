@@ -1,6 +1,4 @@
-export type AnalyticsEvent =
-  | "related_posts_impression"
-  | "related_post_click"
+export type AnalyticsEvent = "related_posts_impression" | "related_post_click"
 
 export function trackAnalyticsEvent(
   eventName: AnalyticsEvent,
