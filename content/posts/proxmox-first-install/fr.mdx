@@ -2,6 +2,8 @@
 title: Proxmox - la voie de la douleur
 description: Histoire d'une lutte avec Proxmox qui se termine par un twist épique. Mise en place d'Immich dans LXC, débogage du réseau, meurtre de disques et heures passées sur iptables - tout cela pour découvrir que le téléphone avait occupé l'IP du conteneur tout le temps.
 date: 2025-11-14T12:00:00.000Z
+tags: homelab, proxmox, lxc, docker, immich, networking
+coverImage: /assets/images/ct-100.png
 ---
 
 ## Introduction
@@ -13,6 +15,7 @@ Il me semble que la meilleure solution pour commencer l'aventure avec ce truc es
 ### Objectifs
 
 J'ai fixé 6 objectifs :
+
 - Créer une VM avec Ubuntu Server et exécuter Docker avec mon site web
 - Configurer le DDNS pour mon réseau domestique
 - Rattacher mon domaine à mon portfolio hébergé sur cette VM
@@ -94,9 +97,10 @@ wget -O .env https://github.com/immich-app/immich/releases/latest/download/examp
 3. J'ai configuré `.env`.
 
 > Puisque j'ai divisé ce disque de 750 Go en 2 partitions :
+>
 > - La première a 250 Go et c'est la partition de stockage d'Immich.
 > - La deuxième a 100 Go et c'est celle pour la VM sur Proxmox.
-> 
+>
 > Le reste est non alloué, car je n'en ai pas besoin pour l'instant.
 
 > Je vais mapper cette première partition au FS de cette VM et utiliser cet espace pour le stockage de fichiers et Postgres :D
@@ -143,4 +147,5 @@ PUTAIN DE MERDE! Et pendant tout ce temps, le téléphone avait l'IP `192.168.1.
 PUTAIN DE MERDEEEEEEE!
 
 ## Liens
+
 - [https://youtu.be/lFzWDJcRsqo?si=2yiDTdhfHh3uUQSx](https://youtu.be/lFzWDJcRsqo?si=2yiDTdhfHh3uUQSx)

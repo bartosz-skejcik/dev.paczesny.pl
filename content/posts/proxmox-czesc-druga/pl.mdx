@@ -2,6 +2,8 @@
 title: Proxmox - część druga
 description: Jakiś tam opis
 date: "2025-11-15T18:00:00.000Z"
+tags: homelab, proxmox, macvlan, ddns, openvpn, cloudflare
+coverImage: /assets/images/ct-100.png
 ---
 
 ## Wprowadzenie
@@ -9,23 +11,21 @@ date: "2025-11-15T18:00:00.000Z"
 Witam w części drugiej pierwszych zmagań z proxmoxem :D.
 Dla tych co są tu po raz pierwszy to zachęcam przeczytać sobie najpierw [część pierwszą](https://dev.paczesny.pl/blog/proxmox-first-install).
 
-
 Jako że były pewne komplikacje z adresami IP itd to przeszedłem na konfiguracje z macvlan'em. [Tutaj](https://ipwithease.com/what-is-macvlan/) macie fajnie opisane co to i po co to ;)
 Tak jak już wspomniałem wcześniej, dzisiaj na warsztat biorę OpenVPN ale poza tym chce jeszcze skonfigurować DDNS aby mieć możliwość dostępu do czego kolwiek z poza sieci domowej.
-
 
 Poniżej dla przypomnienia mam liste rzeczy, które chciałbym zrobić z tym proxmoxem
 
 ### Cele
 
 Jako cel ustaliłem sobie 6 rzeczy:
+
 - Stworzyć VM-kę z Ubuntu Server i uruchomić na niej Dockera z moją stroną internetową
 - **Skonfigurować DDNS dla sieci domowej**
 - Podpiąć domenę do mojego portfolio hostowanego na tej VM-ce
 - Uruchomić codzienne backupy
 - **Na kolejnych VM-kach / kontenerach postawić vaultwardena i OpenVPN**
 - [x] Postawić Immich-a
-
 
 ## Konfiguracja DDNS
 
@@ -42,6 +42,7 @@ Dobra, domenka już kupiona. Teraz pora na konfigurację skryptu na proxmoxie, k
 Stworzyłem sobie małą LVM'ke: 1GB RAM'u, 4GB dysku, 1vCPU
 
 1. Tworzę folder w którym będą sie dane zapisywać:
+
 ```bash
 mkdir data
 chown 1000 -R data
@@ -51,6 +52,7 @@ chmod u+r+w+x -R data
 2. Aktualizuje plik `data/config.json` pod Cloudflare'a
 
 3. Tworze `docker-compose.yml`
+
 ```yml
 version: "3.8"
 
@@ -70,11 +72,12 @@ services:
 ```
 
 4. Odpalam kontener dockera:
+
 ```bash
 docker compose up -d
 ```
 
-No i klasa. Spojrzałem w rekordy DNS na cloudflarze i rekord A został zmieniony na moje *aktualne* publiczne ip :D
+No i klasa. Spojrzałem w rekordy DNS na cloudflarze i rekord A został zmieniony na moje _aktualne_ publiczne ip :D
 
 ## Stawianie LXC z Nginx i Let's Encrypt jako reverse proxy dla Immich i innych usług
 
@@ -255,7 +258,7 @@ Dostaje odpowiedź z serwera Immich (200 lub inny kod), ale już po HTTPS.
 ---
 
 > ### Bonusowe uwagi
-> 
+>
 > - Teraz mogę używać tego LXC'ka z Nginx'em do innych LXC działających z różnymi usługami, po prostu dodam kolejne pliki konfiguracyjne z innymi domenami i portami.
 > - Można też rozważyć Traefik lub Caddy, które mają certyfikaty wbudowane i mniej konfiguracji ręcznej ale to może innym razem.
 
@@ -274,18 +277,19 @@ vim /etc/pve/lxc/102.conf
 ```
 
 > Jeżeli nie dodam tych linijek to mi wypierdala błąd przy stawianiu dockera :D
-> 
+>
 > ```bash
 > Error response from daemon: error gathering device information while adding custom device "/dev/net/tun": no such file or directory
 > ```
 
 > Oraz, trzeba jeszcze dodać w moim przypadku:
-> 
+>
 > ```bash
 > lxc.apparmor.profile: unconfined
 > ```
+>
 > Bo inaczej wywala coś takiego:
-> 
+>
 > ```bash
 > Error response from daemon: failed to create task for container: failed to create shim task: OCI runtime create failed: runc create failed: unable to start container process: error during container init: open sysctl net.ipv4.ip_unprivileged_port_start file: reopen fd 8: permission denied
 > ```
@@ -300,7 +304,7 @@ cd openvpn-as
 Następnie, konfiguruję plik `docker-compose.yml`:
 
 ```yaml
-version: '3.8'
+version: "3.8"
 
 services:
   openvpn-as:

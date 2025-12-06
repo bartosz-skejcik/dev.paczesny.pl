@@ -15,6 +15,7 @@ import {
   createJsonLd,
 } from "@/lib/structured-data"
 import { LanguageSwitcher } from "@/components/language-switcher"
+import { TagBadge } from "@/components/tag-badge"
 
 // @ts-ignore
 import { ViewTransition } from "react"
@@ -89,10 +90,16 @@ export default async function Post({ params }: PageProps) {
   }
 
   const availableLanguages = getAvailableLanguages(slug)
-  const timeToRead = Math.max(
-    1,
-    Math.round(post.content.split(/\s+/).length / 180)
-  )
+  const readingTimeOverride =
+    post.metadata.readingTimeMinutes ??
+    post.localizedMetadata?.[DEFAULT_FALLBACK_LANG]?.readingTimeMinutes
+  const timeToRead = readingTimeOverride
+    ? Math.round(readingTimeOverride)
+    : Math.max(1, Math.round(post.content.split(/\s+/).length / 180))
+  const tags =
+    post.metadata.tags ??
+    post.localizedMetadata?.[DEFAULT_FALLBACK_LANG]?.tags ??
+    []
 
   const articleJsonLd = createJsonLd(
     buildArticleSchema(post, slug),
@@ -135,6 +142,14 @@ export default async function Post({ params }: PageProps) {
             <span>{formatDate(post.metadata.date, post.lang)}</span>
           </ViewTransition>
         </div>
+
+        {tags.length > 0 && (
+          <div className="mb-8 flex flex-wrap gap-2 text-neutral-500">
+            {tags.map((tag) => (
+              <TagBadge key={tag} tag={tag} className="text-xs!" />
+            ))}
+          </div>
+        )}
 
         <article className="prose prose-invert max-w-none prose-headings:text-white prose-a:text-white hover:prose-a:underline">
           <MDX source={post.content} />

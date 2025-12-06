@@ -32,6 +32,10 @@ export function PostsList({ posts }: PostsProps) {
       }
       searchable.add(meta.title)
       searchable.add(meta.description)
+      meta.tags?.forEach((tag) => {
+        searchable.add(tag)
+        searchable.add(tag.replace(/[-_]/g, " "))
+      })
     }
 
     if (preferredLang && item.localizedMetadata?.[preferredLang]) {

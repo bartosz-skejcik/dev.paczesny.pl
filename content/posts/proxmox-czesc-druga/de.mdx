@@ -2,6 +2,8 @@
 title: Proxmox - Teil zwei
 description: Irgendeine Beschreibung
 date: 2025-11-15T18:00:00.000Z
+tags: homelab, proxmox, macvlan, ddns, openvpn, cloudflare
+coverImage: /assets/images/ct-100.png
 ---
 
 ## Einführung
@@ -17,6 +19,7 @@ Unten findet ihr zur Erinnerung eine Liste der Dinge, die ich mit diesem Proxmox
 ### Ziele
 
 Ich habe mir 6 Ziele gesetzt:
+
 - Eine VM mit Ubuntu Server erstellen und darauf Docker mit meiner Website starten
 - **DDNS für mein Heimnetzwerk konfigurieren**
 - Meine Domain an mein Portfolio anhängen, das auf dieser VM gehostet wird
@@ -39,6 +42,7 @@ Gut, die Domain ist jetzt gekauft. Jetzt ist es Zeit, das Skript auf meinem Prox
 Ich habe eine kleine LVM erstellt: 1 GB RAM, 4 GB Festplatte, 1 vCPU
 
 1. Ich erstelle einen Ordner, in dem die Daten gespeichert werden:
+
 ```bash
 mkdir data
 chown 1000 -R data
@@ -48,6 +52,7 @@ chmod u+r+w+x -R data
 2. Ich aktualisiere die Datei `data/config.json` für Cloudflare
 
 3. Ich erstelle eine `docker-compose.yml`-Datei:
+
 ```yml
 version: "3.8"
 
@@ -67,6 +72,7 @@ services:
 ```
 
 4. Ich starte den Docker-Container:
+
 ```bash
 docker compose up -d
 ```
@@ -84,32 +90,37 @@ Ich habe bereits einen frischen Immich auf LXC mit der IP `192.168.1.100`, der �
 Ich habe einen frischen LXC. Ich wähle Ubuntu Server 22.04, weil es stabil ist und alles enthält, was ich benötige.
 
 Ich gehe hinein:
+
 ```bash
 pct enter 200
 ```
 
 Ich aktualisiere das System, weil es immer besser ist, ein aktuelles Repo zu haben:
+
 ```bash
 apt update && apt upgrade -y
 ```
 
 Ich installiere Nginx und Certbot (ein Programm zum Abrufen von Let's-Encrypt-Zertifikaten):
+
 ```bash
 apt install -y nginx certbot python3-certbot-nginx vim
 ```
 
---- 
+---
 
 ### Konfiguration von Nginx als Reverse-Proxy für Immich
 
 Jetzt konfiguriere ich Nginx, um HTTP-Verkehr auf Port 80 und 443 für meine Domain zu empfangen und ihn an Immich auf HTTP weiterzuleiten.
 
 Ich erstelle eine Konfigurationsdatei für Nginx:
+
 ```bash
 vim /etc/nginx/sites-available/immich.conf
 ```
 
 Ich füge die folgende Konfiguration hinzu:
+
 ```nginx
 server {
     listen 80;
@@ -131,27 +142,31 @@ server {
 ```
 
 Ich aktiviere die Website:
+
 ```bash
 ln -s /etc/nginx/sites-available/immich.conf /etc/nginx/sites-enabled/
 ```
 
 Ich erstelle ein Verzeichnis für die Certbot-Herausforderungen:
+
 ```bash
 mkdir -p /var/www/certbot
 ```
 
 Ich überprüfe die Konfiguration von Nginx und starte sie neu:
+
 ```bash
 nginx -t && systemctl reload nginx
 ```
 
---- 
+---
 
 ### Abrufen des Let's-Encrypt-Zertifikats
 
 Jetzt kommt der wichtigste Teil: Ich starte Certbot, der sich mit Let's Encrypt verbinden und vorübergehend Dateien in `.well-known/acme-challenge` auf Port 80 veröffentlichen wird.
 
 Im LXC-Terminal gebe ich ein:
+
 ```bash
 certbot certonly --webroot -w /var/www/certbot -d immich.blonie.cloud
 ```
@@ -159,11 +174,13 @@ certbot certonly --webroot -w /var/www/certbot -d immich.blonie.cloud
 Ich folge den Anweisungen von Certbot. Wenn alles gut geht, landet das Zertifikat in `/etc/letsencrypt/live/immich.blonie.cloud/`.
 
 Nachdem ich das Zertifikat abgerufen habe, aktiviere ich SSL in Nginx:
+
 ```bash
 vim /etc/nginx/sites-available/immich.conf
 ```
 
 Ich modifiziere die Datei, damit sie so aussieht:
+
 ```nginx
 server {
     listen 80;
@@ -193,29 +210,32 @@ server {
 ```
 
 Ich überprüfe und starte Nginx neu:
+
 ```bash
 nginx -t && systemctl reload nginx
 ```
 
---- 
+---
 
 ### Automatisches Zertifikatserneuern
 
 Let's-Encrypt-Zertifikate sind nur 90 Tage gültig, also konfiguriere ich die automatische Erneuerung:
 
 Ich füge eine Crontab hinzu:
+
 ```bash
 crontab -e
 ```
 
 Ich füge die folgende Zeile hinzu:
+
 ```bash
 0 3 * * * certbot renew --quiet && systemctl reload nginx
 ```
 
 Jeden Tag um 3:00 Uhr wird das System versuchen, die Zertifikate zu erneuern und Nginx neu zu starten, wenn sich etwas geändert hat.
 
---- 
+---
 
 ### Router- und Cloudflare-Konfiguration
 
@@ -223,21 +243,22 @@ Jeden Tag um 3:00 Uhr wird das System versuchen, die Zertifikate zu erneuern und
 - In Cloudflare stelle ich SSL auf „Full (Strict)“, weil ich jetzt ein Zertifikat auf dem Server habe.
 - Ich überprüfe, ob in Cloudflare der CNAME-Eintrag für immich.blonie.cloud proxied ist.
 
---- 
+---
 
 ### Testen
 
 Auf meinem Telefon und einem anderen Gerät starte ich:
+
 ```bash
 curl -I https://immich.blonie.cloud
 ```
 
 Ich erhalte eine Antwort vom Immich-Server (200 oder einen anderen Code), aber jetzt über HTTPS.
 
---- 
+---
 
 > ### Bonus-Hinweise
-> 
+>
 > - Jetzt kann ich diesen LXC mit Nginx für andere LXC mit verschiedenen Diensten verwenden, indem ich einfach weitere Konfigurationsdateien mit anderen Domains und Ports hinzufüge.
 > - Man könnte auch Traefik oder Caddy in Betracht ziehen, die eingebaute Zertifikate haben und weniger manuelle Konfiguration erfordern, aber das ist vielleicht für ein anderes Mal.
 
@@ -256,18 +277,19 @@ vim /etc/pve/lxc/102.conf
 ```
 
 > Wenn ich diese Zeilen nicht hinzufüge, erhalte ich einen Fehler beim Starten des Docker-Containers :D
-> 
+>
 > ```bash
 > Error response from daemon: error gathering device information while adding custom device "/dev/net/tun": no such file or directory
 > ```
 
 > Und ich muss auch noch hinzufügen:
-> 
+>
 > ```bash
 > lxc.apparmor.profile: unconfined
 > ```
+>
 > Denn sonst wirft es einen Fehler aus:
-> 
+>
 > ```bash
 > Error response from daemon: failed to create task for container: failed to create shim task: OCI runtime create failed: unable to start container process: error during container init: open sysctl net.ipv4.ip_unprivileged_port_start file: reopen fd 8: permission denied
 > ```
@@ -282,7 +304,7 @@ cd openvpn-as
 Dann konfiguriere ich die `docker-compose.yml`-Datei:
 
 ```yaml
-version: '3.8'
+version: "3.8"
 
 services:
   openvpn-as:

@@ -23,6 +23,31 @@ stack: next.js, tailwindcss, typescript, mdx, vercel
 - `/blog` exports a `CollectionPage` that enumerates every localized post from `getPosts()`, while each article renders a `BlogPosting` plus `BreadcrumbList` to reinforce canonical paths.
 - `/projects` shares the portfolio as an `ItemList` of `CreativeWork`/`SoftwareApplication` entries so the same schema can power future feeds (RSS/JSON) without duplicating logic.
 
+## Content Taxonomy & Archives
+
+- All MDX front matter now accepts `tags`, `coverImage`, and `readingTimeMinutes`. Tags drive the archive, the cover image feeds OG builders, and the reading time override short-circuits the word-count heuristic when long shell dumps are present. Example:
+
+  ```mdx
+  ---
+  title: Proxmox - Part Two
+  description: Some description
+  date: 2025-11-15T18:00:00.000Z
+  tags: homelab, proxmox, macvlan, ddns, openvpn, cloudflare
+  coverImage: /assets/images/ct-100.png
+  readingTimeMinutes: 18
+  ---
+  ```
+
+- Migration steps for existing content under `content/posts/**`:
+
+  1.  Update the canonical `pl.mdx` front matter for every slug with the three fields above.
+  2.  Copy the same key/value pairs into each translated `[lang].mdx` file so localized metadata stays in sync (or translate tag labels if you want localized archives).
+  3.  Keep tags kebab/space friendly—`homelab`, `macvlan`, `cloudflare`, etc.—so `/blog/tags/[tag]` routes remain predictable.
+
+- `/blog/tags` lists every discovered tag with usage counts, while `/blog/tags/[tag]` renders a dedicated archive that reuses `PostsList` so search, keyboard control, and view transitions keep working. Each `PostItem` exposes linked tag pills and the article page mirrors them beneath the metadata row.
+
+- Programmatically, use `getTagSummaries()`/`getTagSummaryBySlug()` for tag clouds, `getPostsByTag()` for related content, and `getTagsForPost()` or `<TagBadge>` when you need linked UI chips.
+
 ## Accessibility QA
 
 1. `bun dev` and open both `/` and `/blog` in separate tabs so Lighthouse can evaluate the hero/Header and the search workflow.

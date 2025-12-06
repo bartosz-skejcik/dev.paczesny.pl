@@ -38,10 +38,10 @@ export default function Breadcrumbs() {
           const isLast = i === breadcrumbs.length - 1
 
           return (
-            <span key={`bred-${i}`} className="flex items-center">
-              <li className="mx-0.5 inline-flex items-center">/</li>
+            <li key={`bred-${i}`} className="flex items-center">
+              <span className="mx-0.5 inline-flex items-center">/</span>
 
-              <li className="inline-flex items-center">
+              <span className="inline-flex items-center">
                 {isLast ? (
                   <span aria-current="page">{text}</span>
                 ) : (
@@ -52,8 +52,8 @@ export default function Breadcrumbs() {
                     {text}
                   </Link>
                 )}
-              </li>
-            </span>
+              </span>
+            </li>
           )
         })}
 

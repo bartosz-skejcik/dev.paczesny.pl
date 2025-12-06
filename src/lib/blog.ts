@@ -6,11 +6,15 @@ import {
   SUPPORTED_LANGS,
   type SupportedLang,
 } from "@/lib/i18n"
+import { createTagSlug } from "@/lib/tags"
 
 export type Metadata = {
   title: string
   description: string
   date: string
+  tags?: string[]
+  coverImage?: string
+  readingTimeMinutes?: number
 }
 
 export type FrontmatterParseResult = {
@@ -23,6 +27,12 @@ export type MDXFileData = FrontmatterParseResult & {
   lang: SupportedLang
   availableLangs?: SupportedLang[]
   localizedMetadata?: Partial<Record<SupportedLang, Metadata>>
+}
+
+export type TagSummary = {
+  slug: string
+  label: string
+  count: number
 }
 
 const POSTS_ROOT = path.join(process.cwd(), "content", "posts")
@@ -76,6 +86,77 @@ export function getCanonicalPost(slug: string) {
   return getPostBySlug(slug, CANONICAL_LANG)
 }
 
+export function getTagSummaries(
+  preferredLang: SupportedLang = DEFAULT_FALLBACK_LANG
+): TagSummary[] {
+  const posts = getPosts(preferredLang)
+  const summaryMap = new Map<string, TagSummary>()
+
+  posts.forEach((post) => {
+    const tags = Array.from(new Set(getTagsForPost(post, preferredLang)))
+    tags.forEach((tag) => {
+      const slug = createTagSlug(tag)
+      if (!slug) {
+        return
+      }
+
+      const current = summaryMap.get(slug)
+      if (current) {
+        current.count += 1
+      } else {
+        summaryMap.set(slug, { slug, label: tag, count: 1 })
+      }
+    })
+  })
+
+  return Array.from(summaryMap.values()).sort((a, b) => {
+    if (b.count === a.count) {
+      return a.label.localeCompare(b.label)
+    }
+    return b.count - a.count
+  })
+}
+
+export function getTagSummaryBySlug(
+  tagSlug: string,
+  preferredLang: SupportedLang = DEFAULT_FALLBACK_LANG
+): TagSummary | null {
+  const normalizedSlug = createTagSlug(tagSlug)
+  if (!normalizedSlug) {
+    return null
+  }
+
+  return (
+    getTagSummaries(preferredLang).find(
+      (summary) => summary.slug === normalizedSlug
+    ) ?? null
+  )
+}
+
+export function getPostsByTag(
+  tagSlugOrLabel: string,
+  preferredLang: SupportedLang = DEFAULT_FALLBACK_LANG
+): MDXFileData[] {
+  const normalizedSlug = createTagSlug(tagSlugOrLabel)
+  return getPosts(preferredLang).filter((post) => {
+    return getTagsForPost(post, preferredLang).some(
+      (tag) => createTagSlug(tag) === normalizedSlug
+    )
+  })
+}
+
+export function getTagsForPost(
+  post: MDXFileData,
+  lang: SupportedLang = post.lang
+) {
+  const metadataForLang =
+    post.localizedMetadata?.[lang] ??
+    post.localizedMetadata?.[post.lang] ??
+    post.metadata
+
+  return metadataForLang.tags ?? post.metadata.tags ?? []
+}
+
 export function getPostSlugs(): string[] {
   if (!fs.existsSync(POSTS_ROOT)) {
     return []
@@ -121,19 +202,55 @@ export function parseFrontmatter(fileContent: string): FrontmatterParseResult {
   }
 
   const content = fileContent.replace(frontmatterRegex, "").trim()
-  const frontmatterLines = frontmatter.trim().split("\n")
+  const frontmatterLines = frontmatter
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
   const metadata: Partial<Metadata> = {}
 
   frontmatterLines.forEach((line) => {
-    const [key, ...values] = line.split(": ")
-    let value = values.join(": ").trim()
-    value = value.replace(/^['"](.*)['"]$/, "$1")
-    if (key && value) {
-      metadata[key.trim() as keyof Metadata] = value
+    const [rawKey, ...rest] = line.split(":")
+    if (!rawKey || rest.length === 0) {
+      return
     }
+
+    const key = rawKey.trim()
+    let value = rest.join(":").trim()
+    value = value.replace(/^["'](.*)["']$/, "$1")
+
+    if (!value) {
+      return
+    }
+
+    if (key === "tags") {
+      metadata.tags = parseListValue(value)
+      return
+    }
+
+    if (key === "readingTimeMinutes") {
+      const minutes = Number.parseFloat(value)
+      if (!Number.isNaN(minutes) && minutes > 0) {
+        metadata.readingTimeMinutes = minutes
+      }
+      return
+    }
+
+    metadata[key as keyof Metadata] = value as Metadata[keyof Metadata]
   })
 
   return { metadata: metadata as Metadata, content }
+}
+
+function parseListValue(value: string): string[] {
+  let normalized = value.trim()
+  if (normalized.startsWith("[") && normalized.endsWith("]")) {
+    normalized = normalized.slice(1, -1)
+  }
+
+  return normalized
+    .split(",")
+    .map((item) => item.trim().replace(/^["'](.*)["']$/, "$1"))
+    .filter(Boolean)
 }
 
 function readMDXFile(filePath: string): FrontmatterParseResult {

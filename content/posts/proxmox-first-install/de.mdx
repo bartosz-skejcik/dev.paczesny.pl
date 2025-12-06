@@ -2,6 +2,8 @@
 title: Proxmox - ein Weg durch die Hölle
 description: Die Geschichte eines Kampfes mit Proxmox, der mit einem epischen Plot-Twist endet. Die Installation von Immich in LXC, das Debuggen von Netzwerken, das Töten von Festplatten und die Stunden, die mit iptables verbracht werden - all das nur, um herauszufinden, dass das Telefon die ganze Zeit über die IP des Containers besetzt hatte.
 date: 2025-11-14T12:00:00.000Z
+tags: homelab, proxmox, lxc, docker, immich, networking
+coverImage: /assets/images/ct-100.png
 ---
 
 ## Einführung
@@ -13,6 +15,7 @@ Ich denke, dass die beste Lösung für den Anfang meiner Abenteuer mit diesem Te
 ### Ziele
 
 Ich habe mir 6 Ziele gesetzt:
+
 - Eine VM mit Ubuntu Server erstellen und darauf Docker mit meiner Website installieren
 - DDNS für mein Heimnetzwerk konfigurieren
 - Meine Domain an mein Portfolio anhängen, das auf dieser VM gehostet wird
@@ -94,9 +97,10 @@ wget -O .env https://github.com/immich-app/immich/releases/latest/download/examp
 3. Ich konfiguriere die `.env`-Datei.
 
 > Da ich diese 750-GB-Festplatte in zwei Partitionen aufgeteilt habe:
+>
 > - Die erste hat 250 GB und ist die Partition für den Immich-Speicher.
 > - Die zweite hat 100 GB und ist für die VMs auf Proxmox.
-> 
+>
 > Der Rest ist unzugewiesen, weil ich vorerst nicht mehr benötige.
 
 > Ich werde also diese erste Partition an das Dateisystem dieser VM anhängen und diese Speicherplatz für den Dateispeicher und Postgres verwenden :D
@@ -123,11 +127,12 @@ Und jetzt habe ich 15 GB.
 
 Beim Versuch, den Immich-Container zu starten, erhielt ich einen Fehler mit containerd.io (Version 2.x.x) im Zusammenhang mit `ip_unprivileged_port_start` und AppArmor. Das Problem stellte sich als [ein frischer Bug](https://forum.proxmox.com/threads/docker-inside-lxc-net-ipv4-ip_unprivileged_port_start-error.175437/) in Proxmox 9.0 heraus. Die Lösung bestand darin, containerd herunterzustufen, aber bevor ich überhaupt etwas tun konnte, musste ich zuerst den Internetzugang in LXC reparieren.
 
-Der Container hat keinen Internetzugang, obwohl ich von meinem Laptop aus pingen kann. 
+Der Container hat keinen Internetzugang, obwohl ich von meinem Laptop aus pingen kann.
 
 Das Problem lag in der Routing-Konfiguration - ich verwende WiFi auf Proxmox anstelle von Ethernet, also musste ich einen Proxy-ARP mit SNAT konfigurieren und entsprechende iptables-FORWARD-Regeln hinzufügen. Nachdem ich eine spezifische Route für die IP des Containers (`ip route add 192.168.1.100/32 dev vmbr0`) hinzugefügt hatte, funktionierte alles. Docker startete, Immich wurde gestartet und ist unter `http://192.168.1.100:2283` verfügbar...
 
 Nein, fast. Es stellte sich heraus, dass das Telefon die ganze Zeit über die IP des Containers besetzt hatte.
 
 ## Links
+
 - [https://youtu.be/lFzWDJcRsqo?si=2yiDTdhfHh3uUQSx](https://youtu.be/lFzWDJcRsqo?si=2yiDTdhfHh3uUQSx)

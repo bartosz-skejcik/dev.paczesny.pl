@@ -2,6 +2,8 @@
 title: Proxmox - droga przez mękę
 description: Historia walki z Proxmoxem, która kończy się epickim plottwistem. Stawianie Immicha w LXC, debugowanie sieci, zabijanie dysków i godziny spędzone na iptables – wszystko po to, żeby odkryć, że telefon przez cały czas miał zajęte IP kontenera.
 date: "2025-11-14T12:00:00.000Z"
+tags: homelab, proxmox, lxc, docker, immich, networking
+coverImage: /assets/images/ct-100.png
 ---
 
 ## Wprowadzenie
@@ -13,6 +15,7 @@ Wydaje mi się, że najlepszym rozwiązaniem jak na początek przygody z tym cac
 ### Cele
 
 Jako cel ustaliłem sobie 6 rzeczy:
+
 - Stworzyć VM-kę z Ubuntu Server i uruchomić na niej Dockera z moją stroną internetową
 - Skonfigurować DDNS dla sieci domowej
 - Podpiąć domenę do mojego portfolio hostowanego na tej VM-ce
@@ -61,7 +64,7 @@ Jako że nie mam miejsca w szafce z routerem, a chciałbym pobrać i skonfigurow
 
 Zacząłem od stworzenia lekkiej maszynki specjalnie pod Dockera, bo tego będę używał do postawienia Immicha (nie ma innej opcji w moim przypadku).
 
-```bash 
+```bash
 bash -c \"$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/docker.sh)\"
 ```
 
@@ -94,9 +97,10 @@ wget -O .env https://github.com/immich-app/immich/releases/latest/download/examp
 3. Konfiguruję `.env`.
 
 > Jako że ten 750-gigowy dysk podzieliłem na 2 partycje:
+>
 > - Pierwsza ma 250 G i jest to partycja na storage Immicha.
 > - Druga ma 100 G i jest ona na VM-ki na Proxmoxie.
-> 
+>
 > Reszta jest jako `unallocated`, bo po co więcej na razie.
 
 > To zmapuję tą pierwszą partycję do FS-a tej VM-ki i użyję tej przestrzeni na file storage i Postgres-a :D
@@ -123,7 +127,7 @@ I już mamy 15 G.
 
 Przy próbie uruchomienia kontenera z Immichem dostałem błąd z containerd.io (wersja 2.x.x) związany z `ip_unprivileged_port_start` i AppArmor. Problem okazał się być [świeżym bugiem](https://forum.proxmox.com/threads/docker-inside-lxc-net-ipv4-ip_unprivileged_port_start-error.175437/) w Proxmoxie 9.0. Rozwiązaniem było zrobienie downgrade'a containerd, ale zanim w ogóle mogłem cokolwiek zrobić, musiałem najpierw naprawić dostęp do internetu w LXC.
 
-Kontener nie ma dostępu do neta, mimo że jest ping z laptopa. 
+Kontener nie ma dostępu do neta, mimo że jest ping z laptopa.
 
 Problem był w konfiguracji routingu – używam WiFi na Proxmoxie zamiast kabla Ethernet, więc musiałem skonfigurować proxy ARP z SNAT i dodać odpowiednie reguły iptables FORWARD. Po dodaniu specyficznej trasy dla IP kontenera (`ip route add 192.168.1.100/32 dev vmbr0`) wszystko zadziałało. Docker się uruchomił, Immich wstał i jest dostępny pod `http://192.168.1.100:2283`...
 
@@ -145,4 +149,5 @@ JA PIERDOLĘ! I na chuj mi to kurwa było???
 KURWAAAAAAAAAAAA
 
 ## Linki
+
 - [https://youtu.be/lFzWDJcRsqo?si=2yiDTdhfHh3uUQSx](https://youtu.be/lFzWDJcRsqo?si=2yiDTdhfHh3uUQSx)

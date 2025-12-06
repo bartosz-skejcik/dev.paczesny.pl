@@ -2,6 +2,8 @@
 title: Proxmox - deuxième partie
 description: Quelque description
 date: 2025-11-15T18:00:00.000Z
+tags: homelab, proxmox, macvlan, ddns, openvpn, cloudflare
+coverImage: /assets/images/ct-100.png
 ---
 
 ## Introduction
@@ -17,6 +19,7 @@ Ci-dessous, pour rappel, j'ai une liste des choses que je veux faire avec Proxmo
 ### Objectifs
 
 J'ai défini 6 objectifs :
+
 - Créer une VM avec Ubuntu Server et exécuter Docker avec mon site web
 - **Configurer DDNS pour mon réseau domestique**
 - Attacher mon domaine à mon portfolio hébergé sur cette VM
@@ -39,6 +42,7 @@ Bien, j'ai acheté le domaine. Maintenant, il est temps de configurer le script 
 J'ai créé une petite LVM : 1 Go de RAM, 4 Go de disque, 1 vCPU
 
 1. Je crée un dossier où les données seront enregistrées :
+
 ```bash
 mkdir data
 chown 1000 -R data
@@ -48,6 +52,7 @@ chmod u+r+w+x -R data
 2. Je mets à jour le fichier `data/config.json` pour Cloudflare
 
 3. Je crée un `docker-compose.yml` :
+
 ```yml
 version: "3.8"
 
@@ -67,6 +72,7 @@ services:
 ```
 
 4. Je lance le conteneur Docker :
+
 ```bash
 docker compose up -d
 ```
@@ -101,7 +107,7 @@ J'installe Nginx et certbot (l'outil pour obtenir des certificats Let's Encrypt)
 apt install -y nginx certbot python3-certbot-nginx vim
 ```
 
---- 
+---
 
 ### Configuration de Nginx en tant que reverse proxy pour Immich
 
@@ -153,7 +159,7 @@ Je vérifie la configuration Nginx et je redémarre :
 nginx -t && systemctl reload nginx
 ```
 
---- 
+---
 
 ### Obtention du certificat Let's Encrypt
 
@@ -209,7 +215,7 @@ Je vérifie et je redémarre Nginx :
 nginx -t && systemctl reload nginx
 ```
 
---- 
+---
 
 ### Renouvellement automatique du certificat
 
@@ -229,7 +235,7 @@ J'ajoute la ligne suivante :
 
 Chaque jour à 3h00, le système essayera de renouveler les certificats et de recharger Nginx si nécessaire.
 
---- 
+---
 
 ### Configuration du routeur et de Cloudflare
 
@@ -237,7 +243,7 @@ Chaque jour à 3h00, le système essayera de renouveler les certificats et de re
 - Dans Cloudflare, je configure SSL sur « Full (Strict) », car maintenant j'ai un certificat sur le serveur.
 - Je vérifie si dans Cloudflare l'enregistrement CNAME pour immich.blonie.cloud est proxifié.
 
---- 
+---
 
 ### Test
 
@@ -249,10 +255,10 @@ curl -I https://immich.blonie.cloud
 
 Je reçois une réponse du serveur Immich (200 ou un autre code), mais maintenant en HTTPS.
 
---- 
+---
 
 > ### Remarques bonus
-> 
+>
 > - Maintenant, je peux utiliser ce LXC avec Nginx pour d'autres LXC avec différents services, en ajoutant simplement d'autres fichiers de configuration avec d'autres domaines et ports.
 > - On peut également considérer Traefik ou Caddy, qui ont des certificats intégrés et moins de configuration manuelle, mais c'est pour une autre fois.
 
@@ -271,18 +277,19 @@ vim /etc/pve/lxc/102.conf
 ```
 
 > Si je n'ajoute pas ces lignes, j'obtiens une erreur lors de l'installation de Docker :D
-> 
+>
 > ```bash
 > Error response from daemon: error gathering device information while adding custom device "/dev/net/tun": no such file or directory
 > ```
 
 > Et il faut également ajouter dans mon cas :
-> 
+>
 > ```bash
 > lxc.apparmor.profile: unconfined
 > ```
+>
 > Sinon, j'obtiens une erreur comme celle-ci :
-> 
+>
 > ```bash
 > Error response from daemon: failed to create task for container: failed to create shim task: OCI runtime create failed: unable to start container process: error during container init: open sysctl net.ipv4.ip_unprivileged_port_start file: reopen fd 8: permission denied
 > ```
@@ -297,7 +304,7 @@ cd openvpn-as
 Ensuite, je configure le fichier `docker-compose.yml` :
 
 ```yaml
-version: '3.8'
+version: "3.8"
 
 services:
   openvpn-as:

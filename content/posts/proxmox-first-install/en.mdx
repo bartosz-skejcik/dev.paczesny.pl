@@ -2,6 +2,8 @@
 title: Proxmox - A Path of Struggle
 description: The story of a fight with Proxmox that ends with an epic plot twist. Setting up Immich in LXC, debugging the network, killing disks, and hours spent on iptables - all to discover that the phone had the container's IP occupied the whole time.
 date: 2025-11-14T12:00:00.000Z
+tags: homelab, proxmox, lxc, docker, immich, networking
+coverImage: /assets/images/ct-100.png
 ---
 
 ## Introduction
@@ -13,6 +15,7 @@ I think the best solution for starting my adventure with this thing is to go wit
 ### Goals
 
 I've set six goals for myself:
+
 - Create a VM with Ubuntu Server and run Docker with my website on it
 - Configure DDNS for my home network
 - Connect my domain to my portfolio hosted on this VM
@@ -94,9 +97,10 @@ wget -O .env https://github.com/immich-app/immich/releases/latest/download/examp
 3. I configure `.env`.
 
 > Since I divided this 750-gig disk into 2 partitions:
+>
 > - The first one has 250 G and is the storage partition for Immich.
 > - The second one has 100 G and is for the VM on Proxmox.
-> 
+>
 > The rest is unallocated, because I don't need more for now.
 
 > So, I'll map this first partition to the FS of this VM and use this space for file storage and Postgres :D
@@ -145,4 +149,5 @@ FUCK! And what was all this crap for???
 FUCK!!!!
 
 ## Links
+
 - [https://youtu.be/lFzWDJcRsqo?si=2yiDTdhfHh3uUQSx](https://youtu.be/lFzWDJcRsqo?si=2yiDTdhfHh3uUQSx)

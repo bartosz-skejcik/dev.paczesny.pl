@@ -5,7 +5,12 @@ import {
   getLanguageConfig,
   type SupportedLang,
 } from "@/lib/i18n"
-import { getAvailableLanguages, getPostBySlug, getPostSlugs } from "@/lib/blog"
+import {
+  getAvailableLanguages,
+  getPostBySlug,
+  getPostSlugs,
+  getTagSummaries,
+} from "@/lib/blog"
 import { runtimeAbsoluteUrl } from "@/lib/runtime-url"
 
 type ChangeFrequency = MetadataRoute.Sitemap[number]["changeFrequency"]
@@ -28,6 +33,12 @@ const STATIC_ROUTES: StaticRoute[] = [
     path: "/blog",
     changeFrequency: "weekly",
     priority: 0.8,
+    languages: [DEFAULT_FALLBACK_LANG],
+  },
+  {
+    path: "/blog/tags",
+    changeFrequency: "weekly",
+    priority: 0.6,
     languages: [DEFAULT_FALLBACK_LANG],
   },
   {
@@ -77,7 +88,15 @@ export default function sitemap(): MetadataRoute.Sitemap {
     }
   })
 
-  return routes.concat(postEntries.filter(Boolean) as MetadataRoute.Sitemap)
+  const tagEntries = getTagSummaries().map((tag) => ({
+    url: runtimeAbsoluteUrl(`/blog/tags/${tag.slug}`),
+    changeFrequency: "weekly" as ChangeFrequency,
+    priority: 0.5,
+  }))
+
+  return routes
+    .concat(postEntries.filter(Boolean) as MetadataRoute.Sitemap)
+    .concat(tagEntries)
 }
 
 function buildLanguageAlternates(
