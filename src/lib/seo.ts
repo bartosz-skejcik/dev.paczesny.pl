@@ -26,6 +26,7 @@ type MetadataInput = {
   type?: "website" | "article"
   alternates?: Record<string, string>
   twitterHandle?: string
+  keywords?: string[]
 }
 
 export function buildLocalizedMetadata({
@@ -38,6 +39,7 @@ export function buildLocalizedMetadata({
   type = "website",
   alternates,
   twitterHandle = DEFAULT_TWITTER_HANDLE,
+  keywords = [],
 }: MetadataInput): Metadata {
   const { hrefLang, openGraphLocale, dir } = getLanguageConfig(lang)
   const canonical = absoluteUrl(path)
@@ -57,6 +59,7 @@ export function buildLocalizedMetadata({
   return {
     title,
     description,
+    keywords: keywords.length ? keywords : undefined,
     alternates: {
       canonical,
       languages,
