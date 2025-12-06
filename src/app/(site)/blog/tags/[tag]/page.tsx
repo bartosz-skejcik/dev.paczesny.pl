@@ -5,6 +5,11 @@ import { PostsList } from "@/components/posts-list"
 import { getPostsByTag, getTagSummaries, getTagSummaryBySlug } from "@/lib/blog"
 import { DEFAULT_FALLBACK_LANG } from "@/lib/i18n"
 import { buildLocalizedMetadata } from "@/lib/seo"
+import {
+  buildBreadcrumbSchema,
+  buildCollectionPageSchema,
+  createJsonLd,
+} from "@/lib/structured-data"
 import Link from "next/link"
 
 const sortByDateDesc = (posts: ReturnType<typeof getPostsByTag>) =>
@@ -57,9 +62,39 @@ export default async function TagArchivePage({ params }: PageProps) {
   }
 
   const sortedPosts = sortByDateDesc(posts)
+  const tagJsonLd = createJsonLd(
+    buildCollectionPageSchema({
+      name: `#${summary.label.toLowerCase()} posts`,
+      description: `Articles tagged ${summary.label}.`,
+      path: `/blog/tags/${summary.slug}`,
+      items: sortedPosts.map((post) => ({
+        name: post.metadata.title,
+        description: post.metadata.description,
+        path: `/blog/${post.lang}/${post.slug}`,
+        lang: post.lang,
+        datePublished: post.metadata.date,
+      })),
+    }),
+    buildBreadcrumbSchema([
+      { name: "Home", path: "/" },
+      { name: "Blog", path: "/blog" },
+      { name: "Tags", path: "/blog/tags" },
+      {
+        name: `#${summary.label.toLowerCase()}`,
+        path: `/blog/tags/${summary.slug}`,
+      },
+    ])
+  )
 
   return (
     <main className="animate-fade-in-up relative">
+      <script
+        type="application/ld+json"
+        suppressHydrationWarning
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(tagJsonLd),
+        }}
+      />
       <h1 className="text-4xl font-bold mb-4 text-white">
         <span className="text-accent mr-2">*</span>
         <ScrambleText text={`#${summary.label.toLowerCase()}`} />

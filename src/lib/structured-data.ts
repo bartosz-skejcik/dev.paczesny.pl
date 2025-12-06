@@ -67,6 +67,16 @@ type ProjectSchemaInput = {
   status?: string
 }
 
+type TagListSchemaInput = {
+  path: string
+  description?: string
+  tags: Array<{
+    label: string
+    slug: string
+    count: number
+  }>
+}
+
 export function buildPersonSchema({
   name = "Bartłomiej Paczesny",
   alternateName = "Bartek Paczesny",
@@ -237,6 +247,31 @@ export function buildProjectsItemList(
         keywords: project.technologies.join(", "),
         applicationCategory: project.role,
         developmentStatus: project.status,
+      },
+    })),
+  }
+}
+
+export function buildTagListSchema({
+  path,
+  description = "Browse blog tags and their post counts.",
+  tags,
+}: TagListSchemaInput): SchemaNode {
+  return {
+    "@type": "ItemList",
+    name: "Blog Tags",
+    description,
+    url: absoluteUrl(path),
+    numberOfItems: tags.length,
+    itemListElement: tags.map((tag, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      item: {
+        "@type": "DefinedTerm",
+        name: `#${tag.label.toLowerCase()}`,
+        description: `${tag.count} post${tag.count === 1 ? "" : "s"}`,
+        termCode: tag.slug,
+        url: absoluteUrl(`/blog/tags/${tag.slug}`),
       },
     })),
   }

@@ -5,8 +5,22 @@ import { TagBadge } from "@/components/tag-badge"
 import { getTagSummaries } from "@/lib/blog"
 import { DEFAULT_FALLBACK_LANG } from "@/lib/i18n"
 import { buildLocalizedMetadata } from "@/lib/seo"
+import { buildTagListSchema, createJsonLd } from "@/lib/structured-data"
 
 const tagSummaries = getTagSummaries()
+const tagListJsonLd = tagSummaries.length
+  ? createJsonLd(
+      buildTagListSchema({
+        path: "/blog/tags",
+        description: "Filter dev.paczesny.pl posts by topic.",
+        tags: tagSummaries.map((tag) => ({
+          label: tag.label,
+          slug: tag.slug,
+          count: tag.count,
+        })),
+      })
+    )
+  : null
 
 export const metadata: Metadata = buildLocalizedMetadata({
   lang: DEFAULT_FALLBACK_LANG,
@@ -19,6 +33,15 @@ export const metadata: Metadata = buildLocalizedMetadata({
 export default async function TagsIndexPage() {
   return (
     <main className="animate-fade-in-up relative">
+      {tagListJsonLd && (
+        <script
+          type="application/ld+json"
+          suppressHydrationWarning
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(tagListJsonLd),
+          }}
+        />
+      )}
       <h1 className="text-4xl font-bold mb-4 text-white">
         <span className="text-accent mr-2">*</span>
         <ScrambleText text="tags" />
