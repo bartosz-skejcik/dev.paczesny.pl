@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 import { ScrambleText } from "@/components/scramble-text"
 import { PostsList } from "@/components/posts-list"
 import { getPosts } from "@/lib/blog"
+import { BLOG_FEED_DESCRIPTION } from "@/lib/feed"
 import { DEFAULT_FALLBACK_LANG } from "@/lib/i18n"
 import { buildLocalizedMetadata } from "@/lib/seo"
 import { buildCollectionPageSchema, createJsonLd } from "@/lib/structured-data"
@@ -14,7 +15,7 @@ const posts = getPosts().sort(
 const blogCollectionJsonLd = createJsonLd(
   buildCollectionPageSchema({
     name: "Blog",
-    description: "Writings on programming, computer science, and more.",
+    description: BLOG_FEED_DESCRIPTION,
     path: "/blog",
     items: posts.map((post) => ({
       name: post.metadata.title,
@@ -73,7 +74,7 @@ export default async function BlogPage() {
 export const metadata: Metadata = buildLocalizedMetadata({
   lang: DEFAULT_FALLBACK_LANG,
   title: "Blog",
-  description: "Writings on programming, computer science, and more.",
+  description: BLOG_FEED_DESCRIPTION,
   path: "/blog",
   openGraphImagePath: "/og/home?title=blog",
 })

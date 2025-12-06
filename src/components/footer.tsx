@@ -51,6 +51,8 @@ interface FooterProps {
 }
 
 const links = [
+  { title: "rss", href: "/feed.xml" },
+  { title: "json feed", href: "/feed.json" },
   { title: "email", href: "mailto:bartek@paczesny.pl" },
   { title: "x.com", href: "https://x.com/_j5on" },
   { title: "github", href: "https://github.com/bartosz-skejcik" },

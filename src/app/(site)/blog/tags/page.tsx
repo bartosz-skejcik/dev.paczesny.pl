@@ -43,21 +43,22 @@ export default async function TagsIndexPage() {
       {tagSummaries.length > 0 && (
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {tagSummaries.map((tag) => (
-            <Link
-              href={`/blog/tags/${tag.slug}`}
-              key={tag.slug}
-              className="border border-neutral-800 p-4 flex flex-col gap-3 hover:border-accent/40 transition-colors"
-            >
-              <div className="flex items-center justify-between">
-                <TagBadge tag={tag.label} />
-                <span className="text-xs uppercase tracking-wide text-neutral-500">
-                  {tag.count} {tag.count === 1 ? "post" : "posts"}
-                </span>
-              </div>
-              <p className="text-sm text-neutral-400">
-                Browse all articles filed under #{tag.label.toLowerCase()}.
-              </p>
-            </Link>
+            <li key={tag.slug}>
+              <Link
+                href={`/blog/tags/${tag.slug}`}
+                className="border border-neutral-800 p-4 flex flex-col gap-3 hover:border-accent/40 transition-colors"
+              >
+                <div className="flex items-center justify-between">
+                  <TagBadge tag={tag.label} interactive={false} />
+                  <span className="text-xs uppercase tracking-wide text-neutral-500">
+                    {tag.count} {tag.count === 1 ? "post" : "posts"}
+                  </span>
+                </div>
+                <p className="text-sm text-neutral-400">
+                  Browse all articles filed under #{tag.label.toLowerCase()}.
+                </p>
+              </Link>
+            </li>
           ))}
         </ul>
       )}

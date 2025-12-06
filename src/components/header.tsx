@@ -1,6 +1,7 @@
 import { ScrambleText } from "@/components/scramble-text"
 import { MapPin, Building2 } from "lucide-react"
 import Image from "next/image"
+import Link from "next/link"
 
 export function Header() {
   const age = new Date().getFullYear() - 2005
@@ -36,6 +37,22 @@ export function Header() {
         and i live on the terminal. if i&apos;m not coding, i&apos;m probably
         playing football, reading the Witcher series or skateboarding.
       </p>
+      <div className="flex items-center gap-3 text-xs uppercase tracking-wide text-neutral-500">
+        <span>subscribe</span>
+        <Link
+          href="/feed.xml"
+          className="text-neutral-300 hover:text-accent transition-colors duration-200"
+        >
+          rss
+        </Link>
+        <span className="text-neutral-600">/</span>
+        <Link
+          href="/feed.json"
+          className="text-neutral-300 hover:text-accent transition-colors duration-200"
+        >
+          json feed
+        </Link>
+      </div>
     </header>
   )
 }

@@ -16,6 +16,16 @@ stack: next.js, tailwindcss, typescript, mdx, vercel
 - Use `buildLocalizedMetadata` from `src/lib/seo.ts` inside each page or route to emit locale-aware `<title>`, `<meta name="description">`, Open Graph, Twitter, and `hreflang` alternates. Pass the route path (`/blog`, `/projects`, etc.) and an optional `openGraphImagePath`; the helper resolves canonical URLs via `https://dev.paczesny.pl`.
 - Blog posts derive alternates automatically by inspecting `getAvailableLanguages(slug)`. Each detected translation becomes a canonical URL of the form `https://dev.paczesny.pl/blog/{lang}/{slug}` with `hreflang` codes populated from `getLanguageConfig`. Adding or removing a `[lang].mdx` file instantly updates the sitemap, metadata, and `<link rel="alternate">` output with no extra wiring.
 
+## Syndication Feeds
+
+- Subscribe via `/feed.xml` (RSS 2.0) or `/feed.json` (JSON Feed 1.1). Both routes reuse the multi-locale metadata assembled in [src/lib/feed.ts](src/lib/feed.ts) so every translated MDX file emits its own entry with proper `hreflang` alternates, tags, and cover image references.
+- Feed metadata stays consistent with `/blog` by sharing `BLOG_FEED_DESCRIPTION`, ensuring copy updates propagate to schema.org, RSS, and JSON feeds simultaneously.
+- Promotion happens in both the hero header and footer so crawlers and readers discover the feeds without relying on auto-discovery alone.
+- Validation workflow:
+  1. `NEXT_PUBLIC_SITE_URL=http://localhost:3000 bun dev`
+  2. Inspect `http://localhost:3000/feed.xml` / `feed.json` to confirm entries per language and absolute URLs.
+  3. Paste the public feed URL into https://validator.w3.org/feed/ for W3C validation and add the same URL inside https://feedly.com/i/myfeed to verify ingestion.
+
 ## Structured Data
 
 - Reusable builders in [src/lib/structured-data.ts](src/lib/structured-data.ts) output JSON-LD nodes for `Person`, `WebSite`, `CollectionPage`, `BlogPosting`, `BreadcrumbList`, and the projects `ItemList`. Import helpers such as `buildPersonSchema()` and wrap them with `createJsonLd()` before inlining via `<script type="application/ld+json">`.
