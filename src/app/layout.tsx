@@ -4,6 +4,7 @@ import { Geist_Mono } from "next/font/google"
 import "./globals.css"
 import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
+import { ShortcutGuide } from "@/components/shortcut-guide"
 import { Analytics } from "@vercel/analytics/next"
 import { SpeedInsights } from "@vercel/speed-insights/next"
 import { DEFAULT_SEO_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/seo"
@@ -44,6 +45,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body className={`antialiased min-h-screen`}>
         <div className="max-w-4xl mx-auto px-4 py-8">
           <Navbar />
+          <ShortcutGuide />
           {children}
           <Footer username="bartosz-skejcik" />
           <Analytics />
