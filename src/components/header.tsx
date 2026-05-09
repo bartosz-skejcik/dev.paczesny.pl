@@ -52,6 +52,9 @@ export function Header() {
         >
           json feed
         </Link>
+        <Link href="https://emedics.pl" className="hidden">
+          emedics
+        </Link>
       </div>
     </header>
   )
