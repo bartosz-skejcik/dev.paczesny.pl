@@ -1,45 +1,59 @@
-import "./globals.css";
-import type { Metadata } from "next";
-import { Inter } from "next/font/google";
-import { Sidebar } from "@components/Sidebar";
-import { Footer } from "@components/Footer";
-import { twMerge } from "tailwind-merge";
-import { getUser } from "@/actions/user";
-import { RootProviders } from "./providers";
+import type { Metadata } from "next"
+import type { ReactNode } from "react"
+import { Geist_Mono } from "next/font/google"
+import "./globals.css"
+import { Navbar } from "@/components/navbar"
+import { Footer } from "@/components/footer"
+import { ShortcutGuide } from "@/components/shortcut-guide"
+import { Analytics } from "@vercel/analytics/next"
+import { SpeedInsights } from "@vercel/speed-insights/next"
+import { Analytics as PaczesnyAnalytics } from "@paczesny/analytics"
+import { DEFAULT_SEO_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/seo"
+import { DEFAULT_FALLBACK_LANG, getLanguageConfig } from "@/lib/i18n"
 
-const inter = Inter({
-    subsets: ["latin"],
-    weight: ["100", "200", "300", "400", "500", "600", "700", "800", "900"],
-});
+const geistMono = Geist_Mono({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-geist-mono",
+})
+
+const fallbackLocale = getLanguageConfig(DEFAULT_FALLBACK_LANG)
 
 export const metadata: Metadata = {
-    title: "Bartek Paczesny - Developer",
-    description:
-        "Bartek Paczesny is a developer, writer and speaker. He is a digital nomad and travels around the world while working remotely.",
-};
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: SITE_NAME,
+    template: `%s | ${SITE_NAME}`,
+  },
+  description: DEFAULT_SEO_DESCRIPTION,
+  robots: {
+    index: true,
+    follow: true,
+    "max-video-preview": -1,
+    "max-image-preview": "large",
+    "max-snippet": -1,
+  },
+}
 
-export default async function RootLayout({
-    children,
-}: {
-    children: React.ReactNode;
-}) {
-    const { data } = await getUser();
-    return (
-        <html lang="en">
-            <body
-                className={twMerge(
-                    inter.className,
-                    "flex h-screen overflow-hidden bg-neutral-950 antialiased",
-                )}
-            >
-                <Sidebar user={data.user} />
-                <div className="flex-1 overflow-y-auto bg-neutral-950 lg:pl-2 lg:pt-2">
-                    <div className="min-h-screen flex-1 overflow-y-auto border border-transparent bg-neutral-900 lg:rounded-tl-xl lg:border-neutral-800">
-                        <RootProviders>{children}</RootProviders>
-                        <Footer />
-                    </div>
-                </div>
-            </body>
-        </html>
-    );
+export default function RootLayout({ children }: { children: ReactNode }) {
+  return (
+    <html
+      lang={fallbackLocale.htmlLang}
+      dir={fallbackLocale.dir}
+      data-locale={DEFAULT_FALLBACK_LANG}
+      className={geistMono.className}
+    >
+      <body className={`antialiased min-h-screen`}>
+        <div className="max-w-4xl mx-auto px-4 py-8">
+          <Navbar />
+          <ShortcutGuide />
+          {children}
+          <Footer username="bartosz-skejcik" />
+          <Analytics />
+          <SpeedInsights />
+          <PaczesnyAnalytics siteId="por_live_8343" />
+        </div>
+      </body>
+    </html>
+  )
 }

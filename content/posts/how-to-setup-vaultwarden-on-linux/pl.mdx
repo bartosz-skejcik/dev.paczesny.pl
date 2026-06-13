@@ -1,0 +1,255 @@
+---
+title: Jak skonfigurować serwer VaultWarden'a na Linuxie
+description: "Przygotowałem krok po kroku, jak skonfigurować serwer Vaultwarden na Proxmoxie z Dockerem i Nginx, aby mieć bezpieczne, szyfrowane hasła dostępne przez własną domenę."
+date: 2025-12-08T21:18:00.000Z
+tags: homelab, proxmox, lxc, docker, vaultwarder, networking, password-manager
+coverImage: /assets/images/vm-create.png
+---
+
+## Wprowadzenie
+
+Siemanko! Tworze ten wpis jako kolejna część moich zmagań z Proxmoxem ALE również jako oddzielny post o charakterze poradnikowym. Postaram się przedstawić wszystko w jak najbardziej zrozumiały i prosty sposób lecz jako, że dopiero zaczynam z pisaniem blogów to nie spodziewaj się żadnych fajerwerków. Coś tu mogę pominąć, o czymś moge nie wspomnieć ale myśle, że główną idee przedstawię. Jeżeli nie widziałeś [poprzednich](/blog/pl/proxmox-first-install) wpisów to zachęcam do przeczytania.
+
+W tym poście dowiesz się w jaki sposób udało mi się uruchomić Vaultwarden'a na maszynie z systemem Linux, a dokładniej to jakiś tam Ubuntu czy Debian.
+
+## Tworzenie maszyny wirtualnej
+
+Jako że w tej serii używam Proxmoxa to na nim będę tworzyć maszyne wirtualną. Jeżeli jednak, używasz VPS'a albo zwykłego serwerka ze stałym IP to możesz pominąć ten krok.
+
+### Konfiguracja parametrów maszyny oraz sieci
+
+Do stworzenia maszyny wirtualnej używam skryptu z [Proxmox VE Helper-Scripts](https://community-scripts.github.io/ProxmoxVE/scripts?id=docker&category=Containers+%26+Docker). Zmodyfikowałem go troszkę w taki sposób, że gdy maszyna jest już utworzona to uruchamia się moja "mini-funkcja", która zmienia jej konfigurację sieciową. Zrobiłem to w taki sposób ponieważ serwer Proxmox ma bezprzewodową kartę sieciową, co oznacza że bridge nie działają i używam `macvlan`'a.
+
+Parametry maszynki na której będzie uruchomiony Docker z Vaultwarden'em ma następujące parametry:
+```
+ID: 104
+vCPU: 2
+RAM: 2GB
+Disk: 5GB
+```
+
+![Konfigurator LXC na Proxmoxie](/assets/images/vm-create.png)
+
+Konfigurator podczas instalowania dockera zapytał mnie czy chciałbym zainstalować Docker Compose v2, na które się zgodziłem. Następnie zapytał czy ma doinstalować portainer'a oraz agenta do portainer'a na co już nie wyraziłem zgody.
+
+### Konfiguracja kontenera
+
+Po stworzeniu maszyny wirtualnej zabieram się za stworzenie potrzebnych folderów oraz plików do uruchomienia kontenera.
+
+Zaczynam od stworzenia folderu:
+
+```bash
+mkdir ~/vaultwarden
+cd ~/vaultwarden
+mkdir vw-data
+```
+Folder `vw-data` będzie później zawierał zaszyfrowaną bazę danych, załączniki i ustawienia Vaultwarden'a.
+
+Następnie tworze plik `docker-compose.yml` i wklejam do niego następującą konfigurację:
+```yaml
+services:
+  vaultwarden:
+    image: vaultwarden/server:1.34.3
+    container_name: vaultwarden
+    restart: always
+    ports:
+      - "80:80"    # Expose HTTP on host port 80
+      - "3012:3012" # WebSocket notifications
+    environment:
+      # - WEBSOCKET_ENABLED=true # Disable WebSocket if not needed or if causing issues
+      # Admin token will be added here later
+      # ADMIN_TOKEN: 'YOUR_SECURE_ADMIN_TOKEN_HASH'
+      # Set timezone (Important for logs and Fail2Ban)
+      TZ: "Europe/Warsaw" # Adjust this to your time zone
+    volumes:
+      - ./vw-data:/data
+      # Mounts for time zone (Important for correct log times -> Fail2Ban)
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+```
+
+Po zapisaniu pliku, klasycznie, uruchamiam kontenerek :D
+```bash
+docker compose up -d
+```
+
+## Konfiguracja Reverse Proxy
+
+Teraz skonfigurujmy Nginx'a tak, aby dostęp do Vaultwarden'a był możliwy za pośrednictwem naszej domeny i aby automatycznie otrzymywał certyfikat SSL
+
+### Generowanie certyfikatu SSL
+
+Najpierw tworzymy plik konfiguracyjny w `/etc/nginx/sites-available/vault.conf`:
+```nginx
+server {
+    listen 80;
+    server_name vault.blonie.cloud;
+
+    location / {
+        proxy_pass http://192.168.1.100:2283;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Let's Encrypt challenge location
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+}
+```
+
+Następnie, aktywujemy witrynę wykonując to polecenie:
+```bash
+ln -s /etc/nginx/sites-available/vault.conf /etc/nginx/sites-enabled/
+```
+
+Jeżeli to pierwsza domena na tym reverse proxy to tworzymy jeszcze folder dla challengow od certbota:
+```bash
+mkdir -p /var/www/certbot
+```
+
+Gdy to już mamy zrobione to sprawdzamy poprawność konfiguracji i restartujemy nginx'a:
+```bash
+nginx -t && systemctl reload nginx
+```
+
+Teraz pora na wygenerowanie certyfikatu SSL za pomocą certbot'a. Jeżeli to twój pierwszy raz kiedy używasz certbota lub nie wiesz jak stworzyć reverse proxy to odsyłam do [tego post'a](/blog/pl/proxmox-czesc-druga#przygotowanie-lxc-na-proxmoxie) gdzie pokazuje jak to robię.
+
+Teraz odpalam certbota, który połączy się z Let's Encrypt i wyeksponuje tymczasowo pliki w `.well-known/acme-challenge` na porcie 80
+
+> Pamiętajcie, że domena w tym momencie musi już kierować na ten server z reverse proxy.
+
+```bash
+certbot certonly --webroot -w /var/www/certbot -d vault.domena.pl
+```
+
+Przechodzę przez zautomatyzowaną konfiguracje od certbot'a. Jeśli wszystko pójdzie dobrze, certyfikat trafia do `/etc/letsencrypt/live/vault.domena.pl/`.
+
+```shell
+root@nginx-reverse-proxy:~# certbot certonly --webroot -w /var/www/certbot -d vault.blonie.cloud
+Saving debug log to /var/log/letsencrypt/letsencrypt.log
+Requesting a certificate for vault.blonie.cloud
+
+Successfully received certificate.
+Certificate is saved at: /etc/letsencrypt/live/vault.blonie.cloud/fullchain.pem
+Key is saved at:         /etc/letsencrypt/live/vault.blonie.cloud/privkey.pem
+This certificate expires on 2026-03-08.
+These files will be updated when the certificate renews.
+Certbot has set up a scheduled task to automatically renew this certificate in the background.
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+If you like Certbot, please consider supporting our work by:
+ * Donating to ISRG / Let's Encrypt:   https://letsencrypt.org/donate
+ * Donating to EFF:                    https://eff.org/donate-le
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+root@nginx-reverse-proxy:~#
+```
+
+Po otrzymaniu certyfikatu od certbota, włączam SSL w nginx'ie:
+```bash
+vim /etc/nginx/sites-available/vault.conf
+```
+
+```nginx
+# /etc/nginx/sites-available/vault.conf
+server {
+    listen 80;
+    server_name vault.blonie.cloud;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name vault.blonie.cloud;
+
+    ssl_certificate /etc/letsencrypt/live/vault.blonie.cloud/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/vault.blonie.cloud/privkey.pem;
+    ssl_trusted_certificate /etc/letsencrypt/live/vault.blonie.cloud/chain.pem;
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+
+    location / {
+        proxy_pass http://192.168.1.104:80;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+KLASYCZNIE, testujemy konfigurację i reloadujemy nginx'a:
+```bash
+nginx -t && systemctl reload nginx
+```
+
+Otwórz przeglądarkę i przejdź do `https://vault.domena.pl`. Powinieneś zobaczyć stronkę Vaultwarden'a. Kliknij „Utwórz konto”, wprowadź swoje dane i utwórz swoje pierwsze konto użytkownika.
+
+Możesz się teraz zalogować i korzystać z menedżera haseł!
+
+
+## Zabezpieczenie panelu admina i blokada tworzenia kont.
+
+Domyślnie każdy może utworzyć konto na Twojej instancji Vaultwarden'a. Chcemy to zmienić. W tym celu potrzebujemy dostępu do panelu administracyjnego, który jest dostępny pod adresem https://vault.domena.pl/admin. Jest on chroniony tokenem administratora, który najpierw musimy wygenerować.
+
+### Generowanie tokena administratora
+
+Używam narzędzia `argon2` do hashowania hasła administratora. Najpierw go instaluje (przykład dla Debiana/Ubuntu):
+
+```bash
+sudo apt-get update && sudo apt-get install argon2
+```
+
+Teraz wygeneruję hash dla hasła administratora (zastąp `YourSecureAdminPassword`, twoim tajnym hasłem). Pamiętaj, aby skopiować cały wynik, zaczynając od `$$argon2id$$....`:
+
+```bash
+echo -n 'YourSecureAdminPassword' | argon2 "$(openssl rand -base64 16)" -e -id -k 65536 -t 3 -p 4 | sed 's/\$/\$\$/g'
+```
+
+Dodaj zmienną `ADMIN_TOKEN` w sekcji `environment` lub usuń komentarz i wklej hash:
+
+```yaml
+# ... (inne serwisy bądź ustawienia)
+services:
+    vaultwarden:
+        # ... (inne ustawienia Vaultwarden'a)
+        environment:
+            # ... (inne zmienne środowiskowe, tj. TZ)
+            ADMIN_TOKEN: YOUR_COPIED_ARGON2_HASH # Wklej skopiowany hash tutaj
+        # ... (reszta konfiguracji)
+# ... (networks itd.)
+```
+
+Zapisz plik i uruchom ponownie Vaultwarden, aby zmiany zostały wprowadzone:
+
+```bash
+docker compose down && docker compose up -d
+```
+
+### Wyłączenie rejestracji
+
+- Przejdź do https://vault.domena.pl/admin.
+- Wprowadź swoje oryginalne hasło administratora (to, które wpisałeś w poleceniu `echo` powyżej, a nie hash).
+- Przejdź do "General Settings".
+- Odznacz opcję "Allow new signups".
+- Kliknij "Save".
+
+Teraz spróbuj (np. w oknie przeglądarki prywatnej) utworzyć nowe konto. Powinien pojawić się komunikat o błędzie informujący o wyłączeniu rejestracji.
+
+W panelu administracyjnym możesz również skonfigurować ustawienia SMTP do wysyłania wiadomości e-mail (przydatne w przypadku zaproszeń lub resetowania hasła) oraz zarządzać użytkownikami.
+
+## Podsumowanie
+
+Gratulacje! Udało Ci się:
+
+- Skonfigurować Vaultwarden z Docker Compose.
+- Użyć określonego tagu obrazu i skonfigurować kontener do działania jako użytkownik inny niż root (opcjonalnie).
+- Skonfigurować Caddy jako odwrotne proxy z SSL i nagłówkiem Real-IP.
+- Zabezpieczyć obszar administracyjny tokenem i wyłączyć rejestrację publiczną.
+
+Twój własny, bezpieczny menedżer haseł działa teraz na Twoim serwerze! Możesz teraz skonfigurować rozszerzenia przeglądarki i aplikacje Bitwarden z adresem URL serwera (https://vault.domena.pl) i bezpiecznie zarządzać swoimi hasłami.
+
+Mam nadzieję, że ten wpis pomoże Ci w instalacji Vaultwarden'a! Daj mi znać, jeśli masz jakieś pytania, lub pomysły dodatki.

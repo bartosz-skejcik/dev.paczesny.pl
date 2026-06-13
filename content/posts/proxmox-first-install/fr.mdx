@@ -1,0 +1,151 @@
+---
+title: Proxmox - la voie de la douleur
+description: "Je vous montre comment transformer ma maison en homelab Proxmox, déployer Immich en LXC et Docker, régler le réseau et gagner en autonomie numérique tout en économisant."
+date: 2025-11-14T12:00:00.000Z
+tags: homelab, proxmox, lxc, docker, immich, networking
+coverImage: /assets/images/ct-100.png
+---
+
+## Introduction
+
+Au total, je vais installer Proxmox. J'ai regardé un tutoriel sympa sur YouTube pour les débutants avec Proxmox. Le gars a montré 2 types de machines virtuelles. La première est une VM classique, qui est entièrement émulée, a son propre noyau, stockage, etc. Le deuxième type est le conteneur Linux (LXC), qui diffère de la VM en ce qu'il partage le noyau et les sous-systèmes avec l'hôte (Proxmox). Cela le rend plus simple et plus rapide à démarrer, mais il est moins sécurisé et présente certaines restrictions en matière d'appels système. Il n'est pas possible d'installer d'autres systèmes d'exploitation que Linux (car il partage le noyau).
+
+Il me semble que la meilleure solution pour commencer l'aventure avec ce truc est de choisir des machines virtuelles classiques, éventuellement avec Docker à bord pour une meilleure organisation et gestion de la puissance de calcul et de la RAM.
+
+### Objectifs
+
+J'ai fixé 6 objectifs :
+
+- Créer une VM avec Ubuntu Server et exécuter Docker avec mon site web
+- Configurer le DDNS pour mon réseau domestique
+- Rattacher mon domaine à mon portfolio hébergé sur cette VM
+- Exécuter des sauvegardes quotidiennes
+- Sur les prochaines VM / conteneurs, installer vaultwarden et OpenVPN
+- Installer Immich
+
+## Installation de Proxmox
+
+Merde...
+
+Après avoir installé Proxmox avec un collègue, nous avons décidé de formater le deuxième disque `/dev/sda` et de créer un nouveau thinpool pour les VM. Tout d'abord, j'ai connecté ce disque à LVM, puis nous avons changé d'avis et, pendant la destruction du disque dans la liste des disques LVM... Ça a pris beaucoup de temps, j'ai décidé de faire un redémarrage rapide, pensant que c'était juste coincé. Maintenant, lorsque j'essaie de créer un nouveau thinpool, j'obtiens une erreur avec bcache....
+
+```bash
+root@proxmox:~# lsblk
+NAME               MAJ:MIN RM  SIZE RO TYPE MOUNTPOINTS
+sda                  8:0    0    0B  0 disk
+sdb                  8:16   0 29.8G  0 disk
+├─sdb1               8:17   0 1007K  0 part
+├─sdb2               8:18   0  512M  0 part
+└─sdb3               8:19   0 28.5G  0 part
+  ├─pve-swap       252:0    0  3.5G  0 lvm  [SWAP]
+  ├─pve-root       252:1    0 12.5G  0 lvm  /
+  ├─pve-data_tmeta 252:2    0    1G  0 lvm
+  │ └─pve-data     252:4    0 10.5G  0 lvm
+  └─pve-data_tdata 252:3    0 10.5G  0 lvm
+    └─pve-data     252:4    0 10.5G  0 lvm
+root@proxmox:~#
+```
+
+Au total, le disque devrait avoir 120 Go xd
+
+La première chose que je vais faire, c'est supprimer la configuration LVM pour ce disque et le supprimer de tous les mappers de périphériques. Redémarrage tactique et on voit ce qui se passe ensuite.
+
+Il ne démarre pas xddd. J'ai réinstallé Proxmox, mais pendant l'installation, j'ai déjà remarqué que ce disque de 120 Go n'apparaissait pas. Je vais voir si il y a des outils pour réparer les disques.
+
+D'accord, système de secours [System Rescue](https://www.system-rescue.org/) et on y va.
+
+Je me rends. Le disque n'est nulle part. Je vais en prendre un nouveau et c'est tout :(
+
+D'accord. J'ai obtenu un disque de 750 Go, je l'ai connecté, il fonctionne. Note à moi-même : ne pas interrompre le processus de création de disque dans Proxmox 😅.
+
+Puisque je n'ai pas de place dans le meuble avec le routeur et que je veux télécharger et configurer les pilotes de la carte réseau USB (TP-Link), j'ai connecté le PC au laptop. Sur le laptop, j'ai configuré l'interface eth en mode partagé avec nmtui et maintenant le laptop fonctionne comme un routeur, et sur Proxmox, j'ai accès à Internet par câble. Je télécharge les pilotes et je commence avec Immich.
+
+## Installation d'Immich
+
+J'ai commencé par créer une petite machine virtuelle spécialement pour Docker, car c'est ce que j'allais utiliser pour installer Immich (pas d'autre option dans mon cas).
+
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/docker.sh)"
+```
+
+Cette commande crée un conteneur. Le script est très intuitif. Je n'ai pas installé Portainer et j'expose tous les ports :D
+
+![screenshot ct 100](/assets/images/ct-100.png)
+
+Après avoir accédé à la VM avec cette commande :
+
+```bash
+pct enter 100
+```
+
+Je suis allé suivre les instructions dans la [documentation d'Immich](https://docs.immich.app/overview/quick-start/).
+
+1. J'ai créé un dossier qui contiendra les fichiers `docker-compose.yml` et `.env` :
+
+```bash
+mkdir ./immich-app
+cd ./immich-app
+```
+
+2. J'ai téléchargé les fichiers :
+
+```bash
+wget -O docker-compose.yml https://github.com/immich-app/immich/releases/latest/download/docker-compose.yml
+wget -O .env https://github.com/immich-app/immich/releases/latest/download/example.env
+```
+
+3. J'ai configuré `.env`.
+
+> Puisque j'ai divisé ce disque de 750 Go en 2 partitions :
+>
+> - La première a 250 Go et c'est la partition de stockage d'Immich.
+> - La deuxième a 100 Go et c'est celle pour la VM sur Proxmox.
+>
+> Le reste est non alloué, car je n'en ai pas besoin pour l'instant.
+
+> Je vais mapper cette première partition au FS de cette VM et utiliser cet espace pour le stockage de fichiers et Postgres :D
+
+> HA!
+> Je ne peux pas créer les dossiers `/mnt/immich-storage/library` et `.../postgres`. Il s'avère que les conteneurs LXC non privilégiés utilisent le mappage UID/GID pour des raisons de sécurité - l'utilisateur root (UID 0) dans le conteneur est en réalité mappé sur l'UID 100000 sur l'hôte. Lors du montage d'un répertoire via un lien, le conteneur voit les valeurs UID/GID de l'hôte, mais ne peut y accéder que si le mappage est compatible.
+
+```bash
+# sur Proxmox
+chown -R 100000:100000 /mnt/immich-storage/
+chmod -R 755 /mnt/immich-storage/
+```
+
+4. J'ai démarré Docker.
+
+Ooops. J'ai oublié que Docker a également besoin d'espace disque pour les conteneurs hahah.
+
+```bash
+# sur Proxmox
+pct resize 100 rootfs +11G
+```
+
+Et maintenant j'ai 15 Go.
+
+Lors de la tentative de démarrage du conteneur avec Immich, j'ai obtenu une erreur avec containerd.io (version 2.x.x) liée à `ip_unprivileged_port_start` et AppArmor. Le problème s'est avéré être un [bug récent](https://forum.proxmox.com/threads/docker-inside-lxc-net-ipv4-ip_unprivileged_port_start-error.175437/) dans Proxmox 9.0. La solution consistait à faire une mise à niveau de containerd, mais avant de pouvoir faire quoi que ce soit, j'ai dû réparer l'accès à Internet dans LXC.
+
+Le conteneur n'a pas accès à Internet, malgré le fait que le ping fonctionne depuis le laptop.
+
+Le problème était dans la configuration du routage - j'utilise le WiFi sur Proxmox au lieu du câble Ethernet, donc j'ai dû configurer le proxy ARP avec SNAT et ajouter les règles iptables FORWARD appropriées. Après avoir ajouté une route spécifique pour l'IP du conteneur (`ip route add 192.168.1.100/32 dev vmbr0`), tout a fonctionné. Docker s'est démarré, Immich est devenu disponible sous `http://192.168.1.100:2283`...
+
+Non, presque. Il s'est avéré que depuis le conteneur et Proxmox, Immich répondait (404 est une réponse normale pour `/`), mais depuis le laptop dans le réseau domestique - silence. Docker dans LXC avec la configuration proxy ARP + SNAT + réseau WiFi routé ne voulait pas laisser passer le trafic TCP sur le port 2283 de l'extérieur, malgré le fait que le ping fonctionnait sans problème. J'ai essayé différentes combinaisons de règles iptables FORWARD, `network_mode: host` (ce qui a cassé le DNS entre les conteneurs Docker - `immich-server` ne pouvait pas trouver `redis` ou `database`), lier à `0.0.0.0:2283` - rien ne fonctionnait. Les paquets n'arrivaient même pas à vmbr0.
+
+Finalement, j'ai fait un port forwarding sur Proxmox depuis l'IP de l'hôte (192.168.1.10) vers le conteneur (192.168.1.100) :
+
+```bash
+iptables -t nat -A PREROUTING -d 192.168.1.10 -p tcp --dport 2283 -j DNAT --to 192.168.1.100:2283
+iptables -A FORWARD -p tcp -d 192.168.1.100 --dport 2283 -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT
+```
+
+Et maintenant Immich est disponible sous `http://192.168.1.10:2283/` depuis n'importe quel appareil dans le réseau domestique. Ce n'est pas la solution idéale (j'aurais préféré avoir une IP dédiée pour le conteneur), mais elle fonctionne de manière stable et c'est ce qui compte le plus.
+
+PUTAIN DE MERDE! Et pendant tout ce temps, le téléphone avait l'IP `192.168.1.100`
+
+PUTAIN DE MERDEEEEEEE!
+
+## Liens
+
+- [https://youtu.be/lFzWDJcRsqo?si=2yiDTdhfHh3uUQSx](https://youtu.be/lFzWDJcRsqo?si=2yiDTdhfHh3uUQSx)

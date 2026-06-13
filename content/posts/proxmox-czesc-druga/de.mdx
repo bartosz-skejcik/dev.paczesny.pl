@@ -1,0 +1,331 @@
+---
+title: Proxmox - Teil zwei
+description: "Ich zeige dir, wie ich in meinem Homelab Proxmox einstelle, DDNS über Cloudflare konfiguriere und OpenVPN nutze, damit ich jederzeit sicher und einfach von überall zugreifen kann."
+date: 2025-11-15T18:00:00.000Z
+tags: homelab, proxmox, macvlan, ddns, openvpn, cloudflare
+coverImage: /assets/images/ct-100.png
+---
+
+## Einführung
+
+Hallo und herzlich willkommen im zweiten Teil meiner ersten Kämpfe mit Proxmox :D.
+Für alle, die zum ersten Mal hier sind, empfehle ich, zunächst den [ersten Teil](https://dev.paczesny.pl/blog/proxmox-first-install) zu lesen.
+
+Da es einige Komplikationen mit IP-Adressen und so weiter gab, bin ich auf eine Konfiguration mit Macvlan umgestiegen. [Hier](https://ipwithease.com/what-is-macvlan/) findet ihr eine gute Erklärung, was das ist und wozu es dient ;)
+Wie ich bereits erwähnt habe, nehme ich heute OpenVPN unter die Lupe, aber ich möchte auch noch DDNS konfigurieren, um Zugriff auf alles außerhalb meines Heimnetzwerks zu haben.
+
+Unten findet ihr zur Erinnerung eine Liste der Dinge, die ich mit diesem Proxmox machen möchte:
+
+### Ziele
+
+Ich habe mir 6 Ziele gesetzt:
+
+- Eine VM mit Ubuntu Server erstellen und darauf Docker mit meiner Website starten
+- **DDNS für mein Heimnetzwerk konfigurieren**
+- Meine Domain an mein Portfolio anhängen, das auf dieser VM gehostet wird
+- Tägliche Backups starten
+- **Auf weiteren VMs/Containern Vaultwarden und OpenVPN installieren**
+- [x] Immich installieren
+
+## DDNS-Konfiguration
+
+---
+
+### Erforderliche Elemente
+
+Ich habe ein [gutes Tutorial](https://www.youtube.com/watch?v=rI-XxnyWFnM) gefunden, in dem gezeigt wird, wie man DDNS mit Cloudflare und einem Raspberry Pi (in meinem Fall einfach mein Home-Server) konfiguriert. Dafür benötige ich noch eine Domain, die ich im Moment nicht besitze, also muss ich etwas finden.
+
+Gut, die Domain ist jetzt gekauft. Jetzt ist es Zeit, das Skript auf meinem Proxmox-Server zu konfigurieren, das Cloudflare mit meiner aktuellen IP-Adresse aktualisieren wird.
+
+> Aber bevor ich das mache, muss ich die Domain in Cloudflare hinzufügen
+
+Ich habe eine kleine LVM erstellt: 1 GB RAM, 4 GB Festplatte, 1 vCPU
+
+1. Ich erstelle einen Ordner, in dem die Daten gespeichert werden:
+
+```bash
+mkdir data
+chown 1000 -R data
+chmod u+r+w+x -R data
+```
+
+2. Ich aktualisiere die Datei `data/config.json` für Cloudflare
+
+3. Ich erstelle eine `docker-compose.yml`-Datei:
+
+```yml
+version: "3.8"
+
+services:
+  ddns-updater:
+    image: qmcgaw/ddns-updater
+    container_name: ddns-updater
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/updater/data
+    environment:
+      - TZ=Europe/Warsaw
+      - LOG_LEVEL=info
+      - HEALTH_SERVER_ADDRESS=127.0.0.1:9999
+```
+
+4. Ich starte den Docker-Container:
+
+```bash
+docker compose up -d
+```
+
+Na und fertig. Ich habe in den DNS-Einträgen von Cloudflare nachgesehen und der A-Eintrag wurde auf meine aktuelle öffentliche IP geändert :D
+
+## Einrichtung von LXC mit Nginx und Let's Encrypt als Reverse-Proxy für Immich und andere Dienste
+
+Ich habe bereits einen frischen Immich auf LXC mit der IP `192.168.1.100`, der über HTTP auf Port 2283 erreichbar ist. Die Domain `immich.blonie.cloud` ist in Cloudflare als `CNAME` eingetragen und proxied, aber leider funktioniert es nur über HTTP — weil Immich keinen SSL hat. Es ist Zeit, das zu ändern, denn ohne SSL wirft Cloudflare einen Fehler 525. Ich erstelle also einen eigenen LXC, der als frontalischer Reverse-Proxy auf HTTPS mit einem Let's-Encrypt-Zertifikat fungieren wird. Dieser wird sich mit Cloudflare auseinandersetzen, während Immich normalen HTTP-Verkehr sieht.
+
+---
+
+### Vorbereitung von LXC auf Proxmox
+
+Ich habe einen frischen LXC. Ich wähle Ubuntu Server 22.04, weil es stabil ist und alles enthält, was ich benötige.
+
+Ich gehe hinein:
+
+```bash
+pct enter 200
+```
+
+Ich aktualisiere das System, weil es immer besser ist, ein aktuelles Repo zu haben:
+
+```bash
+apt update && apt upgrade -y
+```
+
+Ich installiere Nginx und Certbot (ein Programm zum Abrufen von Let's-Encrypt-Zertifikaten):
+
+```bash
+apt install -y nginx certbot python3-certbot-nginx vim
+```
+
+---
+
+### Konfiguration von Nginx als Reverse-Proxy für Immich
+
+Jetzt konfiguriere ich Nginx, um HTTP-Verkehr auf Port 80 und 443 für meine Domain zu empfangen und ihn an Immich auf HTTP weiterzuleiten.
+
+Ich erstelle eine Konfigurationsdatei für Nginx:
+
+```bash
+vim /etc/nginx/sites-available/immich.conf
+```
+
+Ich füge die folgende Konfiguration hinzu:
+
+```nginx
+server {
+    listen 80;
+    server_name immich.blonie.cloud;
+
+    location / {
+        proxy_pass http://192.168.1.100:2283;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Let's Encrypt Challenge-Location
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+}
+```
+
+Ich aktiviere die Website:
+
+```bash
+ln -s /etc/nginx/sites-available/immich.conf /etc/nginx/sites-enabled/
+```
+
+Ich erstelle ein Verzeichnis für die Certbot-Herausforderungen:
+
+```bash
+mkdir -p /var/www/certbot
+```
+
+Ich überprüfe die Konfiguration von Nginx und starte sie neu:
+
+```bash
+nginx -t && systemctl reload nginx
+```
+
+---
+
+### Abrufen des Let's-Encrypt-Zertifikats
+
+Jetzt kommt der wichtigste Teil: Ich starte Certbot, der sich mit Let's Encrypt verbinden und vorübergehend Dateien in `.well-known/acme-challenge` auf Port 80 veröffentlichen wird.
+
+Im LXC-Terminal gebe ich ein:
+
+```bash
+certbot certonly --webroot -w /var/www/certbot -d immich.blonie.cloud
+```
+
+Ich folge den Anweisungen von Certbot. Wenn alles gut geht, landet das Zertifikat in `/etc/letsencrypt/live/immich.blonie.cloud/`.
+
+Nachdem ich das Zertifikat abgerufen habe, aktiviere ich SSL in Nginx:
+
+```bash
+vim /etc/nginx/sites-available/immich.conf
+```
+
+Ich modifiziere die Datei, damit sie so aussieht:
+
+```nginx
+server {
+    listen 80;
+    server_name immich.blonie.cloud;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name immich.blonie.cloud;
+
+    ssl_certificate /etc/letsencrypt/live/immich.blonie.cloud/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/immich.blonie.cloud/privkey.pem;
+    ssl_trusted_certificate /etc/letsencrypt/live/immich.blonie.cloud/chain.pem;
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+
+    location / {
+        proxy_pass http://192.168.1.100:2283;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+Ich überprüfe und starte Nginx neu:
+
+```bash
+nginx -t && systemctl reload nginx
+```
+
+---
+
+### Automatisches Zertifikatserneuern
+
+Let's-Encrypt-Zertifikate sind nur 90 Tage gültig, also konfiguriere ich die automatische Erneuerung:
+
+Ich füge eine Crontab hinzu:
+
+```bash
+crontab -e
+```
+
+Ich füge die folgende Zeile hinzu:
+
+```bash
+0 3 * * * certbot renew --quiet && systemctl reload nginx
+```
+
+Jeden Tag um 3:00 Uhr wird das System versuchen, die Zertifikate zu erneuern und Nginx neu zu starten, wenn sich etwas geändert hat.
+
+---
+
+### Router- und Cloudflare-Konfiguration
+
+- Auf dem Router leite ich Port 443 an den LXC mit Nginx (z.B. 192.168.1.20:443) um und stelle eine NAT/PAT-Regel ein.
+- In Cloudflare stelle ich SSL auf „Full (Strict)“, weil ich jetzt ein Zertifikat auf dem Server habe.
+- Ich überprüfe, ob in Cloudflare der CNAME-Eintrag für immich.blonie.cloud proxied ist.
+
+---
+
+### Testen
+
+Auf meinem Telefon und einem anderen Gerät starte ich:
+
+```bash
+curl -I https://immich.blonie.cloud
+```
+
+Ich erhalte eine Antwort vom Immich-Server (200 oder einen anderen Code), aber jetzt über HTTPS.
+
+---
+
+> ### Bonus-Hinweise
+>
+> - Jetzt kann ich diesen LXC mit Nginx für andere LXC mit verschiedenen Diensten verwenden, indem ich einfach weitere Konfigurationsdateien mit anderen Domains und Ports hinzufüge.
+> - Man könnte auch Traefik oder Caddy in Betracht ziehen, die eingebaute Zertifikate haben und weniger manuelle Konfiguration erfordern, aber das ist vielleicht für ein anderes Mal.
+
+## OpenVPN-Konfiguration
+
+Klassisch, ich erstelle ein neues LXC, 4 GB Festplatte, 2 vCPU, 2 GB RAM. Nachdem ich die Maschine erstellt habe, beginne ich mit der TUN-Konfiguration.
+
+### TUN-Konfiguration:
+
+```bash
+vim /etc/pve/lxc/102.conf
+
+# Am Ende füge ich hinzu:
+# lxc.cgroup2.devices.allow: c 10:200 rwm
+# lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file
+```
+
+> Wenn ich diese Zeilen nicht hinzufüge, erhalte ich einen Fehler beim Starten des Docker-Containers :D
+>
+> ```bash
+> Error response from daemon: error gathering device information while adding custom device "/dev/net/tun": no such file or directory
+> ```
+
+> Und ich muss auch noch hinzufügen:
+>
+> ```bash
+> lxc.apparmor.profile: unconfined
+> ```
+>
+> Denn sonst wirft es einen Fehler aus:
+>
+> ```bash
+> Error response from daemon: failed to create task for container: failed to create shim task: OCI runtime create failed: unable to start container process: error during container init: open sysctl net.ipv4.ip_unprivileged_port_start file: reopen fd 8: permission denied
+> ```
+
+Nachdem die Maschine neu gestartet wurde, logge ich mich ein und erstelle einen Ordner `openvpn-as` (OpenVPN Access Server):
+
+```bash
+mkdir openvpn-as
+cd openvpn-as
+```
+
+Dann konfiguriere ich die `docker-compose.yml`-Datei:
+
+```yaml
+version: "3.8"
+
+services:
+  openvpn-as:
+    image: openvpn/openvpn-as
+    container_name: openvpn-as
+    devices:
+      - /dev/net/tun
+    cap_add:
+      - MKNOD
+      - NET_ADMIN
+    ports:
+      - "943:943"
+      - "443:443"
+      - "1194:1194/udp"
+    volumes:
+      - <Pfad zu Daten>:/openvpn
+    restart: unless-stopped
+```
+
+KLASSISCH, ich starte den Container und gehe zu `https://192.168.1.102:943/admin`
+
+### Zusammenfassung
+
+Nachdem ich mich im Admin-Dashboard angemeldet habe, erstelle ich einen neuen Benutzer. Auf meinem Telefon herunterlade ich das `.ovpn`-Profil, lade es in die App und TADAAA, es funktioniert!
