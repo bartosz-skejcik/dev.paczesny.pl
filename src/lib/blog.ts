@@ -235,7 +235,13 @@ export function parseFrontmatter(fileContent: string): FrontmatterParseResult {
       return
     }
 
-    metadata[key as keyof Metadata] = value as Metadata[keyof Metadata]
+    // tags and readingTimeMinutes are handled above, so only string-valued
+    // keys reach here.
+    const stringKey = key as Exclude<
+      keyof Metadata,
+      "tags" | "readingTimeMinutes"
+    >
+    metadata[stringKey] = value
   })
 
   return { metadata: metadata as Metadata, content }
