@@ -7,6 +7,7 @@ import { Footer } from "@/components/footer"
 import { ShortcutGuide } from "@/components/shortcut-guide"
 import { Analytics } from "@vercel/analytics/next"
 import { SpeedInsights } from "@vercel/speed-insights/next"
+import { Analytics as PaczesnyAnalytics } from "@paczesny/analytics"
 import { DEFAULT_SEO_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/seo"
 import { DEFAULT_FALLBACK_LANG, getLanguageConfig } from "@/lib/i18n"
 
@@ -50,6 +51,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <Footer username="bartosz-skejcik" />
           <Analytics />
           <SpeedInsights />
+          <PaczesnyAnalytics siteId="por_live_8343" />
         </div>
       </body>
     </html>

@@ -1,3 +1,5 @@
+import { track } from "@paczesny/analytics"
+
 export type AnalyticsEvent = "related_posts_impression" | "related_post_click"
 
 export function trackAnalyticsEvent(
@@ -7,6 +9,10 @@ export function trackAnalyticsEvent(
   if (typeof window === "undefined") {
     return
   }
+
+  // Primary sink: @paczesny/analytics, initialized by the <Analytics>
+  // component mounted in the root layout. Records a `custom` event.
+  track(eventName, payload)
 
   const tracker = getTracker()
 
