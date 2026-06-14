@@ -1,0 +1,184 @@
+---
+title: Jak postawić własną wyszukiwarkę SearXNG na Coolify
+description: "Krok po kroku stawiam self-hosted SearXNG na VPS-ie z Coolify i Dockerem: domena, HTTPS od Let's Encrypt, ochrona przed botami i monitoring w Grafanie."
+date: 2026-06-14T20:30:00.000Z
+tags: homelab, coolify, searxng, docker, self-hosting, prywatność, metawyszukiwarka, traefik, grafana, vps
+coverImage: /assets/images/searxng-coolify.png
+---
+
+## Wprowadzenie
+
+Siemanko! Dzisiaj odpoczywam chwilę od Proxmoxa i biorę na warsztat coś, co chodziło mi po głowie od dawna, czyli **własną, prywatną wyszukiwarkę internetową**. Taką, która Cię nie śledzi i nie wciska reklam. Wpisujesz zapytanie, a ona zbiera wyniki z Google'a, DuckDuckGo, Wikipedii i kilkudziesięciu innych miejsc naraz. Cały myk polega na tym, że to **Twój serwer** wysyła te zapytania do Google'a, a nie Ty.
+
+Narzędzie nazywa się **[SearXNG](https://github.com/searxng/searxng)** i w tym wpisie pokażę Ci, jak postawiłem je na swoim VPS-ie za pomocą [Coolify](https://coolify.io) (mój self-hostowany PaaS, taki domowy Vercel). Tym razem nie ma Proxmoxa ani LXC. Leci na czystym Dockerze, z Traefikiem jako reverse proxy i certyfikatem od Let's Encrypt. Na końcu podepniemy to jeszcze pod Grafanę, bo jak coś hostujesz to chyba wypada to widzieć na jakichś wykresach, nie? xd
+
+Jak zwykle, jeśli czegoś nie dopowiem to sory ale kurwa nadal się tego uczę. Przynajmniej przedstawię główną ideę xdd. Jak lubisz takie klimaty, to zerknij sobie wcześniej na mój wpis o [stawianiu Vaultwardena](/blog/pl/how-to-setup-vaultwarden-on-linux), bo to podobna bajka, tylko z menedżerem haseł.
+
+## Dlaczego SearXNG? Czyli krótko o tym, co w ogóle można self-hostować
+
+Zanim cokolwiek postawimy, dobrze by było wiedzieć na co się w ogóle piszemy. Ogarnąłem trochę temat i okazało się, że self-hostowane wyszukiwarki dzielą się na **dwie zupełnie różne kategorie**:
+
+1. **Metawyszukiwarki (agregatory)** — nie mają własnego indeksu internetu. Przekazują Twoje zapytanie do Google'a, Binga, DuckDuckGo itd., zbierają wyniki, zdejmują tracking i pokazują Ci je ładnie zebrane. Lekkie, dają "prawdziwe" wyniki, ale zależą od tych silników (i czasem dostają od nich po łapach za zbyt częste odpytywanie).
+2. **Własne crawlery / indeksy** — same łażą po internecie i budują własny indeks. Prywatne i niezależne, ale żrą zasoby, są wolniejsze, a indeks jest pusty/chudy, dopóki sam nie nascrapujesz pół internetu.
+
+A oto jak wygląda krajobraz na rok 2026:
+
+| Narzędzie | Typ | Licencja | Status |
+|-----------|-----|----------|--------|
+| **SearXNG** | metawyszukiwarka | AGPL-3.0 | ✅ żywy, **mój wybór** |
+| [4get](https://git.lolcat.ca/lolcat/4get) | metawyszukiwarka | AGPL-3.0 | ✅ żywy, lżejsza alternatywa |
+| [YaCy](https://github.com/yacy/yacy_search_server) | własny indeks (P2P) | GPL-2.0 | ✅ żywy, ale więcej zachodu |
+| [Mwmbl](https://github.com/mwmbl/mwmbl) | własny indeks | AGPL-3.0 | ⚠️ niszowy, pusty bez crawlera |
+| [Whoogle](https://github.com/benbusby/whoogle-search) | proxy do Google | MIT | ❌ **koniec wsparcia (kwiecień 2026)** |
+| [Stract](https://github.com/StractOrg/stract) | własny indeks | AGPL-3.0 | ❌ **zarchiwizowany (kwiecień 2026)** |
+
+Z tej tabelki płyną dwa wnioski. Po pierwsze, **Whoogle i Stract odpadają**. Oba umarły w kwietniu 2026 (Google zablokował Whoogle'owi zapytania bez JavaScriptu i tyle z niego było, RIP), więc jak trafisz gdzieś na stary poradnik co je poleca, to omijaj go szerokim łukiem. Po drugie, jak marzy Ci się **w pełni niezależny indeks**, którego nikt nie kontroluje, to YaCy jest spoko, tylko przygotuj się na wolniejsze wyniki i generalnie więcej dłubania.
+
+A dla zwykłego śmiertelnika, który chce po prostu mieć działającą, prywatną wyszukiwarkę na własnym serwerze, **SearXNG to oczywisty wybór**. Jest aktywnie rozwijany, daje sensowne wyniki od razu po postawieniu, ma oficjalny obraz Dockera, kupę silników do wyboru i nawet wsparcie dla Tora. No to na nim jedziemy.
+
+> Jakbyś chciał wejść głębiej w temat, [dokumentacja SearXNG](https://docs.searxng.org/) jest naprawdę porządna i to do niej będę Cię odsyłał.
+
+## Czego potrzebujesz
+
+- **Serwer z Dockerem** — u mnie to VPS na Oracle Cloud (ARM, Ubuntu), ale równie dobrze może być Twój homelab czy zwykły VPS-ik ze stałym IP.
+- **[Coolify](https://coolify.io)** — jeśli go nie masz, to nic nie szkodzi, pokażę `docker-compose.yml`, który odpalisz gdziekolwiek. Coolify tylko ładnie to opakowuje i ogarnia za mnie Traefika oraz certyfikaty.
+- **Domena** — ja użyję `search.blonie.cloud`. DNS trzymam na Cloudflare.
+
+## Tworzenie serwisu w Coolify
+
+SearXNG do działania potrzebuje dwóch kontenerów: samego **searxng** oraz **[Valkey](https://valkey.io/)** (taki fork Redisa). Valkey jest potrzebny limiterowi, czyli ochronie przed botami, ale o tym za chwilę.
+
+W Coolify tworzę nowy **Service** typu *Docker Compose* (Project → New → Service) i wklejam taką konfigurację:
+
+```yaml
+services:
+  searxng:
+    image: searxng/searxng:latest
+    restart: unless-stopped
+    environment:
+      - SEARXNG_BASE_URL=https://search.blonie.cloud/
+      - SEARXNG_VALKEY_URL=redis://valkey:6379/0
+      - SEARXNG_LIMITER=true
+    volumes:
+      - searxng-data:/etc/searxng
+    depends_on:
+      - valkey
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+      - DAC_OVERRIDE
+  valkey:
+    image: valkey/valkey:8-alpine
+    restart: unless-stopped
+    command: valkey-server --save 30 1 --loglevel warning
+    volumes:
+      - valkey-data:/data
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETGID
+      - SETUID
+      - DAC_OVERRIDE
+volumes:
+  searxng-data:
+  valkey-data:
+```
+
+> **UWAGA, tu się przejechałem.** Widzisz to `DAC_OVERRIDE` w sekcji `cap_add`? **Jest obowiązkowe.** Jak go pominiesz (a ja pominąłem), to kontener wpada w nieskończony restart z błędem:
+>
+> ```
+> cp: can't create '/etc/searxng/settings.yml': Permission denied
+> ```
+>
+> Dzieje się tak, bo przy `cap_drop: ALL` nawet root w kontenerze nie ma prawa zapisać domyślnego `settings.yml` do świeżego wolumenu, a `DAC_OVERRIDE` mu to umożliwia. Oficjalny compose od SearXNG ma tę capability z dokładnie tego powodu. Szkoda, że doczytałem dopiero po fakcie xd.
+
+Zmienne środowiskowe, które tu wrzuciłem:
+
+- `SEARXNG_BASE_URL` — publiczny adres instancji, żeby linki działały poprawnie.
+- `SEARXNG_VALKEY_URL` — adres Valkeya. **Ważne:** używaj zmiennej z `VALKEY`, a nie starej `SEARXNG_REDIS_URL`, bo ta druga jest już przestarzała i SearXNG będzie Ci o tym pyskował w logach.
+- `SEARXNG_LIMITER=true` — włącza limiter, czyli ochronę przed botami.
+
+## Domena i HTTPS
+
+W Cloudflare dodaję rekord **A**: `search.blonie.cloud` → IP mojego serwera, ustawiony jako **DNS only (szara chmurka)**, żeby Let's Encrypt mógł wystawić certyfikat po HTTP-01 prosto na origin.
+
+Teraz w Coolify w zakładce **Domains** danego serwisu wpisuję `https://search.blonie.cloud` (to `https://` ma znaczenie, bo po nim Coolify wie, że ma zrobić routing HTTPS i pociągnąć certyfikat). Coolify dorzuca odpowiednie labelki do Traefika i sam wystawia certyfikat od Let's Encrypt. Po chwili instancja jest żywa pod `https://search.blonie.cloud` z zieloną kłódką 🔒.
+
+> Jak wolisz robić reverse proxy ręcznie z Nginxem i certbotem (np. na Proxmoxie), to dokładnie to pokazywałem w [drugiej części serii o Proxmoxie](/blog/pl/proxmox-czesc-druga#przygotowanie-lxc-na-proxmoxie). Tutaj Coolify/Traefik załatwia to za mnie.
+
+## Limiter i bezpieczeństwo, czyli żeby boty się odbiły
+
+Postawiłem instancję **publicznie**, ale z włączonym limiterem. Dlaczego nie całkiem otwartą? Bo publiczne instancje SearXNG to magnes na boty, które scrapują przez Ciebie wyniki, a wtedy to **Twoje** IP obrywa bana od Google'a czy Binga. Limiter (ten od Valkeya) blokuje ruch, który pachnie botem: klient bez normalnych nagłówków przeglądarki dostaje **HTTP 429**, a normalna przeglądarka wchodzi bez problemu.
+
+Konfigurację limitera trzymam w pliku `limiter.toml` w wolumenie `/etc/searxng`. Nowy schemat (w starszych poradnikach jest inaczej!) wygląda tak:
+
+```toml
+[botdetection]
+# zaufaj nagłówkom XFF od Traefika (prywatne sieci Dockera),
+# żeby limiter widział prawdziwe IP klienta, a nie adres proxy
+trusted_proxies = ["127.0.0.0/8", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
+ipv4_prefix = 32
+ipv6_prefix = 48
+
+[botdetection.ip_limit]
+# link_token podnosi ochronę, ale wymaga JS/redirectu — zostawiam wyłączony,
+# żeby zwykłe klienty (curl, czytniki) działały
+link_token = false
+```
+
+`secret_key` (taki podpis sesji) generuje się sam przy pierwszym starcie, więc nie musisz go ruszać. Po edycji pliku restartuję kontener searxng i z głowy.
+
+Test? Klasycznie:
+
+```bash
+# prawdziwa przeglądarka — wynik 200
+curl -s -A "Mozilla/5.0 Firefox/128" -H "Accept-Language: en" \
+  "https://search.blonie.cloud/search?q=self-hosted+search&format=json" \
+  -o /dev/null -w "%{http_code}\n"
+```
+
+Goły `curl` bez nagłówków dostanie 429 i o to właśnie chodzi. Limiter robi swoją robotę 💪.
+
+## Monitoring w Grafanie
+
+No i moja ulubiona część. Mam już całą [obserwowalność postawioną na Oracle](/blog/pl/proxmox-czesc-druga) (Grafana + Prometheus + Loki), więc grzech tego nie wykorzystać.
+
+Część rzeczy łapie się **sama**, bez kiwnięcia palcem: logi kontenera (przez Loki), zużycie CPU/RAM/sieci (przez `docker-stats-exporter`) i metryki HTTP z Traefika. W tych ostatnich widać nawet liczbę odpowiedzi **429**, czyli od razu ładnie widać, ile botów odbił limiter.
+
+Ale najlepsze jest to, że **SearXNG ma własny, wbudowany endpoint w formacie Prometheusa**. Domyślnie jest wyłączony, więc wystarczy w `settings.yml` ustawić token:
+
+```yaml
+general:
+  # wystaw statystyki w formacie OpenMetrics pod /metrics
+  open_metrics: 'jakis-dlugi-losowy-token'
+```
+
+Po restarcie endpoint `/metrics` (chroniony basic-authem tym tokenem) wypluwa metryki **per silnik wyszukiwania**:
+
+- `searxng_engines_request_count_total` — ile razy odpytano każdy silnik
+- `searxng_engines_result_count_total` — ile wyników zwrócił
+- `searxng_engines_response_time_total_seconds` — średni czas odpowiedzi
+- `searxng_engines_reliability_total` — niezawodność (0–100)
+
+Dorzucam więc do Prometheusa nowy scrape job (z `basic_auth` i tym tokenem) celujący w `https://search.blonie.cloud/metrics`, przeładowuję konfig i tyle. W Grafanie mam teraz wykresy z czasem odpowiedzi i niezawodnością każdego silnika z osobna.
+
+> Mały myk: **nie ma jednej metryki "liczba wyszukiwań"**. SearXNG liczy zapytania *per silnik*, a jedno Twoje wyszukiwanie rozjeżdża się na kilka silników naraz. Więc jak widzisz że google i duckduckgo mają po 3, a brave 1, to nie znaczy że ktoś szukał 7 razy xd.
+
+## Podsumowanie
+
+I to by było na tyle! W skrócie przeszliśmy przez to, czemu w ogóle SearXNG a nie Whoogle czy YaCy, jak postawić go na Coolify z `docker-compose.yml` (i nie wywalić się na `DAC_OVERRIDE`), jak podpiąć domenę z certyfikatem od Let's Encrypt, jak zabezpieczyć całość limiterem na Valkeyu i na koniec jak wpiąć to wszystko w Grafanę przez wbudowany endpoint OpenMetrics.
+
+Masz teraz **własną, prywatną wyszukiwarkę**, która nie sprzedaje Twoich zapytań nikomu. Wpinasz ją w przeglądarce jako domyślną (`https://search.blonie.cloud/search?q=%s`) i jedziesz.
+
+Daj znać jak coś u Ciebie nie pyka albo masz pomysł co dorzucić. Następnym razem może pokażę jak dostroić silniki i motyw, żeby było jeszcze ładniej. Trzymaj się mordo!
+
+## Linki
+
+- [SearXNG — repozytorium na GitHubie](https://github.com/searxng/searxng)
+- [Dokumentacja SearXNG](https://docs.searxng.org/)
+- [Coolify](https://coolify.io)
+- [Valkey](https://valkey.io/)
+- [Mój wpis o Vaultwardenie](/blog/pl/how-to-setup-vaultwarden-on-linux)

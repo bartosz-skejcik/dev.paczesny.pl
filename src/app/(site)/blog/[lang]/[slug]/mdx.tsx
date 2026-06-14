@@ -1,6 +1,7 @@
 import { MDXRemote } from "next-mdx-remote/rsc"
 import Link from "next/link"
 import { Children, createElement, isValidElement } from "react"
+import remarkGfm from "remark-gfm"
 import { codeToHtml } from "shiki"
 import { CopyButton } from "@/components/copy-button"
 
@@ -137,12 +138,33 @@ const components = {
   h6: createHeading(6),
   pre: Pre,
   Table,
+  table: (props: React.HTMLAttributes<HTMLTableElement>) => (
+    <div className="my-6 overflow-x-auto">
+      <table className="w-full border-collapse text-sm" {...props} />
+    </div>
+  ),
+  thead: (props: React.HTMLAttributes<HTMLTableSectionElement>) => (
+    <thead className="border-b border-white/20" {...props} />
+  ),
+  th: (props: React.ThHTMLAttributes<HTMLTableCellElement>) => (
+    <th className="p-2 text-left font-semibold" {...props} />
+  ),
+  td: (props: React.TdHTMLAttributes<HTMLTableCellElement>) => (
+    <td className="border-t border-white/10 p-2 text-left align-top" {...props} />
+  ),
+}
+
+const mdxOptions = {
+  mdxOptions: {
+    remarkPlugins: [remarkGfm],
+  },
 }
 
 export function MDX(props: any) {
   return (
     <MDXRemote
       {...props}
+      options={{ ...mdxOptions, ...(props.options ?? {}) }}
       components={{ ...components, ...(props.components ?? {}) }}
     />
   )
