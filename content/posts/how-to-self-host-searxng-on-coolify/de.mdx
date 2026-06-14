@@ -1,0 +1,184 @@
+---
+title: Wie man seine eigene SearXNG-Suchmaschine auf Coolify aufsetzt
+description: Schritt-für-Schritt-Anleitung zum Aufsetzen einer selbstgehosteten SearXNG-Suchmaschine auf einem VPS mit Coolify und Docker: Domain, HTTPS von Let's Encrypt, Bot-Schutz und Überwachung in Grafana.
+date: 2026-06-14T20:30:00.000Z
+tags: homelab, coolify, searxng, docker, self-hosting, prywatność, metawyszukiwarka, traefik, grafana, vps
+coverImage: /assets/images/searxng-coolify.png
+---
+
+## Einleitung
+
+Hallo! Heute mache ich mal eine Pause von Proxmox und beschäftige mich mit etwas, das mich schon lange interessiert: **eine eigene, private Internetsuchmaschine**. Eine, die dich nicht verfolgt und keine Werbung einblendet. Du gibst eine Anfrage ein, und sie sammelt Ergebnisse von Google, DuckDuckGo, Wikipedia und Dutzenden anderen Quellen gleichzeitig. Der ganze Trick besteht darin, dass **dein Server** diese Anfragen an Google sendet, und nicht du.
+
+Das Tool heißt **[SearXNG](https://github.com/searxng/searxng)**, und in diesem Beitrag zeige ich dir, wie ich es auf meinem VPS mit [Coolify](https://coolify.io) (meine selbstgehostete PaaS, so etwas wie ein eigenes Vercel) aufgesetzt habe. Dieses Mal gibt es kein Proxmox oder LXC. Es läuft auf reinem Docker, mit Traefik als Reverse-Proxy und einem Zertifikat von Let's Encrypt. Am Ende verbinde ich es noch mit Grafana, weil man sehen sollte, was man hostet, oder? xd
+
+Wie immer, wenn ich etwas nicht erwähne, entschuldige bitte, aber ich lerne noch dazu. Ich werde zumindest die Hauptidee vorstellen xdd. Wenn du solche Themen magst, schau dir meinen Beitrag über [die Einrichtung von Vaultwarden](/blog/de/how-to-setup-vaultwarden-on-linux) an, denn es ist ein ähnliches Thema, nur mit einem Passwort-Manager.
+
+## Warum SearXNG? Oder: Was kann man überhaupt selbst hosten
+
+Bevor wir etwas aufsetzen, ist es gut zu wissen, worauf wir uns überhaupt einlassen. Ich habe mich ein bisschen mit dem Thema auseinandergesetzt und festgestellt, dass selbstgehostete Suchmaschinen in **zwei völlig unterschiedliche Kategorien** unterteilt werden können:
+
+1. **Metasuchmaschinen (Aggregatoren)** — haben keinen eigenen Internet-Index. Sie leiten deine Anfrage an Google, Bing, DuckDuckGo usw. weiter, sammeln die Ergebnisse, entfernen die Tracking-Informationen und zeigen sie dir schön zusammengefasst an. Sie sind leicht, liefern "echte" Ergebnisse, aber hängen von diesen Suchmaschinen ab (und manchmal bekommen sie von ihnen eine Abreibung, weil sie zu oft abgefragt werden).
+2. **Eigene Crawler / Indizes** — durchsuchen das Internet selbst und bauen einen eigenen Index auf. Sie sind privat und unabhängig, aber verbrauchen Ressourcen, sind langsamer, und der Index ist leer/dünn, bis du das halbe Internet gescrapet hast.
+
+Und hier ist die Landschaft im Jahr 2026:
+
+| Tool | Typ | Lizenz | Status |
+|-----------|-----|----------|--------|
+| **SearXNG** | Metasuchmaschine | AGPL-3.0 | ✅ aktiv, **meine Wahl** |
+| [4get](https://git.lolcat.ca/lolcat/4get) | Metasuchmaschine | AGPL-3.0 | ✅ aktiv, leichtere Alternative |
+| [YaCy](https://github.com/yacy/yacy_search_server) | eigener Index (P2P) | GPL-2.0 | ✅ aktiv, aber mehr Aufwand |
+| [Mwmbl](https://github.com/mwmbl/mwmbl) | eigener Index | AGPL-3.0 | ⚠️ Nischenprodukt, leer ohne Crawler |
+| [Whoogle](https://github.com/benbusby/whoogle-search) | Proxy für Google | MIT | ❌ **EOL (April 2026)** |
+| [Stract](https://github.com/StractOrg/stract) | eigener Index | AGPL-3.0 | ❌ **archiviert (April 2026)** |
+
+Aus dieser Tabelle ergeben sich zwei Schlussfolgerungen. Erstens **scheiden Whoogle und Stract aus**. Beide sind im April 2026 eingestellt worden (Google hat Whoogle die Anfragen ohne JavaScript gesperrt, und das war's), also wenn du auf einen alten Leitfaden stößt, der sie empfiehlt, geh ihm aus dem Weg. Zweitens, wenn du **vollständig unabhängigen Index** haben möchtest, den niemand kontrolliert, ist YaCy okay, aber bereite dich auf langsamere Ergebnisse und mehr Aufwand vor.
+
+Für den normalen Sterblichen, der einfach eine funktionierende, private Suchmaschine auf seinem eigenen Server haben möchte, **ist SearXNG die offensichtliche Wahl**. Es wird aktiv entwickelt, liefert sinnvolle Ergebnisse direkt nach der Einrichtung, hat offizielle Docker-Images, eine Vielzahl von Suchmaschinen zur Auswahl und sogar Unterstützung für Tor. Also fahren wir damit.
+
+> Wenn du tiefer in das Thema eintauchen möchtest, ist die [Dokumentation von SearXNG](https://docs.searxng.org/) wirklich ordentlich und darauf werde ich dich verweisen.
+
+## Was du benötigst
+
+- **Server mit Docker** — bei mir ist es ein VPS auf Oracle Cloud (ARM, Ubuntu), aber es kann auch dein Homelab oder ein einfacher VPS mit festen IP sein.
+- **[Coolify](https://coolify.io)** — wenn du es nicht hast, keine Sorge, ich zeige dir die `docker-compose.yml`, die du überall starten kannst. Coolify verpackt es nur schön und kümmert sich um Traefik und Zertifikate.
+- **Domain** — ich verwende `search.blonie.cloud`. DNS verwaltet Cloudflare.
+
+## Erstellung des Dienstes in Coolify
+
+SearXNG benötigt zwei Container: **searxng** selbst und **[Valkey](https://valkey.io/)** (eine Art Redis-Fork). Valkey ist für den Limiter, also den Bot-Schutz, erforderlich, aber dazu später.
+
+In Coolify erstelle ich einen neuen **Dienst** vom Typ *Docker Compose* (Projekt → Neu → Dienst) und füge diese Konfiguration hinzu:
+
+```yaml
+services:
+  searxng:
+    image: searxng/searxng:latest
+    restart: unless-stopped
+    environment:
+      - SEARXNG_BASE_URL=https://search.blonie.cloud/
+      - SEARXNG_VALKEY_URL=redis://valkey:6379/0
+      - SEARXNG_LIMITER=true
+    volumes:
+      - searxng-data:/etc/searxng
+    depends_on:
+      - valkey
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+      - DAC_OVERRIDE
+  valkey:
+    image: valkey/valkey:8-alpine
+    restart: unless-stopped
+    command: valkey-server --save 30 1 --loglevel warning
+    volumes:
+      - valkey-data:/data
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETGID
+      - SETUID
+      - DAC_OVERRIDE
+volumes:
+  searxng-data:
+  valkey-data:
+```
+
+> **Achtung, hier bin ich auf eine Falle hereingefallen.** Siehst du das `DAC_OVERRIDE` im Abschnitt `cap_add`? **Es ist obligatorisch.** Wenn du es weglässt (und ich habe es weggelassen), landet der Container in einem endlosen Neustart mit dem Fehler:
+>
+> ```
+> cp: kann '/etc/searxng/settings.yml' nicht erstellen: Keine Berechtigung
+> ```
+>
+> Das passiert, weil bei `cap_drop: ALL` sogar der Root im Container nicht die Berechtigung hat, die Standard-`settings.yml` in den neuen Volume zu schreiben, und `DAC_OVERRIDE` ermöglicht es ihm, dies zu tun. Die offizielle Compose-Datei von SearXNG enthält diese Capability aus genau diesem Grund. Schade, dass ich es erst nachträglich herausgefunden habe xd.
+
+Die Umgebungsvariablen, die ich hier hinzugefügt habe:
+
+- `SEARXNG_BASE_URL` — die öffentliche Adresse der Instanz, damit Links korrekt funktionieren.
+- `SEARXNG_VALKEY_URL` — die Adresse von Valkey. **Wichtig:** Verwende die Variable mit `VALKEY`, nicht die alte `SEARXNG_REDIS_URL`, denn die zweite ist veraltet und SearXNG wird dir in den Log-Dateien darüber klagen.
+- `SEARXNG_LIMITER=true` — aktiviert den Limiter, also den Bot-Schutz.
+
+## Domain und HTTPS
+
+In Cloudflare füge ich einen **A-Eintrag** hinzu: `search.blonie.cloud` → IP meines Servers, als **DNS only (graue Wolke)** eingestellt, damit Let's Encrypt das Zertifikat direkt auf dem Origin-Server ausstellen kann.
+
+Jetzt in Coolify, im Abschnitt **Domains** des Dienstes, gebe ich `https://search.blonie.cloud` ein (das `https://` ist wichtig, weil Coolify dann weiß, dass es den Routing für HTTPS einrichten und das Zertifikat abrufen soll). Coolify fügt die entsprechenden Labels für Traefik hinzu und holt selbst das Zertifikat von Let's Encrypt. Nach einer Weile ist die Instanz unter `https://search.blonie.cloud` mit grünem Schloss 🔒 verfügbar.
+
+> Wenn du lieber manuell mit Nginx und certbot (z.B. auf Proxmox) einen Reverse-Proxy einrichten möchtest, habe ich das in [Teil 2 meiner Proxmox-Serie](/blog/de/proxmox-teil-zwei#vorbereitung-lxc-auf-proxmox) gezeigt. Hier kümmert sich Coolify/Traefik darum.
+
+## Limiter und Sicherheit, oder: Wie man Bots abwehrt
+
+Ich habe die Instanz **öffentlich** eingerichtet, aber mit aktiviertem Limiter. Warum nicht ganz offen? Weil öffentliche SearXNG-Instanzen ein Magnet für Bots sind, die durch dich Ergebnisse scrapen, und dann **deine** IP von Google oder Bing gesperrt wird. Der Limiter (von Valkey) blockiert den Traffic, der nach einem Bot aussieht: Ein Klient ohne normale Browser-Header bekommt **HTTP 429**, und ein normaler Browser kommt problemlos durch.
+
+Die Konfiguration des Limiters speichere ich in einer Datei `limiter.toml` im Volume `/etc/searxng`. Das neue Schema (in älteren Anleitungen ist es anders!) sieht so aus:
+
+```toml
+[botdetection]
+# Vertraue den XFF-Headern von Traefik (private Docker-Netzwerke),
+# damit der Limiter die echten IP-Adressen der Clients sieht und nicht die des Proxys
+trusted_proxies = ["127.0.0.0/8", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
+ipv4_prefix = 32
+ipv6_prefix = 48
+
+[botdetection.ip_limit]
+# link_token erhöht den Schutz, aber erfordert JavaScript/Umleitung — lasse ich deaktiviert,
+# damit einfache Clients (curl, Leser) funktionieren
+link_token = false
+```
+
+`secret_key` (so etwas wie eine Sitzungssignatur) wird automatisch bei erstem Start generiert, also musst du dich nicht darum kümmern. Nach Änderungen an der Datei starte ich den SearXNG-Container neu und bin fertig.
+
+Test? Klassisch:
+
+```bash
+# Echter Browser — Ergebnis 200
+curl -s -A "Mozilla/5.0 Firefox/128" -H "Accept-Language: en" \
+  "https://search.blonie.cloud/search?q=self-hosted+search&format=json" \
+  -o /dev/null -w "%{http_code}\n"
+```
+
+Ein einfacher `curl` ohne Header bekommt 429 und das ist genau, was wir wollen. Der Limiter tut seine Arbeit 💪.
+
+## Überwachung in Grafana
+
+Und jetzt mein Lieblingsteil. Ich habe bereits die gesamte **Überwachung auf Oracle** eingerichtet (Grafana + Prometheus + Loki), also wäre es schade, es nicht zu nutzen.
+
+Ein Teil der Dinge lässt sich **automatisch** erfassen, ohne dass man sich großartig anstrengen muss: Container-Log-Dateien (über Loki), CPU-/RAM-/Netzwerk-Auslastung (über `docker-stats-exporter`) und HTTP-Metriken von Traefik. In letzteren sieht man sogar die Anzahl der **429-Antworten**, also direkt, wie viele Bots der Limiter abgewehrt hat.
+
+Aber das Beste ist, dass **SearXNG einen eigenen, integrierten Endpoint im Prometheus-Format** hat. Standardmäßig ist er deaktiviert, also muss man in `settings.yml` einen Token einrichten:
+
+```yaml
+general:
+  # Stelle Metriken im OpenMetrics-Format unter /metrics bereit
+  open_metrics: 'ein-langer-zufälliger-token'
+```
+
+Nach dem Neustart des Containers liefert der Endpoint `/metrics` (gesichert durch Basic-Auth mit diesem Token) Metriken **pro Suchmaschine**:
+
+- `searxng_engines_request_count_total` — wie oft jede Suchmaschine abgefragt wurde
+- `searxng_engines_result_count_total` — wie viele Ergebnisse jede Suchmaschine zurückgegeben hat
+- `searxng_engines_response_time_total_seconds` — durchschnittliche Antwortzeit
+- `searxng_engines_reliability_total` — Zuverlässigkeit (0–100)
+
+Ich füge also in Prometheus einen neuen Scrape-Job hinzu (mit `basic_auth` und diesem Token), der auf `https://search.blonie.cloud/metrics` abzielt, lädt die Konfiguration neu und fertig. In Grafana habe ich jetzt Diagramme mit der Antwortzeit und Zuverlässigkeit jeder Suchmaschine.
+
+> Ein kleiner Trick: **es gibt keine einzelne Metrik "Anzahl der Suchanfragen"**. SearXNG zählt Anfragen *pro Suchmaschine*, und eine deiner Suchanfragen wird auf mehrere Suchmaschinen gleichzeitig verteilt. Also, wenn du siehst, dass Google und DuckDuckGo jeweils 3 Anfragen haben und Brave 1, bedeutet das nicht, dass jemand 7 Mal gesucht hat xd.
+
+## Zusammenfassung
+
+Das war's! In Kürze haben wir gesehen, warum SearXNG und nicht Whoogle oder YaCy, wie man es auf Coolify mit `docker-compose.yml` aufsetzt (und nicht auf `DAC_OVERRIDE` hereinfällt), wie man eine Domain mit Zertifikat von Let's Encrypt einrichtet, wie man die ganze Sache mit Valkey sichert und am Ende, wie man alles in Grafana überwacht.
+
+Du hast jetzt **eine eigene, private Suchmaschine**, die deine Anfragen nicht an Dritte verkauft. Du kannst sie in deinem Browser als Standard-Suchmaschine einrichten (`https://search.blonie.cloud/search?q=%s`) und los geht's.
+
+Lass mich wissen, wenn bei dir etwas nicht funktioniert oder wenn du Ideen hast, was man hinzufügen könnte. Nächstes Mal vielleicht, wie man die Suchmaschinen anpasst und das Design ändert, damit es noch schöner aussieht. Bleib gesund!
+
+## Links
+
+- [SearXNG — GitHub-Repository](https://github.com/searxng/searxng)
+- [SearXNG-Dokumentation](https://docs.searxng.org/)
+- [Coolify](https://coolify.io)
+- [Valkey](https://valkey.io/)
+- [Mein Beitrag über Vaultwarden](/blog/de/how-to-setup-vaultwarden-on-linux)
