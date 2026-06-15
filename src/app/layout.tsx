@@ -43,6 +43,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       data-locale={DEFAULT_FALLBACK_LANG}
       className={geistMono.className}
     >
+      <head>
+        <meta
+          name="google-site-verification"
+          content="qRK-Kl4ZkQUDd_Og6Jj29lts2QyKWoRgez6KemKFVmE"
+        />
+      </head>
       <body className={`antialiased min-h-screen`}>
         <div className="max-w-4xl mx-auto px-4 py-8">
           <Navbar />
