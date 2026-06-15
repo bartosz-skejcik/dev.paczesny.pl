@@ -5,6 +5,7 @@ import "./globals.css"
 import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
 import { ShortcutGuide } from "@/components/shortcut-guide"
+import { WebMcp } from "@/components/web-mcp"
 import { Analytics } from "@vercel/analytics/next"
 import { SpeedInsights } from "@vercel/speed-insights/next"
 import { Analytics as PaczesnyAnalytics } from "@paczesny/analytics"
@@ -49,6 +50,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <ShortcutGuide />
           {children}
           <Footer username="bartosz-skejcik" />
+          <WebMcp />
           <Analytics />
           <SpeedInsights />
           <PaczesnyAnalytics siteId="por_live_8343" />
