@@ -5,6 +5,7 @@ import "./globals.css"
 import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
 import { ShortcutGuide } from "@/components/shortcut-guide"
+import { WebMcp } from "@/components/web-mcp"
 import { Analytics } from "@vercel/analytics/next"
 import { SpeedInsights } from "@vercel/speed-insights/next"
 import { Analytics as PaczesnyAnalytics } from "@paczesny/analytics"
@@ -43,18 +44,13 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       data-locale={DEFAULT_FALLBACK_LANG}
       className={geistMono.className}
     >
-      <head>
-        <meta
-          name="google-site-verification"
-          content="qRK-Kl4ZkQUDd_Og6Jj29lts2QyKWoRgez6KemKFVmE"
-        />
-      </head>
       <body className={`antialiased min-h-screen`}>
         <div className="max-w-4xl mx-auto px-4 py-8">
           <Navbar />
           <ShortcutGuide />
           {children}
           <Footer username="bartosz-skejcik" />
+          <WebMcp />
           <Analytics />
           <SpeedInsights />
           <PaczesnyAnalytics siteId="por_live_8343" />
