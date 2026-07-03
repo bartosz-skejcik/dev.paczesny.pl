@@ -107,7 +107,7 @@ In Cloudflare, I add an **A record**: `search.blonie.cloud` → my server's IP, 
 
 Now, in Coolify, in the **Domains** tab of the service, I enter `https://search.blonie.cloud` (the `https://` matters, because Coolify knows to set up HTTPS routing and fetch a certificate). Coolify adds the necessary labels to Traefik and issues a certificate from Let's Encrypt. After a while, the instance is live at `https://search.blonie.cloud` with a green lock.
 
-> If you prefer to set up a reverse proxy manually with Nginx and certbot (e.g., on Proxmox), I showed how to do that in [part two of my Proxmox series](/blog/en/proxmox-part-two#preparing-lxc-on-proxmox). Here, Coolify/Traefik handles it for me.
+> If you prefer to set up a reverse proxy manually with Nginx and certbot (e.g., on Proxmox), I showed how to do that in [part two of my Proxmox series](/blog/en/proxmox-czesc-druga#preparing-lxc-on-proxmox). Here, Coolify/Traefik handles it for me.
 
 ## Limiter and Security, or Keeping Bots at Bay
 
@@ -144,7 +144,7 @@ A bare `curl` without headers gets a 429, and that's the point. The limiter does
 
 ## Monitoring in Grafana
 
-And my favorite part! I already have [observability set up on Oracle](/blog/en/proxmox-part-two) (Grafana + Prometheus + Loki), so it's a shame not to use it.
+And my favorite part! I already have [observability set up on Oracle](/blog/en/proxmox-czesc-druga) (Grafana + Prometheus + Loki), so it's a shame not to use it.
 
 Some things are caught **automatically**, without lifting a finger: container logs (via Loki), CPU/RAM/network usage (via `docker-stats-exporter`), and HTTP metrics from Traefik. In the latter, you can even see the number of **429 responses**, or how many bots the limiter blocked.
 
