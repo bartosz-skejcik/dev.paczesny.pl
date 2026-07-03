@@ -5,9 +5,11 @@ import {
   getAvailableLanguages,
   getPostBySlug,
   getPostSlugs,
+  getPublicImageSize,
   type MDXFileData,
 } from "@/lib/blog"
 import {
+  CANONICAL_LANG,
   DEFAULT_FALLBACK_LANG,
   getLanguageConfig,
   normalizeLang,
@@ -60,9 +62,17 @@ export async function generateMetadata({
   const available = getAvailableLanguages(slug)
   const tags = resolvePostTags(post)
   const publishedTime = new Date(post.metadata.date).toISOString()
-  const ogImagePath = `/og/blog?title=${encodeURIComponent(
-    post.metadata.title
-  )}&lang=${post.lang}`
+  const coverImage =
+    post.metadata.coverImage ??
+    post.localizedMetadata?.[CANONICAL_LANG]?.coverImage
+  const ogImagePath =
+    coverImage ??
+    `/og/blog?title=${encodeURIComponent(post.metadata.title)}&lang=${
+      post.lang
+    }`
+  const ogImageSize = coverImage
+    ? getPublicImageSize(coverImage)
+    : { width: 1200, height: 600 }
   const baseDescription = resolvePostDescription(post)
   const description = buildKeywordRichDescription(
     baseDescription,
@@ -84,6 +94,7 @@ export async function generateMetadata({
     description,
     path: `/blog/${post.lang}/${slug}`,
     openGraphImagePath: ogImagePath,
+    openGraphImageSize: ogImageSize,
     publishedTime,
     type: "article",
     alternates,

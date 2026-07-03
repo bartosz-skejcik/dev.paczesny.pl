@@ -22,6 +22,7 @@ type MetadataInput = {
   description: string
   path: string
   openGraphImagePath?: string
+  openGraphImageSize?: { width: number; height: number }
   publishedTime?: string
   type?: "website" | "article"
   alternates?: Record<string, string>
@@ -35,6 +36,7 @@ export function buildLocalizedMetadata({
   description,
   path,
   openGraphImagePath,
+  openGraphImageSize,
   publishedTime,
   type = "website",
   alternates,
@@ -74,6 +76,8 @@ export function buildLocalizedMetadata({
       images: [
         {
           url: ogImage,
+          alt: title,
+          ...(openGraphImageSize ?? {}),
         },
       ],
       ...(publishedTime && type === "article" ? { publishedTime } : {}),
