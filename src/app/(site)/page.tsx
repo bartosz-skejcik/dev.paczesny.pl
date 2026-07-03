@@ -105,10 +105,14 @@ export default function HomePage() {
   )
 }
 
-export const metadata: Metadata = buildLocalizedMetadata({
-  lang: DEFAULT_FALLBACK_LANG,
-  title: "Bartek Paczesny",
-  description: DEFAULT_SEO_DESCRIPTION,
-  path: "/",
-  openGraphImagePath: "/og/home",
-})
+export const metadata: Metadata = {
+  ...buildLocalizedMetadata({
+    lang: DEFAULT_FALLBACK_LANG,
+    title: "Bartek Paczesny",
+    description: DEFAULT_SEO_DESCRIPTION,
+    path: "/",
+    openGraphImagePath: "/og/home",
+  }),
+  // The root layout's title template would render "Bartek Paczesny | Bartek Paczesny" here.
+  title: { absolute: "Bartek Paczesny: Developer & Homelab Blog" },
+}
