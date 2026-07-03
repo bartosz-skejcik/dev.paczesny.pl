@@ -12,7 +12,7 @@ Salut ! Aujourd'hui, je prends une pause de Proxmox et je m'attaque à quelque c
 
 L'outil s'appelle **[SearXNG](https://github.com/searxng/searxng)** et dans cet article, je vais te montrer comment je l'ai installé sur mon VPS avec [Coolify](https://coolify.io) (mon PaaS auto-hébergé, comme un Vercel maison). Cette fois, pas de Proxmox ni de LXC. Ça tourne sur Docker pur, avec Traefik comme reverse proxy et un certificat Let's Encrypt. Et pour finir, on va le relier à Grafana, parce que si on héberge quelque chose, il faut bien le voir sur des graphiques, n'est-ce pas ?
 
-Comme d'habitude, si je ne dis pas quelque chose, c'est que je m'apprends encore, désolé. Au moins, je présenterai l'idée générale. Si tu aimes ce genre de choses, tu peux jeter un œil à mon article sur [l'installation de Vaultwarden](/blog/fr/comment-installer-vaultwarden-sur-linux), c'est une histoire similaire, mais avec un gestionnaire de mots de passe.
+Comme d'habitude, si je ne dis pas quelque chose, c'est que je m'apprends encore, désolé. Au moins, je présenterai l'idée générale. Si tu aimes ce genre de choses, tu peux jeter un œil à mon article sur [l'installation de Vaultwarden](/blog/fr/how-to-setup-vaultwarden-on-linux), c'est une histoire similaire, mais avec un gestionnaire de mots de passe.
 
 ## Pourquoi SearXNG ? Ou comment choisir son moteur de recherche auto-hébergé
 
@@ -107,7 +107,7 @@ Dans Cloudflare, j'ajoute un enregistrement **A** : `search.blonie.cloud` → l'
 
 Maintenant, dans Coolify, dans l'onglet **Domains** du service, je tape `https://search.blonie.cloud` (le `https://` est important, car comme ça, Coolify sait qu'il doit faire du routing HTTPS et aller chercher le certificat). Coolify ajoute les étiquettes appropriées à Traefik et délivre le certificat Let's Encrypt. Au bout d'un moment, l'instance est opérationnelle sous `https://search.blonie.cloud` avec un cadenas vert.
 
-> Si tu préfères faire le reverse proxy à la main avec Nginx et certbot (par exemple sur Proxmox), c'est exactement ce que j'ai montré dans [la deuxième partie de la série sur Proxmox](/blog/fr/proxmox-partie-deux#préparation-de-lxc-sur-proxmox). Ici, Coolify/Traefik s'en charge pour moi.
+> Si tu préfères faire le reverse proxy à la main avec Nginx et certbot (par exemple sur Proxmox), c'est exactement ce que j'ai montré dans [la deuxième partie de la série sur Proxmox](/blog/fr/proxmox-czesc-druga#préparation-de-lxc-sur-proxmox). Ici, Coolify/Traefik s'en charge pour moi.
 
 ## Limiteur et sécurité, ou comment faire fuir les bots
 
@@ -144,7 +144,7 @@ Un `curl` nu sans en-tête reçoit un 429, et c'est exactement ce qu'on veut. Le
 
 ## Surveillance avec Grafana
 
-Et maintenant, ma partie préférée. J'ai déjà toute [l'observabilité mise en place sur Oracle](/blog/fr/proxmox-partie-deux) (Grafana + Prometheus + Loki), donc c'est dommage de ne pas l'utiliser.
+Et maintenant, ma partie préférée. J'ai déjà toute [l'observabilité mise en place sur Oracle](/blog/fr/proxmox-czesc-druga) (Grafana + Prometheus + Loki), donc c'est dommage de ne pas l'utiliser.
 
 Une partie des choses se configurent **toutes seules**, sans bouger le petit doigt : les logs du conteneur (via Loki), l'utilisation de la CPU/RAM/réseau (via `docker-stats-exporter`) et les métriques HTTP de Traefik. Dans ces dernières, on voit même le nombre de réponses **429**, c'est-à-dire combien de bots le limiteur a repoussés.
 

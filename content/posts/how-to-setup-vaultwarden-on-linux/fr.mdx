@@ -114,7 +114,7 @@ Une fois cela fait, je vérifie la configuration et redémarre Nginx :
 nginx -t && systemctl reload nginx
 ```
 
-Maintenant, il est temps de générer le certificat SSL à l'aide de Certbot. Si c'est la première fois que vous utilisez Certbot ou que vous ne savez pas comment configurer un proxy inverse, je vous renvoie à [ce billet](/blog/fr/proxmox-partie-deux#préparation-de-lxc-sur-proxmox) où je montre comment je le fais.
+Maintenant, il est temps de générer le certificat SSL à l'aide de Certbot. Si c'est la première fois que vous utilisez Certbot ou que vous ne savez pas comment configurer un proxy inverse, je vous renvoie à [ce billet](/blog/fr/proxmox-czesc-druga#préparation-de-lxc-sur-proxmox) où je montre comment je le fais.
 
 Je lance maintenant Certbot, qui se connectera à Let's Encrypt et exposera temporairement les fichiers dans `.well-known/acme-challenge` sur le port 80.
 

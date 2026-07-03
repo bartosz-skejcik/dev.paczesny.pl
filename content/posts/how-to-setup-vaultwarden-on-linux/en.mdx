@@ -8,7 +8,7 @@ coverImage: /assets/images/vm-create.png
 
 ## Introduction
 
-Hey there! I'm creating this post as another part of my struggles with Proxmox, but also as a separate tutorial post. I'll try to present everything in a clear and simple way, but since I'm just starting to write blogs, don't expect any fireworks. I might miss something or not mention something, but I think I'll convey the main idea. If you haven't seen my [previous](/blog/pl/proxmox-first-install) posts, I encourage you to read them.
+Hey there! I'm creating this post as another part of my struggles with Proxmox, but also as a separate tutorial post. I'll try to present everything in a clear and simple way, but since I'm just starting to write blogs, don't expect any fireworks. I might miss something or not mention something, but I think I'll convey the main idea. If you haven't seen my [previous](/blog/en/proxmox-first-install) posts, I encourage you to read them.
 
 In this post, you'll learn how I managed to run Vaultwarden on a Linux machine, specifically on some Ubuntu or Debian.
 
@@ -114,7 +114,7 @@ Once that's done, I check the configuration and restart Nginx:
 nginx -t && systemctl reload nginx
 ```
 
-Now it's time to generate an SSL certificate using Certbot. If this is your first time using Certbot or you're not sure how to create a reverse proxy, I refer you to [this post](/blog/pl/proxmox-czesc-druga#przygotowanie-lxc-na-proxmoxie) where I show how to do it.
+Now it's time to generate an SSL certificate using Certbot. If this is your first time using Certbot or you're not sure how to create a reverse proxy, I refer you to [this post](/blog/en/proxmox-czesc-druga#przygotowanie-lxc-na-proxmoxie) where I show how to do it.
 
 I run Certbot, which will connect to Let's Encrypt and expose temporary files in `.well-known/acme-challenge` on port 80:
 ```bash

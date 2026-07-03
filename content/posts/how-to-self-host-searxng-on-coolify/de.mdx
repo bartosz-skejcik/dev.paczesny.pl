@@ -107,7 +107,7 @@ In Cloudflare füge ich einen **A-Eintrag** hinzu: `search.blonie.cloud` → IP 
 
 Jetzt in Coolify, im Abschnitt **Domains** des Dienstes, gebe ich `https://search.blonie.cloud` ein (das `https://` ist wichtig, weil Coolify dann weiß, dass es den Routing für HTTPS einrichten und das Zertifikat abrufen soll). Coolify fügt die entsprechenden Labels für Traefik hinzu und holt selbst das Zertifikat von Let's Encrypt. Nach einer Weile ist die Instanz unter `https://search.blonie.cloud` mit grünem Schloss 🔒 verfügbar.
 
-> Wenn du lieber manuell mit Nginx und certbot (z.B. auf Proxmox) einen Reverse-Proxy einrichten möchtest, habe ich das in [Teil 2 meiner Proxmox-Serie](/blog/de/proxmox-teil-zwei#vorbereitung-lxc-auf-proxmox) gezeigt. Hier kümmert sich Coolify/Traefik darum.
+> Wenn du lieber manuell mit Nginx und certbot (z.B. auf Proxmox) einen Reverse-Proxy einrichten möchtest, habe ich das in [Teil 2 meiner Proxmox-Serie](/blog/de/proxmox-czesc-druga#vorbereitung-lxc-auf-proxmox) gezeigt. Hier kümmert sich Coolify/Traefik darum.
 
 ## Limiter und Sicherheit, oder: Wie man Bots abwehrt
 

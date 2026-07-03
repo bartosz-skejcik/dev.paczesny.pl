@@ -8,7 +8,7 @@ coverImage: /assets/images/vm-create.png
 
 ## Einführung
 
-Hallo! Ich erstelle diesen Beitrag als weitere Folge meiner Auseinandersetzungen mit Proxmox, aber auch als separaten Beitrag mit Anleitung. Ich werde mich bemühen, alles so verständlich und einfach wie möglich darzustellen, aber da ich gerade erst mit dem Bloggen beginne, erwarte keine Feuerwerke. Ich könnte etwas übersehen oder nicht erwähnen, aber ich denke, ich werde die Hauptidee vermitteln. Wenn du die [vorherigen](/blog/de/proxmox-erste-installation) Beiträge nicht gesehen hast, empfehle ich dir, sie zu lesen.
+Hallo! Ich erstelle diesen Beitrag als weitere Folge meiner Auseinandersetzungen mit Proxmox, aber auch als separaten Beitrag mit Anleitung. Ich werde mich bemühen, alles so verständlich und einfach wie möglich darzustellen, aber da ich gerade erst mit dem Bloggen beginne, erwarte keine Feuerwerke. Ich könnte etwas übersehen oder nicht erwähnen, aber ich denke, ich werde die Hauptidee vermitteln. Wenn du die [vorherigen](/blog/de/proxmox-first-install) Beiträge nicht gesehen hast, empfehle ich dir, sie zu lesen.
 
 In diesem Beitrag erfährst du, wie ich es geschafft habe, Vaultwarden auf einer Maschine mit Linux-System, genauer gesagt auf Ubuntu oder Debian, zu starten.
 
@@ -114,7 +114,7 @@ Wenn wir dies alles erledigt haben, überprüfen wir die Konfiguration und start
 nginx -t && systemctl reload nginx
 ```
 
-Jetzt ist es Zeit, das SSL-Zertifikat mit Certbot zu generieren. Wenn dies das erste Mal ist, dass du Certbot verwendest, oder wenn du nicht weißt, wie du einen Reverse Proxy einrichtest, verweise ich auf [diesen Beitrag](/blog/de/proxmox-teil-zwei#vorbereitung-lxc-auf-proxmox), in dem ich zeige, wie ich es mache.
+Jetzt ist es Zeit, das SSL-Zertifikat mit Certbot zu generieren. Wenn dies das erste Mal ist, dass du Certbot verwendest, oder wenn du nicht weißt, wie du einen Reverse Proxy einrichtest, verweise ich auf [diesen Beitrag](/blog/de/proxmox-czesc-druga#vorbereitung-lxc-auf-proxmox), in dem ich zeige, wie ich es mache.
 
 Jetzt starte ich Certbot, der sich mit Let's Encrypt verbinden und temporär Dateien im `.well-known/acme-challenge`-Verzeichnis auf Port 80 verfügbar machen wird.
 
