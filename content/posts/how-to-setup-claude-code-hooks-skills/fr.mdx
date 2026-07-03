@@ -1,0 +1,251 @@
+---
+title: Claude Code : les hooks, les compétences et les sous-agents en pratique
+description: Deux fois, l'agent a fait du désordre, donc j'ai configuré Claude Code sérieusement : les hooks PreToolUse et Stop, mes propres compétences et sous-agents. De vrais scripts à l'intérieur.
+date: 2026-07-03T18:00:00.000Z
+tags: claude-code, ai, agents, hooks, skills, automatisation, productivité, llm
+coverImage: /assets/images/claude-code-hooks.png
+---
+
+## Introduction
+
+Salut ! Aujourd'hui, ce ne sera pas à propos de Proxmox ou de Docker, mais d'un outil dans lequel je passe plus de temps que sur un navigateur, à savoir **Claude Code**. Plus précisément, sur la façon dont j'ai arrêté de lui faire confiance aveuglément et l'ai configuré pour qu'il ne puisse pas faire de désordre, même s'il le voulait vraiment.
+
+Une petite scène. Je dis à l'agent : répare le bogue et déploie. L'agent fouille dans le code, commit et rapporte avec fierté qu'il a terminé. Une heure passe, le client écrit que rien n'a changé. Eh bien, chez moi, le déploiement se fait avec **git push**, et il n'y a pas eu de push. L'agent a considéré le travail comme terminé au commit, le commit est resté sur mon disque et c'est tout pour le déploiement. Zut.
+
+Deuxième action, plus récente, début juillet : une session lancée dans le projet A a commencé à modifier discrètement des fichiers dans le projet B. Dans le projet B, un **autre agent** était en cours d'exécution. Deux agents fouillant dans le même dépôt sans savoir ce que fait l'autre, c'est une recette pour le désastre. Heureusement que cela s'est terminé par un petit nettoyage.
+
+Après ces deux erreurs, j'ai décidé qu'il était temps de mettre des règles en place. Dans cet article, vous obtiendrez trois choses :
+
+1. Mes véritables règles de **CLAUDE.md**, que l'agent lit au démarrage de chaque session,
+2. Deux **hooks** qui bloquent physiquement les bêtises (avec du code à copier),
+3. **Compétences et sous-agents**, ou comment ne pas avoir à expliquer la même chose à l'agent pour la dixième fois.
+
+Il y a déjà pas mal de matériel en anglais, Anthropic a même décrit récemment [toutes les façons de piloter Claude Code](https://claude.com/blog/steering-claude-code-skills-hooks-rules-subagents-and-more), mais vous n'y trouverez pas de vrais scripts de production. Ici, si. Et si j'oublie de mentionner quelque chose, désolé, je suis encore en train d'apprendre xd.
+
+## Qu'est-ce qui différencie CLAUDE.md, une compétence, un hook et un sous-agent
+
+Claude Code peut être contrôlé de quatre manières. **CLAUDE.md** est un fichier avec des instructions constantes, chargé dans le contexte au démarrage de la session. Une **compétence** est une procédure dans un fichier markdown, que l'agent charge à la demande. Un **hook** est un script que le programme Claude Code exécute automatiquement à un événement spécifique. Un **sous-agent** est une session séparée avec son propre contexte, lancée pour une sous-tâche.
+
+| Mécanisme | Qu'est-ce que c'est | Quand ça fonctionne | L'agent peut-il l'ignorer |
+|-----------|------------|--------------|------------------------------|
+| **CLAUDE.md** | instructions constantes dans le contexte | toujours, depuis le démarrage de la session | théoriquement non, pratiquement ça arrive |
+| **Compétence** | procédure à la demande (fichier `SKILL.md`) | quand vous l'appelez ou quand elle correspond à la tâche | exécute étape par étape, mais c'est toujours un modèle |
+| **Hook** | script exécuté par le harnais | à un événement : avant l'outil, à la fin de la session | **non, c'est du code, pas une demande** |
+| **Sous-agent** | session séparée pour une sous-tâche | quand vous le lancez | a son propre contexte et autorisations |
+
+La phrase la plus importante de cet article : **un hook est le seul de ces mécanismes que le modèle ne peut pas ignorer**, car il est exécuté par le harnais (c'est-à-dire le programme Claude Code lui-même), et non par le modèle. CLAUDE.md et les compétences sont des instructions pour le modèle, et le modèle, comme tous les modèles, a parfois des humeurs. Un hook est du code ordinaire : il s'exécute toujours, indépendamment de l'humeur de l'agent.
+
+## CLAUDE.md, ou les règles écrites une fois pour toutes
+
+CLAUDE.md est un fichier avec des instructions que Claude Code charge dans le contexte au démarrage de chaque session : global dans `~/.claude/CLAUDE.md`, spécifique au projet dans le répertoire du dépôt. C'est la première ligne de défense et l'endroit pour tout ce que vous expliqueriez normalement à l'agent à chaque fois. Voici quelques règles réelles de mon fichier global :
+
+```markdown
+## Déploiement et définition de "fait"
+- Le travail est terminé seulement lorsque c'est commité, PUSHÉ
+  sur la bonne branche et que le déploiement est vérifié.
+  Le déploiement ne se déclenche que sur git push.
+
+## Secrets
+- Ne jamais afficher les secrets dans le chat. Les fichiers env sont lus en mode redacted : affichez les noms de variables, pas les valeurs.
+
+## Portée
+- Restez dans le répertoire du projet de cette session. Ne modifiez jamais le projet voisin : il peut être travaillé par un autre agent.
+
+## Style
+- Zéro tirets cadratins (em dashes), dans aucune langue.
+  Virgules, points, deux-points.
+```
+
+(Oui, l'interdiction des tirets cadratins est une vraie règle. Quiconque a lu des textes écrits par une IA sait pourquoi xd.)
+
+Mais une instruction en markdown est toujours **une demande, pas une garantie**. Dans 95 % des cas, ça fonctionne et c'est beau. Mais le modèle, dans une longue session, peut « oublier » une règle, surtout si le contexte gonfle. Pour les règles du genre « ne débarque pas dans le dépôt de quelqu'un d'autre », je préfère ne pas tester à quelle fréquence arrive le « pratiquement ça arrive » du tableau. Pour ces 5 % restants, il y a les hooks.
+
+## Les hooks dans Claude Code : des fusibles que l'agent ne peut pas contourner
+
+Un hook dans Claude Code est un script (ou n'importe quelle commande) que le harnais exécute automatiquement à un événement spécifique : avant l'exécution d'un outil (`PreToolUse`), après (`PostToolUse`), lors de la tentative de fin de session (`Stop`) et à quelques autres. Le script reçoit sur stdin un JSON avec le contexte complet de l'événement et peut le laisser passer, le bloquer ou y ajouter quelque chose. Le modèle n'a rien à dire ici.
+
+Chez moi, deux hooks font le travail, tous deux nés de la douleur.
+
+### Hook Stop : fini avec les déploiements fantômes
+
+Rappelez-vous la scène de l'introduction ? Maintenant, nous allons la clore avec du code. L'événement `Stop` se déclenche lorsque l'agent pense qu'il a terminé et veut rendre la parole. Mon `unpushed-work-guard.sh` vérifie alors s'il reste des commits non poussés ou des modifications non commitées dans le dépôt. S'il y en a, la session se fait taper sur les doigts :
+
+```bash
+#!/usr/bin/env bash
+# unpushed-work-guard.sh, hook Stop :
+# n'autorise pas la session à se terminer avec du travail non poussé
+set -euo pipefail
+
+input=$(cat)
+
+# si le hook a déjà une fois bloqué ce Stop, laisse passer (sinon boucle)
+stop_hook_active=$(printf '%s' "$input" | jq -r '.stop_hook_active // false')
+[ "$stop_hook_active" = "true" ] && exit 0
+
+cwd=$(printf '%s' "$input" | jq -r '.cwd // empty')
+repo=$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null) || exit 0
+git -C "$repo" remote get-url origin >/dev/null 2>&1 || exit 0
+
+# commit avant origin + modifications dans les fichiers suivis par git
+ahead=$(git -C "$repo" rev-list --count '@{u}..HEAD' 2>/dev/null || echo 0)
+dirty=$(git -C "$repo" status --porcelain | grep -cv '^??' || true)
+[ "$ahead" = "0" ] && [ "$dirty" -eq 0 ] && exit 0
+
+reason="Travail non poussé dans $(basename "$repo") : commit avant origin : ${ahead}, fichiers modifiés : ${dirty}. Le déploiement ne se fait que sur git push. Quand le travail est terminé : commit et push. Si vous ne poussez pas intentionnellement, écrivez-le explicitement et terminez seulement après."
+jq -n --arg reason "$reason" '{decision: "block", reason: $reason}'
+```
+
+La mécanique est simple : le hook crache sur stdout un JSON avec `decision: "block"` et un champ `reason`. Le harnais n'arrête pas la session, et l'agent reçoit `reason` comme instruction et retourne au travail. Dans la pratique, cela signifie que l'agent écrit "terminé !", puis soudainement ajoute "ah, et je vais pusher" et pousse. Magie xd.
+
+Deux détails découverts à l'usage :
+
+- `stop_hook_active` est un flag du harnais indiquant « ce Stop a déjà été bloqué une fois ». Sans cette vérification, le hook peut faire boucler la session indéfiniment.
+- La version complète du script enregistre également **une signature de l'état du dépôt** (HEAD, nombre de commits avant origin, flag de fichiers sales) dans un fichier et ne se manifeste que si la signature change. Sinon, le hook radoterait à chaque Stop dans une session interactive. De nouveaux commits changent la signature, donc le fusible se réarme tout seul.
+
+### Hook PreToolUse : comment bloquer Claude Code avant la modification de fichiers étrangers
+
+Deuxième erreur. Tous mes projets sont dans un même répertoire de travail, et une session dans le projet A peut techniquement voir les fichiers du projet B. L'événement `PreToolUse` se déclenche avant chaque exécution d'outil et est le seul à pouvoir la **bloquer**. Mon `sibling-project-guard.sh` veille à ce qu'une session dans un projet ne modifie pas les fichiers d'un autre projet. L'essence du script :
+
+```bash
+deny() {
+  jq -n --arg r "$1" '{hookSpecificOutput: {hookEventName: "PreToolUse",
+    permissionDecision: "deny", permissionDecisionReason: $r}}'
+  exit 0
+}
+
+# Edit / Write : comparez la cible avec le projet de la session
+if [ "$tool" = "Edit" ] || [ "$tool" = "Write" ]; then
+  fp=$(printf '%s' "$input" | jq -r '.tool_input.file_path // empty')
+  if target_outside "$fp"; then
+    deny "Écriture bloquée dans un autre projet : la session est dans ${session_proj}, et la cible est ${fp}. Un autre agent peut travailler sur ce projet."
+  fi
+fi
+```
+
+Le hook retourne un JSON avec `permissionDecision: "deny"`, et Claude reçoit une refus, **avant même que la modification ne soit effectuée**. La raison de refus est jointe, donc l'agent sait pourquoi il ne peut pas le faire et n'essaye pas en boucle. La version complète attrape également les commandes Bash qui modifient le projet voisin (`git commit/push/checkout`, `rm`, `sed -i`, `npm install`, etc.), et laisse les lectures (`cat`, `grep`, `git log`) autorisées. Regarder le code du voisin est légitime, le modifier ne l'est pas.
+
+### Comment brancher un hook
+
+Les hooks sont déclarés dans `settings.json` : globalement dans `~/.claude/settings.json` ou par projet dans `.claude/settings.json`. L'entrée est composée de l'événement (par exemple `PreToolUse`, `Stop`), d'un `matcher` sur le nom de l'outil et de la commande à exécuter, avec un timeout optionnel :
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/sibling-project-guard.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/unpushed-work-guard.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Le script reçoit un JSON sur stdin et a deux façons de répondre : le code de sortie (0 pour laisser passer, 2 pour bloquer et afficher à l'agent stderr) ou un JSON sur stdout, comme dans les exemples ci-dessus. Il y a également un `timeout`, pour que le hook suspendu ne suspende pas toute la session. La liste complète des événements et des champs est dans la [documentation des hooks](https://code.claude.com/docs/en/hooks).
+
+## Compétences : des procédures au lieu de tout réexpliquer à zéro
+
+Une compétence dans Claude Code est un fichier `SKILL.md` avec une procédure que l'agent charge seulement lorsqu'elle est nécessaire : il reconnaît lui-même d'après la description qu'elle correspond à la tâche, ou vous l'appelez manuellement via `/nom`. Contrairement à CLAUDE.md, une compétence ne reste pas en permanence dans le contexte, elle peut donc être longue et détaillée, et ne coûte qu'à l'utilisation.
+
+Ma compétence la plus utilisée s'appelle `ship`. Elle est née directement de la première erreur : puisque l'agent pense que « terminé » signifie « commité », il a reçu une procédure qui définit la fin du travail étape par étape :
+
+```markdown
+---
+name: ship
+description: Utilisez lorsque l'unité de travail est terminée et doit sortir,
+  ou lorsque Bartek dit "expédiez", "poussez", "envoyez-le" ou demande si le déploiement a fonctionné.
+---
+
+# Ship
+
+Terminez le travail : vérifiez, commitez, poussez, observez le déploiement, testez.
+
+1. Prévol : exécutez les tests/lint du projet. Quelque chose est cassé = rapportez et arrêtez.
+2. Commit : seulement les modifications liées, description courte.
+3. Poussez sur la branche de déploiement du projet (de CLAUDE.md, ne devinez jamais).
+4. Observez le déploiement : interrogez l'URL live, jusqu'à ce que le nouveau build réponde (2-5 minutes).
+5. Testez : une vraie requête à la production, pas une supposition.
+6. Rapport : SHA, état du déploiement, résultat du test.
+```
+
+(Version abrégée et traduite, l'original est en anglais et comporte des détails spécifiques à l'hébergement.) Maintenant, au lieu d'écrire un long discours, je lance « envoyez-le » et l'agent sait que le push sans déploiement vérifié ne compte pas. Lorsque j'ai installé [SearXNG sur Coolify](/blog/fr/how-to-self-host-searxng-on-coolify), c'était exactement ce type de travail : commit, push, surveillance du build et vérification que le site est en vie. Maintenant, une seule compétence s'en charge.
+
+En plus de celle-ci, j'en ai encore quelques autres : `oracle` (travail sur mon VPS, mettez à jour les docs et les tableaux de bord dans Grafana après), `preview` (mettez en place un serveur de développement et donnez-moi un lien pour vérifier) ou `go-live` (liste de contrôle pour la mise en ligne d'un nouveau site sur Coolify). Rien de grand, mais ce sont exactement ces choses que j'expliquais à chaque session depuis le début.
+
+## Sous-agents : quand une session ne suffit pas
+
+Un sous-agent est une session Claude séparée avec son propre contexte, son propre prompt système et ses propres autorisations, lancée par la session principale pour une sous-tâche. Je les utilise dans deux situations : lorsque les tâches sont indépendantes et peuvent s'exécuter en parallèle, ou lorsque certaines recherches sales généreraient des tonnes de déchets dans le contexte principal, et que j'ai seulement besoin de la conclusion.
+
+Le meilleur exemple de mon propre setup : tout le système que je décris ici a commencé lorsque j'ai lâché un agent sur mes anciennes sessions Claude Code (plus de 200) avec la question « qu'est-ce qui se répète et qu'est-ce qui va régulièrement mal ». La session principale n'a pas lu ces journaux, les sous-agents s'en sont chargés, et ce qui m'est revenu, c'est un rapport avec une liste de points de friction. De ce rapport sont nés les hooks et les compétences de cet article.
+
+Le prompt qui a déclenché tout ça, littéralement (copiez-le sans hésiter) :
+
+```
+Audit my recent Claude Code sessions with sub-agents. Cluster where I keep
+hitting friction, then propose new skills, automations, hooks and CLAUDE.md
+fixes.
+```
+
+Les transcriptions des sessions se trouvent dans `~/.claude/projects/`, donc l'agent a de quoi creuser. Le prompt marche d'ailleurs dans n'importe quelle langue, Claude s'en fiche. Je vous préviens juste que le résultat peut faire mal : chez moi, il est ressorti que j'ai écrit « did you push? » 13 fois en un mois xd.
+
+Le sujet est plus profond (définitions de sous-agents personnalisés, limitation des outils, modèles moins chers pour les tâches simples), mais c'est du matériel pour un autre article, donc pour l'instant, je renvoie à la [documentation des sous-agents](https://code.claude.com/docs/en/sub-agents).
+
+## Qu'est-ce qui a changé
+
+Je ne vais pas dire que je mesure les effets depuis six mois : les règles dans CLAUDE.md ont mûri chez moi pendant des semaines, mais les hooks dans leur forme actuelle ne sont là que depuis peu (les deux erreurs de l'introduction sont récentes, c'est pourquoi il y a cet article). La différence est visible tout de suite :
+
+- **Zéro déploiement fantôme.** La session ne peut pas se terminer avec des commit non poussés. Le hook Stop renvoie l'agent au travail, et si le travail est intentionnellement incomplet, l'agent doit l'écrire explicitement, au lieu de laisser discrètement le commit sur le disque.
+- **Zéro fouille dans les projets étrangers.** Le gardien tue les mutations entre projets avant qu'elles ne s'exécutent. Les lectures fonctionnent toujours, donc l'agent peut regarder le code du voisin, mais il ne le modifiera pas.
+- **Nouvelle session connaissant les règles dès la première seconde.** Au lieu de passer dix minutes à expliquer « chez moi, le déploiement se fait comme ça, et les secrets sont là », l'agent reçoit tout depuis CLAUDE.md.
+
+Et ce qui énerve ? Les hooks sont du code, donc il faut les entretenir comme du code. La première version du gardien tirait des faux positifs : l'un de mes dépôts a le mot « switch » dans son nom, et `git switch` est une commande de mutation, donc le gardien bloquait même les lectures innocentes dans ce projet xd. D'où, dans le script, la suppression des arguments `-C <chemin>` avant le matching, et d'où le fichier `sibling-project-guard.test.sh` avec des tests de régression à côté. Si le fusible doit sauter, qu'il saute au moins au bon moment.
+
+## FAQ
+
+**Qu'est-ce qui différencie une compétence d'un hook dans Claude Code ?**
+Une compétence est une instruction en markdown que le modèle exécute, donc elle est flexible, mais peut être exécutée incorrectement. Un hook est un script exécuté par le programme Claude Code lui-même à un événement spécifique, donc il s'exécute toujours. Les compétences sont pour les procédures, les hooks pour les règles dures.
+
+**Un hook peut-il bloquer l'exécution d'une commande ?**
+Oui. Le hook `PreToolUse` reçoit l'appel complet de l'outil avant qu'il ne s'exécute, et peut retourner `permissionDecision: "deny"`. L'outil ne s'exécute pas, et l'agent reçoit la raison du refus et doit s'adapter.
+
+**Où stocker la configuration des hooks ?**
+Dans `~/.claude/settings.json` (globalement) ou dans `.claude/settings.json` dans le projet. L'entrée est composée de l'événement (par exemple `PreToolUse`, `Stop`), d'un `matcher` sur le nom de l'outil et de la commande à exécuter, avec un timeout optionnel.
+
+**CLAUDE.md suffit-il sans hooks ?**
+Au départ, oui, c'est même par où il faut commencer, car ça règle la majorité des cas gratuitement. Mais CLAUDE.md est toujours **une demande, pas une garantie**. Les règles dont la violation a vraiment un coût (déploiement, secrets, projets étrangers) sont mieux fermées avec un hook, car un hook ne peut pas être ignoré.
+
+**Cela fonctionne-t-il seulement dans le terminal ?**
+Non. Claude Code fonctionne dans le CLI, l'application de bureau, le navigateur et comme extension IDE (VS Code, JetBrains). Les hooks et les compétences sont dans votre répertoire `~/.claude`, donc vous les avez partout où l'environnement y a accès.
+
+## Conclusion
+
+Et voilà ! En résumé : CLAUDE.md fixe les règles, les compétences transforment les explications répétitives en procédures, et les hooks font des règles les plus importantes des fusibles durs que le modèle ne peut pas ignorer. Tous les scripts de cet article peuvent être copiés et adaptés à votre setup.
+
+Et maintenant, la cerise ironique sur le gâteau. J'ai monté tout ce système pour surveiller l'agent. Et il s'est avéré que le hook Stop tape le plus souvent sur les doigts... de moi, car c'est moi qui commite à la main, qui me dis « je pushe dans une minute » et qui pars faire du thé. Le fusible était censé surveiller l'IA, mais il surveille surtout l'humain. Bon, au moins, ça fonctionne xd.
+
+Le prochain article est déjà en préparation : j'ai mis en place mon propre serveur MCP, que l'agent utilise pour lire les statistiques de ce blog (et c'est sur leur base que j'ai choisi le sujet de cet article, mais c'est pour la prochaine fois). Dites-moi si quelque chose ne fonctionne pas chez vous. Restez en forme !
+
+## Liens
+
+- [Steering Claude Code : skills, hooks, subagents and more](https://claude.com/blog/steering-claude-code-skills-hooks-rules-subagents-and-more), article officiel d'Anthropic
+- [Documentation des hooks de Claude Code](https://code.claude.com/docs/en/hooks)
+- [Documentation des compétences de Claude Code](https://code.claude.com/docs/en/skills)
+- [Documentation des sous-agents de Claude Code](https://code.claude.com/docs/en/sub-agents)
+- [Mon article sur SearXNG sur Coolify](/blog/fr/how-to-self-host-searxng-on-coolify)
