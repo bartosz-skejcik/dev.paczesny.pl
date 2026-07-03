@@ -12,15 +12,15 @@ Siemanko! Dzisiaj nie będzie o Proxmoxie ani o Dockerze, tylko o narzędziu, w 
 
 Krótka scenka. Mówię agentowi: napraw buga i wdróż. Agent grzebie w kodzie, commituje, po czym z dumą raportuje, że skończył. Mija godzina, klient pisze, że nic się nie zmieniło. No bo u mnie deploy leci z **git push**, a pusha nie było. Agent uznał robotę za skończoną na commicie, commit został na moim dysku i tyle było z wdrożenia. Kurwa.
 
-Druga akcja, świeższa, z początku lipca: sesja odpalona w projekcie A zaczęła po cichu edytować pliki w projekcie B. W projekcie B siedział w tym czasie **inny agent**. Dwóch agentów grzebiących w jednym repo bez wiedzy o sobie to przepis na katastrofę i cud, że skończyło się na małym sprzątaniu.
+Druga akcja, świeższa, z początku lipca: sesja odpalona w projekcie A zaczęła po cichu edytować pliki w projekcie B. W projekcie B siedział w tym czasie **inny agent**. Dwóch agentów grzebiących w jednym repo bez wiedzy o sobie to przepis na katastrofę. Cud, że skończyło się na małym sprzątaniu.
 
 Po tych dwóch wtopach uznałem, że czas na zasady. W tym wpisie dostaniesz trzy rzeczy:
 
 1. moje prawdziwe reguły z **CLAUDE.md**, które agent czyta na starcie każdej sesji,
 2. dwa **hooki**, które fizycznie blokują mu głupoty (z kodem do skopiowania),
-3. **skille i subagenty**, czyli jak nie tłumaczyć agentowi tego samego dziesiąty raz.
+3. **skille i subagenty**, czyli jak nie tłumaczyć agentowi tego samego po raz dziesiąty.
 
-Po angielsku materiałów o tym trochę już jest, Anthropic zresztą sam niedawno opisał [wszystkie sposoby sterowania Claude Code](https://claude.com/blog/steering-claude-code-skills-hooks-rules-subagents-and-more). Po polsku, jak zwykle, cisza, więc biorę to na siebie. I jak zwykle, jeśli czegoś nie dopowiem to sory, nadal się tego uczę xd.
+Materiałów po angielsku trochę już jest, Anthropic zresztą sam niedawno opisał [wszystkie sposoby sterowania Claude Code](https://claude.com/blog/steering-claude-code-skills-hooks-rules-subagents-and-more). Po polsku, jak zwykle, cisza, więc biorę to na siebie. I jak zwykle, jeśli czegoś nie dopowiem, to sory, nadal się tego uczę xd.
 
 ## Czym się różni CLAUDE.md, skill, hook i subagent
 
@@ -29,7 +29,7 @@ Claude Code da się sterować na cztery sposoby. **CLAUDE.md** to plik ze stały
 | Mechanizm | Co to jest | Kiedy działa | Czy agent może to zignorować |
 |-----------|------------|--------------|------------------------------|
 | **CLAUDE.md** | stałe instrukcje w kontekście | zawsze, od startu sesji | teoretycznie nie, praktycznie bywa |
-| **Skill** | procedura na żądanie (plik `SKILL.md`) | jak go wywołasz albo pasuje do zadania | wykonuje krok po kroku, ale to nadal model |
+| **Skill** | procedura na żądanie (plik `SKILL.md`) | jak go wywołasz albo jak pasuje do zadania | wykonuje krok po kroku, ale to nadal model |
 | **Hook** | skrypt odpalany przez harness | na zdarzeniu: przed toolem, na koniec sesji | **nie, to kod, nie prośba** |
 | **Subagent** | osobna sesja do podzadania | jak go odpalisz | ma własny kontekst i uprawnienia |
 
@@ -57,19 +57,19 @@ CLAUDE.md to plik z instrukcjami, który Claude Code wczytuje do kontekstu na st
 - Zero em dashy, w żadnym języku. Przecinki, kropki, dwukropki.
 ```
 
-(Tak, zakaz em dashy to prawdziwa reguła. Każdy, kto czytał teksty pisane przez AI, wie dlaczego xd.)
+(Tak, zakaz em dashy to prawdziwa reguła. Każdy, kto czytał teksty pisane przez AI, wie, dlaczego xd.)
 
 Tylko że instrukcja w markdownie to dalej **prośba, nie gwarancja**. W jakichś 95% przypadków działa i jest pięknie. Ale model w długiej sesji potrafi o regule "zapomnieć", zwłaszcza jak kontekst puchnie. Przy zasadach typu "nie wchodź z butami do cudzego repo" wolę nie sprawdzać, ile dokładnie wynosi to "praktycznie bywa" z tabelki. Na te pozostałe 5% są hooki.
 
 ## Hooki w Claude Code: bezpieczniki, których agent nie obejdzie
 
-Hook w Claude Code to skrypt (albo dowolna komenda), którą harness odpala automatycznie na określonym zdarzeniu: przed wykonaniem narzędzia (`PreToolUse`), po nim (`PostToolUse`), przy próbie zakończenia sesji (`Stop`) i na kilku innych. Skrypt dostaje na stdin JSON-a z pełnym kontekstem zdarzenia i może przepuścić, zablokować albo dorzucić coś od siebie. Model nie ma tu nic do gadania.
+Hook w Claude Code to skrypt (albo dowolna inna komenda), który harness odpala automatycznie na określonym zdarzeniu: przed wykonaniem narzędzia (`PreToolUse`), po nim (`PostToolUse`), przy próbie zakończenia sesji (`Stop`) i na kilku innych. Skrypt dostaje na stdin JSON-a z pełnym kontekstem zdarzenia i może przepuścić, zablokować albo dorzucić coś od siebie. Model nie ma tu nic do gadania.
 
 U mnie robotę robią dwa hooki, oba urodzone z bólu.
 
 ### Stop hook: koniec z wdrożeniami widmo
 
-Pamiętasz scenkę z wprowadzenia? To ją teraz domkniemy kodem. Zdarzenie `Stop` odpala się, gdy agent uznaje, że skończył i chce oddać głos. Mój `unpushed-work-guard.sh` sprawdza wtedy, czy w repozytorium nie zostały niewypchnięte commity albo niezcommitowane zmiany. Jak zostały, sesja dostaje po łapach:
+Pamiętasz scenkę z wprowadzenia? Teraz domkniemy ją kodem. Zdarzenie `Stop` odpala się, gdy agent uzna, że skończył, i chce oddać głos. Mój `unpushed-work-guard.sh` sprawdza wtedy, czy w repozytorium nie zostały niewypchnięte commity albo niezcommitowane zmiany. Jak zostały, sesja dostaje po łapach:
 
 ```bash
 #!/usr/bin/env bash
@@ -96,16 +96,16 @@ reason="Niewypchnięta robota w $(basename "$repo"): commity przed originem: ${a
 jq -n --arg reason "$reason" '{decision: "block", reason: $reason}'
 ```
 
-Mechanika jest prosta: hook wypluwa na stdout JSON z `decision: "block"` i polem `reason`, harness nie kończy sesji, a agent dostaje `reason` jako polecenie i wraca do roboty. W praktyce wygląda to tak, że agent pisze "gotowe!", po czym nagle sam z siebie dodaje "a, jeszcze pushnę" i pushuje. Magia xd.
+Mechanika jest prosta: hook wypluwa na stdout JSON z `decision: "block"` i polem `reason`. Harness nie kończy wtedy sesji, a agent dostaje `reason` jako polecenie i wraca do roboty. W praktyce wygląda to tak, że agent pisze "gotowe!", po czym nagle sam z siebie dodaje "a, jeszcze pushnę" i pushuje. Magia xd.
 
 Dwa detale, które wyszły w praniu:
 
 - `stop_hook_active` to flaga od harnessa mówiąca "ten Stop już raz zablokowałem". Bez tego sprawdzenia hook potrafi zapętlić sesję w nieskończoność.
-- pełna wersja skryptu zapisuje jeszcze **sygnaturę stanu repo** (HEAD, liczba commitów przed originem, flaga brudnych plików) do pliku i odzywa się tylko, gdy sygnatura się zmieni. Inaczej hook nudzi przy każdym Stopie w interaktywnej sesji. Nowe commity zmieniają sygnaturę, więc bezpiecznik sam się ponownie uzbraja.
+- pełna wersja skryptu zapisuje jeszcze **sygnaturę stanu repo** (HEAD, liczba commitów przed originem, flaga brudnych plików) do pliku i odzywa się tylko wtedy, gdy sygnatura się zmieni. Inaczej hook nudzi przy każdym Stopie w interaktywnej sesji. Nowe commity zmieniają sygnaturę, więc bezpiecznik sam się ponownie uzbraja.
 
 ### PreToolUse hook: jak zablokować Claude Code przed edycją cudzych plików
 
-Wtopa numer dwa. Wszystkie moje projekty siedzą pod jednym katalogiem roboczym i sesja z projektu A technicznie widzi pliki projektu B. Zdarzenie `PreToolUse` odpala się przed każdym wywołaniem narzędzia i jako jedyne może je **zablokować**. Mój `sibling-project-guard.sh` pilnuje, żeby sesja siedząca w jednym projekcie nie zmieniała plików innego. Sedno skryptu:
+Wtopa numer dwa. Wszystkie moje projekty siedzą w jednym katalogu roboczym i sesja z projektu A technicznie widzi pliki projektu B. Zdarzenie `PreToolUse` odpala się przed każdym wywołaniem narzędzia i jako jedyne może je **zablokować**. Mój `sibling-project-guard.sh` pilnuje, żeby sesja siedząca w jednym projekcie nie zmieniała plików innego. Sedno skryptu:
 
 ```bash
 deny() {
@@ -123,7 +123,7 @@ if [ "$tool" = "Edit" ] || [ "$tool" = "Write" ]; then
 fi
 ```
 
-Hook zwraca JSON z `permissionDecision: "deny"` i Claude dostaje odmowę, **zanim edycja w ogóle się wykona**, razem z powodem, więc wie czemu i nie próbuje w kółko. Pełna wersja łapie też komendy Bash mutujące cudzy projekt (`git commit/push/checkout`, `rm`, `sed -i`, `npm install` i podobne), a odczyty (`cat`, `grep`, `git log`) zostawia dozwolone. Podglądanie kodu sąsiada bywa legitne, zmienianie go już nie.
+Hook zwraca JSON z `permissionDecision: "deny"`, a Claude dostaje odmowę, **zanim edycja w ogóle się wykona**. Do odmowy dołączony jest powód, więc agent wie, czemu się nie da, i nie próbuje w kółko. Pełna wersja łapie też komendy Bash mutujące cudzy projekt (`git commit/push/checkout`, `rm`, `sed -i`, `npm install` i podobne), a odczyty (`cat`, `grep`, `git log`) zostawia dozwolone. Podglądanie kodu sąsiada bywa legitne, zmienianie go już nie.
 
 ### Jak w ogóle wpiąć hooka
 
@@ -163,7 +163,7 @@ Skrypt dostaje JSON-a na stdin i ma dwa sposoby odpowiedzi: exit code (0 przepus
 
 ## Skille: procedury zamiast tłumaczenia od zera
 
-Skill w Claude Code to plik `SKILL.md` z procedurą, którą agent ładuje dopiero wtedy, gdy jest potrzebna: sam rozpoznaje z opisu, że pasuje do zadania, albo Ty wywołujesz go ręcznie przez `/nazwa`. W odróżnieniu od CLAUDE.md skill nie siedzi cały czas w kontekście, więc może być długi i szczegółowy, a kosztuje dopiero przy użyciu.
+Skill w Claude Code to plik `SKILL.md` z procedurą, którą agent ładuje dopiero wtedy, gdy jest potrzebna: sam rozpoznaje po opisie, że skill pasuje do zadania, albo Ty wywołujesz go ręcznie przez `/nazwa`. W odróżnieniu od CLAUDE.md skill nie siedzi cały czas w kontekście, więc może być długi i szczegółowy, a kosztuje dopiero przy użyciu.
 
 Mój najczęściej używany to `ship`. Powstał bezpośrednio z wtopy numer jeden: skoro agent uważa, że "skończone" znaczy "scommitowane", to dostał procedurę, która definiuje koniec roboty krok po kroku:
 
@@ -187,7 +187,7 @@ Domknij robotę: verify, commit, push, obserwuj deploy, smoke-test.
 6. Raport: SHA, status deployu, wynik smoke-testu.
 ```
 
-(Wersja skrócona i przetłumaczona, oryginał mam po angielsku i z detalami per hosting.) Teraz zamiast pisać wywód, rzucam "wyślij to" i agent wie, że push bez zweryfikowanego deployu się nie liczy. Jak stawiałem [SearXNG na Coolify](/blog/pl/how-to-self-host-searxng-on-coolify), to była dokładnie ta kategoria roboty: commit, push, patrzenie czy build wstał, sprawdzenie czy strona żyje. Teraz to domyka jeden skill.
+(Wersja skrócona i przetłumaczona, oryginał mam po angielsku i z detalami per hosting.) Teraz zamiast pisać wywód, rzucam "wyślij to" i agent wie, że push bez zweryfikowanego deployu się nie liczy. Jak stawiałem [SearXNG na Coolify](/blog/pl/how-to-self-host-searxng-on-coolify), to była dokładnie ta kategoria roboty: commit, push, pilnowanie builda i sprawdzenie, czy strona żyje. Teraz to domyka jeden skill.
 
 Obok tego mam jeszcze kilka innych: `oracle` (praca na moim VPS-ie, po robocie aktualizuj docsy i dashboardy w Grafanie), `preview` (postaw dev serwer i daj mi link do podejrzenia) czy `go-live` (checklista wypuszczania nowej strony na Coolify). Nic wielkiego, ale to dokładnie te rzeczy, które kiedyś tłumaczyłem w każdej sesji od nowa.
 
@@ -195,14 +195,26 @@ Obok tego mam jeszcze kilka innych: `oracle` (praca na moim VPS-ie, po robocie a
 
 Subagent to osobna sesja Claude z własnym kontekstem, własnym promptem systemowym i własnymi uprawnieniami, odpalana przez główną sesję do konkretnego podzadania. Używam ich w dwóch sytuacjach: gdy zadania są od siebie niezależne i mogą lecieć równolegle, albo gdy jakieś brudne szukanie wygenerowałoby tony śmieci w głównym kontekście, a potrzebuję tylko wniosku.
 
-Najlepszy przykład z mojego podwórka: cały system, który tu opisuję, zaczął się od tego, że puściłem agenta po moich starych sesjach Claude Code (ponad 200 sztuk) z pytaniem "co się powtarza i co regularnie idzie nie tak". Główna sesja nie czytała tych logów, czytały je subagenty, a do mnie wrócił raport z listą punktów tarcia. Z tego raportu wyszły hooki i skille z tego wpisu. Temat jest głębszy (własne definicje subagentów, ograniczanie im narzędzi, tańsze modele do prostych zadań), ale to materiał na osobny wpis, więc na razie odsyłam do [dokumentacji subagentów](https://code.claude.com/docs/en/sub-agents).
+Najlepszy przykład z mojego podwórka: cały system, który tu opisuję, zaczął się od tego, że puściłem agenta po moich starych sesjach Claude Code (ponad 200 sztuk) z pytaniem "co się powtarza i co regularnie idzie nie tak". Główna sesja nie czytała tych logów, czytały je subagenty, a do mnie wrócił raport z listą punktów tarcia. Z tego raportu wyszły hooki i skille z tego wpisu.
+
+Prompt, który to odpalił, brzmiał dosłownie tak (kopiuj śmiało):
+
+```
+Audit my recent Claude Code sessions with sub-agents. Cluster where I keep
+hitting friction, then propose new skills, automations, hooks and CLAUDE.md
+fixes.
+```
+
+Transkrypty sesji leżą w `~/.claude/projects/`, więc agent ma po czym kopać. Po polsku też zadziała, Claude'owi bez różnicy. Ostrzegam tylko, że wynik potrafi zaboleć: u mnie wyszło, że samo "did you push?" napisałem w miesiąc 13 razy xd.
+
+Temat jest głębszy (własne definicje subagentów, ograniczanie im narzędzi, tańsze modele do prostych zadań), ale to materiał na osobny wpis, więc na razie odsyłam do [dokumentacji subagentów](https://code.claude.com/docs/en/sub-agents).
 
 ## Co się zmieniło
 
 Nie będę ściemniał, że mierzę efekty od pół roku: reguły w CLAUDE.md dojrzewały u mnie tygodniami, ale hooki w obecnej formie stoją od niedawna (obie wtopy z wprowadzenia są świeże, stąd zresztą ten wpis). Różnicę widać jednak od razu:
 
 - **Zero wdrożeń widmo.** Sesja fizycznie nie umie się zakończyć z niewypchniętymi commitami. Stop hook odsyła agenta do roboty, a jak robota jest celowo niedokończona, agent musi to napisać wprost, zamiast po cichu zostawić commit na dysku.
-- **Zero grzebania w cudzych projektach.** Guard ubija mutacje między projektami zanim się wykonają. Odczyty dalej działają, więc agent może podejrzeć kod sąsiada, ale nic w nim nie zmieni.
+- **Zero grzebania w cudzych projektach.** Guard ubija mutacje między projektami, zanim się wykonają. Odczyty dalej działają, więc agent może podejrzeć kod sąsiada, ale nic w nim nie zmieni.
 - **Nowa sesja zna zasady od pierwszej sekundy.** Zamiast dziesięciu minut tłumaczenia "u mnie deployuje się tak, a sekrety trzymam tu", agent dostaje wszystko z CLAUDE.md.
 
 A co wkurza? Hooki to kod, więc trzeba je utrzymywać jak kod. Pierwsza wersja guarda strzelała false positive'ami: jedno z moich repozytoriów ma w nazwie słowo "switch", a `git switch` to komenda mutująca, więc guard blokował nawet niewinne odczyty w tamtym projekcie xd. Stąd w skrypcie zdejmowanie argumentów `-C <ścieżka>` przed matchowaniem i stąd leżący obok plik `sibling-project-guard.test.sh` z testami regresyjnymi. Jak bezpiecznik ma strzelać, to niech chociaż strzela w dobrych momentach.
@@ -213,20 +225,20 @@ A co wkurza? Hooki to kod, więc trzeba je utrzymywać jak kod. Pierwsza wersja 
 Skill to instrukcja w markdownie, którą wykonuje model, więc jest elastyczna, ale teoretycznie może zostać źle wykonana. Hook to skrypt odpalany przez sam program Claude Code na zdarzeniu, więc wykonuje się zawsze. Skille do procedur, hooki do twardych zasad.
 
 **Czy hook może zablokować wykonanie komendy?**
-Tak. Hook `PreToolUse` dostaje pełne wywołanie narzędzia zanim się ono wykona i może zwrócić `permissionDecision: "deny"`. Narzędzie się nie odpala, a agent dostaje powód odmowy i musi się dostosować.
+Tak. Hook `PreToolUse` dostaje pełne wywołanie narzędzia, zanim się ono wykona, i może zwrócić `permissionDecision: "deny"`. Narzędzie się nie odpala, a agent dostaje powód odmowy i musi się dostosować.
 
 **Gdzie trzyma się konfigurację hooków?**
 W `~/.claude/settings.json` (globalnie) albo w `.claude/settings.json` w projekcie. Wpis składa się ze zdarzenia (np. `PreToolUse`, `Stop`), matchera na nazwę narzędzia i komendy do wykonania, z opcjonalnym timeoutem.
 
 **Czy CLAUDE.md wystarczy bez hooków?**
-Na start tak i od niego warto zacząć, bo załatwia większość przypadków za darmo. Ale CLAUDE.md to nadal prośba do modelu. Zasady, których złamanie realnie kosztuje (deploye, sekrety, cudze projekty), lepiej domknąć hookiem, bo hooka nie da się zignorować.
+Na start tak, zresztą właśnie od niego warto zacząć, bo załatwia większość przypadków za darmo. Ale CLAUDE.md to nadal prośba do modelu. Zasady, których złamanie realnie kosztuje (deploye, sekrety, cudze projekty), lepiej domknąć hookiem, bo hooka nie da się zignorować.
 
 **Czy to działa tylko w terminalu?**
 Nie. Claude Code działa w CLI, aplikacji desktopowej, w przeglądarce i jako rozszerzenie IDE (VS Code, JetBrains). Hooki i skille siedzą w Twoim katalogu `~/.claude`, więc masz je wszędzie tam, gdzie środowisko ma do niego dostęp.
 
 ## Podsumowanie
 
-I to by było na tyle! W skrócie: CLAUDE.md spisuje zasady, skille zamieniają powtarzalne tłumaczenie w procedury, a hooki robią z najważniejszych zasad twarde bezpieczniki, których model nie może zignorować. Wszystkie skrypty z tego wpisu możesz śmiało kopiować i dopasować do siebie.
+I to by było na tyle! W skrócie: CLAUDE.md spisuje zasady, skille zamieniają powtarzalne tłumaczenie w procedury, a hooki robią z najważniejszych zasad twarde bezpieczniki, których model nie może zignorować. Wszystkie skrypty z tego wpisu możesz śmiało kopiować i dopasować pod siebie.
 
 A teraz ironiczna wisienka. Cały ten system postawiłem, żeby pilnować agenta. Po czym okazało się, że Stop hook najczęściej strzela po łapach... mnie, bo to ja commituję ręcznie, mówię sobie "zaraz pushnę" i idę zrobić herbatę. Bezpiecznik miał pilnować AI, a pilnuje głównie człowieka. No ale dobra, przynajmniej działa xd.
 
