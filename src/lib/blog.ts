@@ -171,6 +171,31 @@ export function getAvailableLanguages(slug: string): SupportedLang[] {
   return SUPPORTED_LANGS.filter((lang) => Boolean(getPostFilePath(slug, lang)))
 }
 
+export function getPublicImageSize(
+  publicPath: string
+): { width: number; height: number } | undefined {
+  try {
+    const filePath = path.join(
+      process.cwd(),
+      "public",
+      publicPath.replace(/^\//, "")
+    )
+    const header = Buffer.alloc(24)
+    const fd = fs.openSync(filePath, "r")
+    fs.readSync(fd, header, 0, 24, 0)
+    fs.closeSync(fd)
+    const pngSignature = Buffer.from([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+    ])
+    if (!header.subarray(0, 8).equals(pngSignature)) {
+      return undefined
+    }
+    return { width: header.readUInt32BE(16), height: header.readUInt32BE(20) }
+  } catch {
+    return undefined
+  }
+}
+
 export function getPostFilePath(slug: string, lang: string): string | null {
   const dir = path.join(POSTS_ROOT, slug)
   if (!fs.existsSync(dir)) {
