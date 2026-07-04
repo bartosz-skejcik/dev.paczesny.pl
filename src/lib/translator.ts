@@ -59,8 +59,11 @@ export async function ensureTranslation({ slug, targetLang }: TranslateParams) {
   const { text } = await generateText({
     model: translator,
     temperature: 0.2,
-    // Groq's default completion cap truncates long posts mid-sentence.
-    maxOutputTokens: 20000,
+    // Groq's default completion cap truncates long posts mid-sentence, but the
+    // account's on_demand TPM limit (12000) caps prompt+output per request, so
+    // this can't just be maxed out — pick something with margin over expected
+    // output (~1.3x source length) while leaving room for prompt tokens.
+    maxOutputTokens: 7000,
     prompt,
   })
 
