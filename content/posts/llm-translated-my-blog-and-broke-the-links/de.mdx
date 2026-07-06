@@ -1,0 +1,196 @@
+---
+title: "Ein LLM hat meinen Blog in vier Sprachen übersetzt und dabei die Hälfte der Links zerschossen"
+description: "Ich schreibe auf Polnisch, die EN/DE/FR-Versionen macht Llama auf Groq. Lief top, bis das Modell die Slugs in den Links übersetzte und mir 404 bescherte."
+date: 2026-07-06T11:00:00.000Z
+tags: ai, llm, tłumaczenia, i18n, nextjs, groq, llama, automatyzacja
+---
+
+## Einleitung
+
+Servus! Erstmal eine kleine Szene. Eine Woche nachdem ich mir stolz verkündet hatte, dass ich einen mehrsprachigen Blog habe (Polnisch, Englisch, Deutsch, Französisch, alles automatisch generiert), setze ich mich abends hin und klicke aus Langeweile durch die deutsche Version meiner eigenen Posts. Ich klicke auf den Link "Teil zwei meiner Proxmox-Serie". 404. Ich klicke auf den nächsten internen Link. 404. Ich klicke auf den dritten. Auch 404. Scheiße. Die Hälfte der internen Links in der DE-Version führt ins Nichts, und ich bin eine Woche lang stolz wie ein Pfau rumgelaufen.
+
+Bevor ich erkläre, was passiert ist, kurze Werbung für den vorherigen Beitrag: das ganze mehrsprachige Setup habe ich aufgebaut, damit [die Seite bereit für KI-Agenten ist](/blog/de/how-to-make-your-website-agent-ready) und ordentliche `hreflang` hat. Schönes SEO, schöne Sprach-Alternates, eine kanonische Sprache und der Rest übersetzt. Ein schöner Plan. Bis zu dem Moment, in dem ich mir die Links angeschaut habe.
+
+In diesem Beitrag bekommst du drei Dinge:
+
+1. wie meine **Übersetzungs-Pipeline** aussieht (echtes Skript, kein Fake),
+2. was genau die **Llama** kaputt gemacht hat und **warum** das überhaupt passieren durfte,
+3. warum **ein schöner Prompt das nicht repariert** und was stattdessen den Job macht.
+
+Auf Englisch hat über solche Reinfälle wahrscheinlich schon jemand geschrieben. Auf Polnisch, wie üblich, Funkstille, also nehme ich das auf meine Kappe. Und wie immer: wenn ich etwas nicht zu Ende erkläre, sorry, ich lerne das auch noch xd.
+
+## Meine Übersetzungs-Pipeline, oder wie das überhaupt funktioniert
+
+Das Prinzip ist einfach: **Polnisch ist kanonisch**. Ich schreibe den Post auf Polnisch, dann starte ich einen Befehl und die fremdsprachigen Versionen entstehen von allein:
+
+```bash
+bun run translate:post --slug moj-post --lang en
+```
+
+Darunter sitzt ein einziges Modell: `llama-3.3-70b-versatile`, gehostet auf [Groq](https://groq.com). Ich rufe es über das [Vercel AI SDK](https://ai-sdk.dev) auf, konkret über den Adapter `@ai-sdk/openai`, weil Groq eine OpenAI-kompatible API bereitstellt. Die ganze Konfiguration sind wortwörtlich ein paar Zeilen:
+
+```typescript
+const groq = createOpenAI({
+  apiKey: process.env.GROQ_API_KEY,
+  baseURL: "https://api.groq.com/openai/v1",
+})
+
+const translator = groq.chat("llama-3.3-70b-versatile")
+```
+
+Die "Llama" aus dem Titel ist also kein lokales Modell auf meinem Laptop, sondern Llama 3.3 70B, die auf der Infrastruktur von Groq läuft. Schnell wie der Teufel, billig, zum Übersetzen von Prosa ideal.
+
+Der Aufruf selbst ist `generateText` mit zwei Parametern, die eine Erwähnung wert sind:
+
+```typescript
+const { text } = await generateText({
+  model: translator,
+  temperature: 0.2,
+  // Groqs Standard-Cap schneidet lange Posts mitten im Satz ab, aber das Limit
+  // des on_demand-Kontos (TPM = 12000) begrenzt Prompt+Output pro Request.
+  // Man kann es also nicht einfach hochziehen: Output ist etwa das 1.3-fache der
+  // Quelllänge, wir nehmen einen Wert mit Puffer und lassen Platz für die Prompt-Tokens.
+  maxOutputTokens: 7000,
+  prompt,
+})
+```
+
+`temperature: 0.2`, weil ich vom Übersetzer Langeweile und Berechenbarkeit will, keine Kreativität. Und `maxOutputTokens: 7000` ist eine ganz eigene Geschichte, die aus dem Commit "raise translator output cap". Anfangs hatte ich dort das niedrigere Standard-Limit und lange Posts wurden mitten im Satz abgeschnitten. Der natürliche Reflex: auf Maximum hochdrehen. Nur hat mein Plan auf Groq (`on_demand`) ein TPM-Limit (Tokens pro Minute) von 12000, und dieses Limit umfasst Prompt plus Output pro Request. Der Output einer Übersetzung ist ungefähr das 1.3-fache der Quelllänge. Würde ich den Output maximieren, bliebe kein Platz für den Prompt selbst und der Request würde abschmieren. Also ist 7000 nicht "so viel wie möglich", sondern "mit Puffer, aber nicht bis zur Decke". Eine langweilige Zahl aus einem langweiligen Grund, aber ohne sie geht die Hälfte der längeren Posts nicht durch.
+
+Das Ergebnis landet im Cache: neben der Datei `pl.mdx` entsteht `en.mdx`, `de.mdx` oder `fr.mdx`. Und damit kommen wir zur Struktur, die der Kern des heutigen Reinfalls ist.
+
+## Die Content-Struktur, oder wo die Mine liegt
+
+Jeder Post ist ein Verzeichnis. Darin eine Datei pro Sprache, und der Verzeichnisname ist **derselbe Slug für alle Sprachen**:
+
+```
+content/posts/
+  proxmox-czesc-druga/
+    pl.mdx
+    en.mdx
+    de.mdx
+    fr.mdx
+  how-to-setup-vaultwarden-on-linux/
+    pl.mdx
+    en.mdx
+    ...
+```
+
+Die URL besteht aus Sprache und Slug: `/blog/{lang}/{slug}`. Die deutsche Version meines Proxmox-Beitrags lebt also unter `/blog/de/proxmox-czesc-druga`, die französische unter `/blog/fr/proxmox-czesc-druga` und die polnische unter `/blog/pl/proxmox-czesc-druga`. Achtung: der Slug ist überall identisch. Er wird **nicht übersetzt**, denn es ist ein Verzeichnisname auf der Platte, einer für alle Sprachen. Das ist die zentrale Vereinbarung des ganzen Systems.
+
+Und jetzt rate mal, was die Llama von dieser Vereinbarung nicht wusste.
+
+## Was genau die Llama zerschossen hat
+
+Das Modell bekam den polnischen Post zum Übersetzen. Im polnischen Post gibt es interne Links, zum Beispiel zum zweiten Teil der Proxmox-Serie: `/blog/pl/proxmox-czesc-druga`. Aufgabe: übersetze den Post ins Deutsche. Das Modell tauschte brav `pl` gegen `de` im Pfad (gut!), und dann, in einem Anfall von Gewissenhaftigkeit, **übersetzte es auch die Wörter im Slug selbst** (Katastrophe).
+
+Denn `proxmox-czesc-druga` heißt ja "proxmox część druga", und auf Deutsch ist "część druga" eben "teil zwei". Also produzierte das Modell `/blog/de/proxmox-teil-zwei`. Schön, logisch, auf Deutsch. Und komplett tot, weil das Verzeichnis `proxmox-czesc-druga` heißt, nicht `proxmox-teil-zwei`. 404.
+
+Das war kein Einzelfall. Das war ein Muster, konsequent, in jeder Zielsprache. Hier die echten Diffs aus dem Commit, in dem ich das repariert habe:
+
+| Sprache | Kanonischer Slug (funktioniert) | Was die Llama generiert hat (404) |
+|---|---|---|
+| DE | `/blog/de/proxmox-czesc-druga` | `/blog/de/proxmox-teil-zwei` |
+| EN | `/blog/en/proxmox-czesc-druga` | `/blog/en/proxmox-part-two` |
+| FR | `/blog/fr/proxmox-czesc-druga` | `/blog/fr/proxmox-partie-deux` |
+| FR | `/blog/fr/how-to-setup-vaultwarden-on-linux` | `/blog/fr/comment-installer-vaultwarden-sur-linux` |
+| DE | `/blog/de/proxmox-first-install` | `/blog/de/proxmox-erste-installation` |
+
+Beachte den besten Gag. Der kanonische Slug `proxmox-czesc-druga` ist **selbst auf Polnisch**, weil ich ihn geschrieben habe, als der Blog einsprachig war. Und das Modell "korrigierte" mir beim Übersetzen ins Deutsche diesen polnischen Slug ins Deutsche. Beim Übersetzen ins Französische, ins Französische. Jedes Mal war es überzeugt, mir einen Gefallen zu tun. Jedes Mal bescherte es mir 404. Das Schlimmste ist: wäre mein Slug auf Englisch gewesen (wie `how-to-setup-vaultwarden-on-linux`), hätte es ihn trotzdem ins Französische `comment-installer-vaultwarden-sur-linux` übersetzt. Das Modell kennt keine Gnade, es übersetzt alles, was wie Wörter aussieht.
+
+## Warum ein schöner Prompt das nicht abfängt
+
+Hier stellt sich die natürliche Frage: na gut Bartek, aber du schreibst doch den Prompt, schreib ihm halt, er soll die Links nicht anfassen. Und hier ist die Pointe des ganzen Abschnitts: **ich habe es ihm geschrieben**. Wortwörtlich. Hier ein Ausschnitt aus meinem echten Prompt aus der Funktion `buildPrompt`:
+
+```typescript
+return `You are a meticulous technical translator. Translate the following
+Polish MDX blog post to ${targetLang.toUpperCase()} while preserving:
+- YAML frontmatter keys: title, description, date...
+- Markdown structure, headings, code blocks, inline formatting, links, and lists.
+- Developer tone (keep technical jargon) and mirror the author's informal voice.
+```
+
+Siehst du das? "preserving [...] **links**". Direkt. Schwarz auf weiß, in der Liste der zu erhaltenden Dinge, steht das Wort "links". Und das Modell hat trotzdem die Wörter in den Pfaden übersetzt, denn für es ist ein Link immer noch Text, und Text wird übersetzt. Das Modell hat den Link in dem Sinne "erhalten", dass es die Syntax `[text](url)` in Ruhe gelassen hat. Aber die Wörter innerhalb der URL hat es wie jede andere Phrase zum Übersetzen behandelt.
+
+Und das ist Lektion Nummer eins dieses Beitrags: **ein Slug ist ein Identifier, keine Prosa**. Für einen Menschen ist `proxmox-czesc-druga` in der Klammer ein offensichtlicher technischer Schlüssel, den man nicht anrührt. Für ein LLM ist es eine Kette polnischer Wörtchen, verbunden mit Bindestrichen, die auf Übersetzung wartet. Das Modell unterscheidet "übersetze das" nicht von "lass das in Ruhe", wenn beides gleich aussieht, nämlich wie Wörter. Mit einer höflichen Bitte im Prompt kriegst du das nicht zu 100% dicht. Du kannst dreimal in Großbuchstaben "übersetze keine Slugs" schreiben und es lässt trotzdem eins von zehn durch, weil die Temperatur nicht null ist und das Modell kein Parser.
+
+## Und das ist nicht das Ende der Überraschungen
+
+Die Slugs waren der lauteste Reinfall, aber nicht der einzige. Wenn du dem Modell Inhalt überlässt, bekommst du ein ganzes Set stiller Fehler nach Hause, gegen die man sich wappnen muss. Ein paar, die ich schon abbekommen habe:
+
+**Das Modell wickelt den ganzen Output in ` ``` `.** Du bittest um sauberes Markdown, bekommst Markdown, verpackt in einen Codeblock, weil das Modell fand, so sei es höflicher. Daher im Code eine Funktion, die diesen Fence wieder abzieht:
+
+```typescript
+function sanitizeModelOutput(output: string) {
+  const trimmed = output.trim()
+  const fenceRegex = /^```(?:mdx|markdown)?\s*([\s\S]*?)\s*```$/i
+  const match = fenceRegex.exec(trimmed)
+  if (match) return match[1].trim()
+  return trimmed
+}
+```
+
+**Das Modell verliert das Frontmatter.** Manchmal frisst es beim Übersetzen eines Posts einfach den YAML-Block mit Titel und Datum, oder es zerschießt dessen Syntax. Und ein Frontmatter ohne Titel ist ein Geister-Post. Deshalb parse ich, bevor ich irgendetwas in den Cache schreibe, das Frontmatter und falls es fehlt, fliege ich laut raus, statt still Müll zu speichern:
+
+```typescript
+const cleaned = sanitizeModelOutput(text)
+// Stell sicher, dass im Output NOCH ein Frontmatter ist, BEVOR du das speicherst.
+parseFrontmatter(cleaned)
+```
+
+**Die Überschriften-Anker bleiben auf Polnisch.** Das ist dieselbe Fehlerklasse wie die Slugs, nur heimtückischer. Ein Anker (`#przygotowanie-lxc-na-proxmoxie`) wird aus dem Text der Überschrift generiert. Wenn sich in der deutschen Version die Überschrift übersetzt, der Link zum Anker aber alt bleibt, dann zielt der Link zu einem Abschnitt auf derselben Seite plötzlich ins Leere. Bei einem meiner Links kam es noch lustiger: das Modell übersetzte den Slug selbst, ließ aber den Anker `#przygotowanie-lxc-na-proxmoxie` auf Polnisch. Einmal strengte es sich zu sehr an, einmal zu wenig, im selben Link.
+
+## Wie ich das repariert habe (ohne Bullshit)
+
+Ich bin ehrlich, denn die Hälfte der Beiträge im Internet tut an dieser Stelle so, als hätte der Autor sofort eine elegante Lösung ausgerollt. Ich nicht. Ich habe zuerst **die Slugs von Hand wieder zusammengeklebt**. Ich öffnete der Reihe nach `de.mdx`, `en.mdx`, `fr.mdx` in mehreren Posts, fand jeden kaputten Link und tippte den kanonischen Slug mit den Fingern ein. Das ist genau dieser Commit aus der History: `fix: dead internal links in translated posts (llama had translated the slugs)`. Sechs Dateien, manuelle Korrektur, ein Abend futsch. Keine Magie, einfach Bartek und Strg+F.
+
+Aber aus solchen Abenden entstehen Erkenntnisse, also schreibe ich hier auch die **Härtungs-Richtung** auf, und ich betone: das ist eine Erkenntnis und ein Plan, nicht etwas, das schon in Produktion steht. Die Idee ist: aufhören, dem Prompt zu vertrauen, und nach der Übersetzung **jeden internen Link deterministisch wieder auf den kanonischen Slug umschreiben**. Ich kann das, weil ich den kanonischen Slug **kenne**: es ist der Verzeichnisname in `content/posts`. Das Modell soll ruhig die Prosa übersetzen, und ich fahre danach mit einem Regex drüber und repariere das, was es nicht anrühren durfte.
+
+Die einfachste Version dieser Idee sieht ungefähr so aus. Die Slugs in der Übersetzung sollten in derselben Reihenfolge stehen wie im polnischen Original (weil die Übersetzung die Struktur erhält), also ziehe ich die Liste der kanonischen Slugs aus der Quelle und überschreibe damit das, was das Modell produziert hat:
+
+```typescript
+// RICHTUNG, noch nicht umgesetzt. Slugs kenne ich: es sind Verzeichnisnamen in content/posts.
+// Zieh die Slugs aus der kanonischen (PL) Quelle, in Reihenfolge des Auftretens.
+const canonicalSlugs = [...canonicalMarkdown.matchAll(/\/blog\/pl\/([a-z0-9-]+)/g)]
+  .map((m) => m[1])
+
+// In der Übersetzung fahre über die Links /blog/{lang}/... und erzwinge den kanonischen Slug.
+let i = 0
+translated = translated.replace(
+  /\/blog\/(en|de|fr)\/[a-z0-9-]+/g,
+  (_whole, lang) => `/blog/${lang}/${canonicalSlugs[i++]}`,
+)
+```
+
+Langweilig? Sehr. Aber genau darin liegt die Stärke. Ein deterministischer Regex hat keine Laune, keine Temperatur und versucht nicht, mir einen Gefallen zu tun. Er macht genau eine Sache und macht sie jedes Mal. **Eine höfliche Bitte im Prompt funktioniert zu 90%, ein Regex zu 100%**, und diese 100% sind hier wichtig, denn ein toter Link hat keine Zwischenzustände. Dieselbe Moral wie bei den Hooks in der [vorherigen Serie](/blog/de/how-to-setup-claude-code-hooks-skills): wenn etwas sicher sein soll, bitte nicht das Modell, sondern mach es mit Code dicht.
+
+## FAQ
+
+**Warum ist überhaupt Polnisch kanonisch und nicht Englisch?**
+Weil ich auf Polnisch natürlich schreibe und es die Sprache ist, in der dieser Blog entsteht. Englisch, Deutsch und Französisch sind die Verteilungsschicht, nicht die Quelle. Nebeneffekt: meine ältesten Slugs sind auf Polnisch (`proxmox-czesc-druga`), was das Modell als Einladung zum Übersetzen auffasste. Würde ich heute anfangen, würde ich die Slugs von Anfang an auf Englisch machen, aber das heilt trotzdem nicht die Ursache, es verkleinert nur die Schadensfläche.
+
+**Würde ein anderes, größeres Modell das nicht kaputt machen?**
+Vielleicht würde es seltener kaputt gehen. Aber es ist immer noch ein Modell, arbeitet immer noch auf Text und hat immer noch keinen harten Begriff von "das ist ein Identifier, nicht anfassen". Für ein teureres Modell zu zahlen, damit es öfter richtig rät, ist keine Lösung des Problems, sondern ein Aufschieben davon. Ein Regex kostet null und rät nicht.
+
+**Warum die Links nicht aus dem Prompt schneiden und danach wieder ankleben?**
+Das ist im Grunde eine Variante der Ziellösung und ergibt Sinn: die Links vor der Übersetzung mit Platzhaltern maskieren und nach der Übersetzung die Originale wieder einsetzen. Dann sieht das Modell den Pfad physisch nicht, hat also nichts zu übersetzen. Im Moment ist es für mich einfacher, mit einem Regex über das Ergebnis zu fahren, aber die Richtung ist dieselbe: Identifier vom Modell fernhalten.
+
+**Heißt das, automatische Übersetzung per LLM ist eine schlechte Idee?**
+Nein, ganz im Gegenteil. Prosa übersetzt es hervorragend und praktisch umsonst. Eine schlechte Idee ist, ihm bei Dingen zu vertrauen, die keine Prosa sind: Slugs, Anker, Schlüssel, Pfade, IDs. Die Grenze verläuft nicht zwischen Sprachen, sondern zwischen "Text zum Lesen" und "Text, der eine Adresse ist".
+
+## Fazit
+
+Und das war's! Der Kern in einem Satz: **das Modell ist genial im Übersetzen von Prosa und komplett gedankenlos bei allem, was keine Prosa ist.** Einen Satz auf Deutsch übersetzt es besser als so mancher Mensch. Aber vor die Kette `proxmox-czesc-druga` gestellt, hat es keinerlei Mechanismus, der sagen würde "das ist eine Adresse, lass es", also übersetzt es, weil Übersetzen sein einziger Hammer ist und alles drumherum wie Nägel aussieht.
+
+Und jetzt die ironische Kirsche. Ich habe mir einen superschnellen, mehrsprachigen Blog praktisch umsonst gebaut, mit einem Befehl, das Modell hat für mich die Arbeit von vier Übersetzern erledigt. Danach verbrachte ich einen Abend damit, von Hand Slugs zusammenzukleben, die das Modell nicht mal hätte anrühren dürfen. Ich habe vier Abende beim Übersetzen gespart und einen für das Reparieren von etwas hergegeben, das ich mir selbst mit Automatisierung kaputt gemacht habe. Netto habe ich trotzdem gewonnen, aber der Beigeschmack blieb.
+
+Und genau in diesem Moment, als ich all diese Regexe, Hooks und Patches ansah, die ich auf diesem Next.js angehäuft habe, überkam mich die Versuchung. Im Internet war gerade viel Wirbel um ein gewisses Hype-Framework, das versprach, dass sich all das einfacher, sauberer und überhaupt anders machen lässt. Ich dachte: vielleicht das alles rausschmeißen und von null auf etwas Neuem anfangen? Ich habe dieser Idee ein ganzes Wochenende Grübelei gewidmet. Warum ich mich am Ende ausgeklinkt und den Blog nicht neu geschrieben habe, kommt im nächsten Beitrag. Mach's gut, Alter!
+
+## Links
+
+- [Groq](https://groq.com), wo die Llama aus diesem Beitrag läuft
+- [Vercel AI SDK](https://ai-sdk.dev), über das ich das Modell aufrufe
+- [Mein vorheriger Beitrag: wie man eine Seite bereit für KI-Agenten macht](/blog/de/how-to-make-your-website-agent-ready)
+- [Teil zwei der Proxmox-Serie](/blog/de/proxmox-czesc-druga), eines der Opfer des Übersetzers
+- [Vaultwarden auf Linux selbst hosten](/blog/de/how-to-setup-vaultwarden-on-linux), das nächste Opfer
+- [SearXNG auf Coolify](/blog/de/how-to-self-host-searxng-on-coolify), hier sind auch Links gefallen

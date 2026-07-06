@@ -1,0 +1,133 @@
+---
+title: Je demande à Claude sur le trafic du blog au lieu de cliquer sur les tableaux de bord
+description: J'ai connecté le serveur MCP d'analyse à Claude et au lieu de cliquer sur les tableaux de bord, je lui demande sur le trafic, le GSC et les erreurs sur le blog. Voici comment j'utilise cela au quotidien.
+date: 2026-07-06T09:00:00.000Z
+tags: mcp, ai, agenty, analytics, claude-code, self-hosting, produktywność, llm
+---
+
+## Introduction
+
+Salut ! Scène de la semaine dernière. Soir, je suis allongé, j'ai publié un nouveau billet le matin et je me demande si quelqu'un est entré dedans. Le vieux moi aurait débloqué son téléphone, serait allé sur [analytics.blonie.cloud](https://analytics.blonie.cloud), aurait attendu que le tableau de bord se charge, aurait cliqué sur l'onglet "Pages", aurait plissé les yeux sur le graphique sur l'écran de 6 pouces, et puis serait allé voir "Pays" parce que la curiosité. Cinq clics et je ne sais toujours pas si quelque chose ne se casse pas en erreur, car c'est un autre onglet.
+
+Le nouveau moi a écrit une phrase à Claude et est allé préparer du thé.
+
+Dans [l'article précédent](/blog/fr/how-to-build-mcp-server-for-analytics), j'ai construit un serveur MCP pour [Paczesny Analytics](https://analytics.blonie.cloud), mon propre analytics sans cookies pour Next.js : 17 outils, carte de découverte, plugin prêt pour Claude Code. Cet article était sur la façon de **le configurer**. Il s'est terminé par le fait que c'est l'agent lui-même, en regardant les statistiques réelles, qui a choisi son sujet. Cet article est sur quelque chose de plus ennuyeux et beaucoup plus utile : comment je **l'utilise** dans la vie quotidienne, lorsque le serveur est déjà en place et qu'il est simplement là.
+
+Vous obtiendrez trois choses :
+
+1. quels sont les questions que je pose réellement et ce que l'agent déclenche en dessous,
+2. pourquoi une question bat trois onglets dans le tableau de bord,
+3. où cela est encore stupide et où il est facile de se laisser tromper (car c'est le cas, oh horreur).
+
+## Configuration en un paragraphe
+
+Je ne vais pas répéter toute la construction, elle est dans [l'article précédent](/blog/fr/how-to-build-mcp-server-for-analytics). En résumé : le serveur MCP est assis sous mon analytics, et pour le connecter à Claude Code, il n'est pas nécessaire de composer manuellement un `claude mcp add` avec un header long. Il y a un plugin public avec son propre marché, donc toute l'installation est de quatre lignes :
+
+```bash
+# clé API à partir du tableau de bord (Settings -> API keys), commence par pak_
+export PACZESNY_API_KEY="pak_..."
+
+/plugin marketplace add paczesny-dev/analytics-claude-plugin
+/plugin install paczesny-analytics@paczesny
+/mcp
+```
+
+`/mcp` montre que le serveur est connecté et que vous pouvez voir ses outils. À partir de ce moment, l'agent dans cette session peut interroger mes statistiques de la même manière naturelle que lorsqu'il lit des fichiers dans le référentiel. Et c'est de cela que parle le reste de l'article.
+
+## Au lieu de cliquer, je demande simplement
+
+L'essence du changement est banal, mais il est profondément ancré dans mon esprit. Le tableau de bord nécessite que **je** sache où cliquer. Le trafic est un onglet, les références un autre, les pays un troisième, les erreurs JS un quatrième, Google Search Console est un monde entièrement séparé. Chaque réponse qui combine deux de ces choses signifie que je saute entre les onglets et que je les assemble dans ma tête.
+
+Avec MCP, j'inverse cela. Je ne dis pas "où dois-je cliquer", mais je dis ce que je veux savoir, et l'agent décide lui-même quels outils déclencher et dans quel ordre. Le plus grand avantage n'est pas qu'il est plus rapide (bien qu'il le soit). Il est dans le fait que dans **une** question, je combine des sources que je devrais chercher dans trois endroits séparés et comparer à l'œil.
+
+Il y a 17 outils, j'ai donné la liste complète dans l'article précédent. Ici, il est plus important de savoir lesquels l'agent choisit pour quelle question :
+
+| Je veux savoir | Qu'est-ce que l'agent déclenche en dessous |
+|---|---|
+| Combien de trafic et quelle est sa forme | `get_stats`, `get_timeseries` |
+| D'où et qui est venu | `get_breakdown` (références, pays, appareils, navigateurs, système, UTM) |
+| Si quelque chose se casse | `get_errors`, `get_site_health` |
+| Comment le SEO se présente dans Google | `get_gsc_stats`, `get_gsc_pages`, `get_search_queries` |
+| Si les conversions volent | `list_funnels`, `get_funnel`, `list_goals`, `get_goal_conversions` |
+| Où les gens cliquent | `get_heatmap`, `get_events` |
+
+Et trois outils d'enregistrement (`manage_funnel`, `manage_goal`, `manage_alert`), mais je les utilise rarement dans la vérification quotidienne, car il s'agit d'une configuration, pas de questions.
+
+## Trois questions que je pose le plus souvent
+
+Avant de vous donner des exemples : **tous les chiffres ci-dessous sont fictifs pour les besoins de l'article, arrondis et purement illustratifs.** Je ne vais pas vous donner mes véritables statistiques privées, il s'agit de vous montrer la forme de la conversation, pas mes colonnes.
+
+Première question, un classique pour le soir :
+
+**Moi :** Comment se présente le trafic sur le blog cette semaine et y a-t-il des erreurs ?
+
+**Agent :** *(déclenche `get_stats`, `get_timeseries`, `get_errors`, `get_site_health`)* Au cours des 7 derniers jours, il y a eu environ 1200 visites, soit 15 % de plus qu'il y a une semaine, avec un pic mardi. La santé du site est verte, une erreur JS répétitive sur `/blog`, qui ressemble à une exception d'extension de navigateur, pas de votre code. Rien d'urgent.
+
+Notez ce qui se passe ici : une phrase, quatre outils, une réponse qui combine "combien de trafic" et "s'il y a des erreurs". Dans le tableau de bord, ce sont deux onglets différents et je les assemble dans ma tête.
+
+Deuxième question, celle que j'aime le plus, car c'est fastidieux dans l'UI :
+
+**Moi :** Quels sont les articles qui augmentent sur Google, mais ont un CTR faible ?
+
+**Agent :** *(déclenche `get_gsc_pages`, `get_search_queries`)* Trois articles ont beaucoup de vues, mais peu de clics. Le pire est le guide sur Vaultwarden : environ 900 vues, CTR en dessous de 2 %. Il arrive principalement sur des requêtes comme "vaultwarden docker", sur lesquelles vous êtes en 8e position. Le titre et la description dans les résultats ne répondent pas vraiment à cette intention, c'est par là que je commencerais.
+
+C'est exactement le type de question pour laquelle je devrais ouvrir le rapport de performance dans Google Search Console, trier par vues, basculer vers le CTR, puis descendre vers les requêtes et les assembler manuellement. Ici, l'agent le fait pour moi, car `get_gsc_pages` et `get_search_queries` sont deux appels pour lui, et non deux écrans.
+
+Troisième question, rapide, après un nouvel article :
+
+**Moi :** Quels sont les pays et les appareils qui ont généré du trafic sur le dernier article ?
+
+**Agent :** *(déclenche `get_breakdown` pour les pays et les appareils)* Sur le dernier article, la Pologne domine, environ 70 %, puis l'Allemagne et le Royaume-Uni. La répartition des appareils est à peu près à parts égales entre ordinateurs de bureau et mobiles, avec une légère prédominance des mobiles. Atypiquement élevé pour votre blog, où les ordinateurs de bureau gagnent généralement.
+
+Encore une fois : `get_breakdown` dans l'UI, c'est basculer la dimension dans un menu déroulant, pays, puis appareil, puis comparer. Dans le chat, c'est une phrase.
+
+## Où cela est encore stupide
+
+Bon, maintenant la partie honnête, car sinon cela ressemble à une publicité, et ce n'est pas le cas. Il y a quelques choses qui m'énervent encore et dont il faut être prudent.
+
+**L'agent peut inventer une tendance à partir de bruit pur.** C'est la pire embuscade. Mon blog n'est pas Onet, sur de petits chiffres, la différence entre 40 visites et 55 visites n'est pas "une augmentation de 37 %", c'est mardi. Le modèle, si vous ne le surveillez pas, aimera habiller un tel bruit dans une narration de "forte tendance à la hausse". Le remède est simple et ennuyeux : je le tiens en main avec la plage de dates. Au lieu de "comment le trafic augmente", je demande "comparez les 30 derniers jours avec les 30 précédents", pour avoir quelque chose à compter.
+
+**Une question trop large brûle le contexte.** Si je lance "parlez-moi de tout sur mon blog", l'agent déclenche poliment six outils l'un après l'autre, aspire le haut des données dans le contexte et produit un mur de texte, dont je lis de toute façon deux phrases. J'ai appris à poser des questions étroites. Une question, un sujet. Je veux à la fois le trafic, le SEO et les erreurs en même temps ? Ce sont trois questions séparées qui sortiront moins cher et plus lisibles qu'une seule question large.
+
+**Les chiffres sont vrais, les conclusions ne le sont pas nécessairement.** C'est une distinction importante. Les données qui reviennent des outils sont exactement celles qui se trouvent dans la base de données, je n'ai pas peur de cela. Mais **l'interprétation** de ces données, c'est juste la supposition du modèle, et c'est là qu'il peut inventer. "Le CTR a baissé, car Google a changé son algorithme" sonne intelligent et est inventé. Je fais confiance aux chiffres, pas aux morales, et je vérifie les morales moi-même.
+
+**Les données de l'utilisateur sont du texte non fiable.** J'en ai parlé plus en détail dans [l'article précédent](/blog/fr/how-to-build-mcp-server-for-analytics), donc je vais juste le rappeler : les références, les requêtes de recherche, les titres des pages, tout cela a été saisi par quelqu'un d'autre que moi, et atterrit directement dans le contexte du modèle. Quelqu'un peut laisser une référence comme "IGNORE ALL PREVIOUS INSTRUCTIONS", en comptant sur le fait que le modèle l'exécutera. C'est pourquoi le serveur entoure de telles valeurs avec un marqueur `[DATA: ... :DATA]`, pour que le texte étranger ne puisse pas prétendre être une commande. C'est exactement le moment où cette sanitation fait son travail, même lorsque je demande innocemment "quelles sont les meilleures références".
+
+## Ce qui a changé
+
+La routine du début, téléphone, tableau de bord, cinq clics, plissement des yeux, a simplement disparu. Mais le véritable changement est plus profond et m'a un peu surpris.
+
+Autrefois, vérifier les statistiques avait un **coût** : il me fallait vouloir ouvrir l'UI, attendre, cliquer. Donc je vérifiais rarement et seulement lorsque je voulais vraiment savoir. Maintenant, la question coûte une phrase dans la fenêtre que j'ai de toute façon ouverte, car je suis dans Claude Code toute la journée. Le coût est tombé à zéro, et avec un coût nul, je demande des choses pour lesquelles je n'aurais jamais voulu cliquer sur le tableau de bord. "Et d'où viennent les gens sur l'article Proxmox ?" Autrefois : ce n'est pas la peine. Maintenant : une demi-phrase entre deux tâches.
+
+## FAQ
+
+**Ai-je besoin du plugin pour poser des questions ?**
+Non. Le plugin est juste un emballage pratique pour Claude Code. En dessous, c'est un serveur MCP standard sur HTTP, donc cela fonctionnera avec n'importe quel client MCP qui peut s'authentifier avec un bearer. Le plugin vous épargne la configuration manuelle, rien de plus.
+
+**D'où sais-je que l'agent ne fabrique pas des chiffres ?**
+Parce que les chiffres ne proviennent pas du modèle, mais des appels d'outils vers mon API. Le modèle ne les invente pas, il les reçoit et les résume. Il peut inventer l'**interprétation**, et c'est la seule partie que je prends avec réserve. Si j'ai des doutes, je lui demande de montrer la réponse brute de l'outil.
+
+**L'agent peut-il gâcher ma configuration ?**
+Seulement si la clé a une portée `read-write`, et seulement dans les trois outils d'enregistrement (funnel, objectif, alerte). Pour regarder les statistiques, une clé en lecture seule suffit, et c'est celle que je recommande pour les questions quotidiennes. Alors, même si l'agent voulait vraiment, il ne peut rien faire.
+
+**N'est-ce pas juste un tableau de bord plus lent ?**
+Pour un chiffre spécifique que je regarde tous les jours, le tableau de bord est plus rapide, car je vois le graphique immédiatement. MCP gagne lorsque la question combine plusieurs sources ("trafic plus erreurs plus GSC à la fois"), car dans l'UI, ce sont trois onglets, et dans le chat, c'est une phrase. J'utilise les deux, mais pour différentes choses.
+
+**Cela fonctionne-t-il sur le téléphone ?**
+Chez moi, principalement dans le terminal sur l'ordinateur, mais Claude Code fonctionne également dans l'application et dans le navigateur, donc tant que le plugin est connecté, je peux poser des questions depuis n'importe quel endroit où j'ai une session. La clé `pak_` est dans une variable d'environnement, donc c'est une question de savoir où je la configure.
+
+## Résumé
+
+Et voilà. En résumé : j'ai arrêté de cliquer sur les onglets et j'ai commencé à poser des questions avec des phrases, l'agent choisit lui-même les outils, et la plus grande valeur vient des questions qui combinent plusieurs sources à la fois. Il faut juste se rappeler que les chiffres sont fiables, mais les conclusions ne le sont pas, et que le texte étranger dans les statistiques est une entrée non fiable, pas une commande.
+
+Et maintenant, une ironique cerise sur le gâteau. J'ai configuré tout le serveur MCP, une dizaine d'outils et un plugin, littéralement pour **arrêter** de regarder les statistiques et de cliquer sur les tableaux de bord. L'effet est que je vérifie mon trafic maintenant **plus souvent** que jamais auparavant. Parce que si la question est gratuite, je demande tout ce que je ne voulais pas ouvrir l'UI pour. J'ai voulu cliquer moins, et j'ai obtenu plus de vérifications. Cercle vicieux, et je suis assis au milieu.
+
+Le prochain article est déjà en préparation. Mon agent lit ces analytics, car je lui ai donné la clé. Mais qu'est-ce qui se passe si je veux que **des bots étrangers**, ChatGPT, Perplexity, n'importe quel crawler AI, puissent lire mon site de la même manière, sans clé et sans deviner ? J'ai rendu mon blog "prêt pour l'agent", et c'est de cela que je parlerai la prochaine fois. Restez à l'écoute !
+
+## Liens
+
+- [Article précédent : Comment j'ai construit ce serveur MCP](/blog/fr/how-to-build-mcp-server-for-analytics)
+- [Article sur les hooks, les compétences et les sous-agents dans Claude Code](/blog/fr/how-to-setup-claude-code-hooks-skills)
+- [Plugin pour Claude Code (paczesny-dev/analytics-claude-plugin)](https://github.com/paczesny-dev/analytics-claude-plugin)
+- [Paczesny Analytics](https://analytics.blonie.cloud)
+- [Spécification du protocole Model Context](https://modelcontextprotocol.io)

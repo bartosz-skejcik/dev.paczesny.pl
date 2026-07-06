@@ -1,0 +1,266 @@
+---
+title: Ich habe meine Seite agent-ready gemacht: llms.txt, Content-Signals und API-Katalog
+description: Ich habe meine Next.js-Seite agent-ready gemacht: Content-Signals in robots.txt, Link-Header, llms.txt, Markdown für Bots und API-Katalog. Echte Routen drin.
+date: 2026-07-06T10:00:00.000Z
+tags: agent-ready, ai, llms-txt, seo, nextjs, boty, self-hosting, llm
+---
+
+## Einführung
+
+Hallo! In meinem [vorherigen Beitrag](/blog/de/ask-claude-about-your-website-traffic-with-mcp) habe ich mich damit gebrüstet, dass mein Agent die Statistiken dieses Blogs über meinen eigenen MCP-Server liest. Alles schön und gut, aber dieser Agent hatte eine Sache, die niemand anders hat: meinen API-Schlüssel. Er kam durch die Vordertür herein, mit einem Eintrittskarten.
+
+Und eines Abends kam mir der Gedanke: Okay, mein Bot sieht alles. Aber was sehen fremde Bots? ChatGPT, wenn jemand einen Link zu meinem Beitrag einfügt. Perplexity, wenn es eine Antwort erstellt. Claude ohne jedes Plugin. Ein einfacher AI-Crawler, der hereinkommt, um sich zu indexieren. Ich habe das getestet, was ein solcher Bot macht, nämlich einen einfachen `curl` ohne JavaScript, und ich habe gesehen, was ich bekomme.
+
+Nun, ich bekomme eine Suppe. Eine schöne Next.js- und React-Seite aus der Perspektive eines Bots ohne JavaScript-Engine ist oft ein verschlossenes Tor: ein bisschen HTML-Skelett, ein Haufen `<script>`-Tags und das war's. Ein Mensch sieht einen schönen Blog, ein Bot sieht leere Divs. Ich habe die Seite schön für Menschen gemacht, bevor ich überprüft habe, ob sie überhaupt maschinenlesbar ist.
+
+Also habe ich mich hingesetzt und sie "agent-ready" gemacht, gemäß dem Standard, den [isitagentready.com](https://isitagentready.com) sammelt (das ist größtenteils die Arbeit von Leuten von Cloudflare rund um das Thema Agent-Web). In diesem Beitrag bekommst du drei Dinge:
+
+1. was "agent-ready" im Jahr 2026 überhaupt bedeutet, konkrete Standards, keine Buzzwords,
+2. wie ich es in Next.js implementiert habe, echte Routen und Middleware, Code zum Kopieren,
+3. ob es einen realen Nutzen bringt oder nur eine weitere Checkbox zum Abhaken ist.
+
+Ich warne dich: Ich werde bis zum Ende leicht skeptisch bleiben. Denn ich mag solche Dinge aufstellen, aber ich mag es nicht, wenn man so tut, als ob jede davon einen Ruck in der Bewegung bringt.
+
+## Was bedeutet "agent-ready" überhaupt
+
+Lass uns beginnen damit, dass es nicht eine einzige magische Marke ist, die man in den `<head>`-Bereich einfügt. Es ist ein Beutel mit kleinen, langweiligen Standards, von denen jeder einem Bot eine Frage beantwortet:
+
+| Element | Auf welche Frage des Bots antwortet es |
+|---|---|
+| `robots.txt` + Content-Signal | Darf ich das indexieren, trainieren, zitieren? |
+| Link-Header (RFC 8288) | Wo sind die maschinellen Eingänge zu dieser Seite? |
+| Markdown-Verhandlung | Gibst du mir den Inhalt ohne JavaScript-Suppe? |
+| `llms.txt` | Was ist hier überhaupt, in einer Datei? |
+| API-Katalog (RFC 9727) | Welche maschinellen Ressourcen hast du, unter kanonischer Adresse? |
+
+Das Schöne daran ist, dass keines dieser Elemente das Umstellen der Seite erfordert. Es sind nur ein paar zusätzliche Routen und ein bisschen Middleware, die an die Seite angehängt werden. Kein neuer Framework, keine Migration. Ich werde sie alle durchgehen, mit echtem Code aus diesem Repository und mit einem lebendigen `curl` auf der Produktion als Beweis, dass es tatsächlich funktioniert.
+
+## robots.txt, der Bots AI "darf" sagt
+
+Zunächst die allergrundlegendste Sache, nämlich `robots.txt`. In Next.js ist es verlockend, es durch die Konvention `MetadataRoute.Robots` zu generieren. Das Problem ist, dass diese API nicht in der Lage ist, die Direktive `Content-Signal` hinzuzufügen, und das ist genau der neue Teil, der Bots AI direkt sagt, worauf man sich einigt. Also serviere ich `robots.txt` von einem einfachen Route-Handler aus:
+
+```typescript
+// robots.txt als Route-Handler, nicht MetadataRoute.Robots, damit man
+// die Direktive Content-Signal (https://contentsignals.org) hinzufügen kann.
+const CONTENT_SIGNAL = "Content-Signal: ai-train=yes, search=yes, ai-input=yes"
+
+const lines = isProduction
+  ? ["User-Agent: *", "Allow: /", CONTENT_SIGNAL]
+  : ["User-Agent: *", "Disallow: /"]
+```
+
+[Content-Signal](https://contentsignals.org) ist ein einfaches Protokoll: drei Schalter, die Dinge trennen, die früher in einem "Bot"-Beutel saßen. `ai-train=yes` ist die Zustimmung zum Trainieren von Modellen, `search=yes` zur klassischen Indizierung, `ai-input=yes` zur Verwendung meiner Inhalte als Material für AI-Antworten. Bei mir sind alle drei auf `yes` gesetzt, weil ich will, dass man mich zitiert, das ist der ganze Sinn. Aber beachte diesen `isProduction`: auf Preview und lokal fliegt ein hartes `Disallow: /`, weil es nichts Schlimmeres gibt als einen Bot, der dein Testumfeld indexiert.
+
+Überprüfung im Leben:
+
+```bash
+curl https://dev.paczesny.pl/robots.txt
+```
+
+```
+User-Agent: *
+Allow: /
+Content-Signal: ai-train=yes, search=yes, ai-input=yes
+```
+
+So viel. Eine Direktive, und sie löst das ewige Problem "Behandle mich anders als einen Scraper, der mich gleich klonen wird".
+
+## Link-Header, oder die Visitenkarte für Bots
+
+Nehmen wir an, der Bot weiß bereits, dass er hereinkommen darf. Woher soll er wissen, dass ich `llms.txt`, Feed und API-Katalog habe? Er kann raten, nach typischen Pfaden, aber warum, wenn es einen Standard dafür gibt, der seit einem Jahrzehnt existiert: [RFC 8288](https://www.rfc-editor.org/rfc/rfc8288), also der Link-Header. Ich füge ihn auf jede Seite mit Middleware hinzu:
+
+```typescript
+// Link-Header (RFC 8288) werben für Ressourcen für Agenten.
+const LINK_HEADER = [
+  '</.well-known/api-catalog>; rel="api-catalog"',
+  '</llms.txt>; rel="alternate"; type="text/plain"',
+  '</sitemap.xml>; rel="sitemap"',
+  '</feed.xml>; rel="alternate"; type="application/rss+xml"',
+  '</feed.json>; rel="alternate"; type="application/feed+json"',
+].join(", ")
+```
+
+Das ist die Visitenkarte, die der Bot bei einem einfachen `HEAD` oder `GET` bekommt, noch bevor der Body startet. "API-Katalog habe ich hier, Index für LLMs dort, Sitemap hier, Feed dort". Kein Raten. Beweis:
+
+```bash
+curl -sI https://dev.paczesny.pl/
+```
+
+```
+link: </.well-known/api-catalog>; rel="api-catalog",
+ </llms.txt>; rel="alternate"; type="text/plain",
+ </sitemap.xml>; rel="sitemap",
+ </feed.xml>; rel="alternate"; type="application/rss+xml",
+ </feed.json>; rel="alternate"; type="application/feed+json"
+```
+
+Billig wie Borschtsch, weil es ein fester String ist, der an jede Antwort angehängt wird. Und der Bot bekommt eine Karte der Seite, ohne auch nur ein Byte Inhalt zu lesen.
+
+## Content-Verhandlung: dieselbe Seite, aber in Markdown
+
+Das ist mein Lieblingsteil, weil es genau das Problem löst, das ich eingeführt habe. Ein Bot, der nach Inhalten kommt, will nicht meinen HTML-Code parsen und React ausführen. Er will reinen Text. Und HTTP hat einen Mechanismus dafür, seit jeher: Content-Verhandlung durch den `Accept`-Header. Wenn der Request `Accept: text/markdown` sagt, dann schreibt die Middleware ihn stillschweigend auf den Markdown-Endpunkt um. Der Browser, der `text/html` verlangt, bekommt immer noch die normale Seite.
+
+Die gesamte Logik sitzt in zwei Funktionen. Die erste prüft, ob der Klient überhaupt Markdown will, die zweite mappt den öffentlichen Pfad auf den `/api/md`-Endpunkt:
+
+```typescript
+function wantsMarkdown(accept: string | null): boolean {
+  if (!accept) return false
+  return accept
+    .split(",")
+    .some((part) => part.trim().toLowerCase().startsWith("text/markdown"))
+}
+
+// Mappe den öffentlichen Pfad auf seinen Markdown-Endpunkt oder null.
+function markdownTarget(pathname: string): string | null {
+  if (pathname === "/") return "/api/md"
+  if (pathname === "/blog") return "/api/md/blog"
+  const post = /^\/blog\/([a-z]{2})\/([^/]+)\/?$/.exec(pathname)
+  if (post) return `/api/md/blog/${post[1]}/${post[2]}`
+  return null
+}
+```
+
+Und die eigentliche Umleitung ist `NextResponse.rewrite`, also ändert sich die URL in der Adresszeile nicht, ändert sich nur, was zurückgegeben wird:
+
+```typescript
+if (wantsMarkdown(request.headers.get("accept"))) {
+  const target = markdownTarget(pathname)
+  if (target) {
+    const url = request.nextUrl.clone()
+    url.pathname = target
+    return withDiscoveryHeaders(NextResponse.rewrite(url))
+  }
+}
+```
+
+Ein wichtiger Punkt, der leicht übersehen werden kann, aber wichtig ist: Die Antwort bekommt den Header `Vary: Accept`. Das sagt jedem Cache auf dem Weg, dass unter derselben URL zwei verschiedene Antworten je nach `Accept` sein können, also nicht dem Browser Markdown oder dem Bot HTML geben. Ohne das kann die Content-Verhandlung auf einem CDN auf die seltsamste Weise auseinanderfallen.
+
+Effekt im Leben, dieselbe Adresse, nur mit einem anderen Header:
+
+```bash
+curl -H "Accept: text/markdown" https://dev.paczesny.pl/
+```
+
+```markdown
+# Bartek Paczesny
+
+> Developer, IT-Spezialist und der "Ich kann deinen Computer reparieren"-Typ.
+
+## Blog-Beiträge
+
+- [Mein eigener MCP-Server: AI liest meine Website-Statistiken](...)
+- [Claude-Code-Hooks, Fähigkeiten und Subagenten: eine praktische Einrichtung](...)
+...
+```
+
+Der Bot bekommt reinen Markdown anstelle von Suppe mit Divs und Skripten. Keine Rendering, kein Raten, wo der Inhalt ist und wo die Navigation. Dieselbe Seite, die ich selbst im Terminal lesen würde.
+
+## llms.txt: eine Datei, in der alles ist
+
+Der Link-Header sagt dem Bot "habe Index für LLMs hier". Dieser Index ist [`llms.txt`](https://llmstxt.org), also eine kuratierte, markdown-Datei, die speziell für Modelle gedacht ist. Anstatt dem Bot zu sagen, die gesamte Sitemap zu durchsuchen, bekommt er eine Datei: Titel, einzeilige Beschreibung, Liste aller Beiträge mit Links und Beschreibungen, am Ende Feeds und API-Katalog. Ich baue es aus derselben Liste von Beiträgen auf, aus der der Rest der Seite stammt:
+
+```typescript
+const lines: string[] = [
+  `# ${SITE_NAME}`,
+  "",
+  `> ${DEFAULT_SEO_DESCRIPTION}`,
+  "",
+  "Developer-Blog und Portfolio. Jede Seite gibt sauberen Markdown zurück, wenn sie mit dem `Accept: text/markdown`-Header angefordert wird.",
+  "",
+  "## Blog-Beiträge",
+  "",
+]
+
+for (const post of posts) {
+  const url = runtimeAbsoluteUrl(`/blog/${post.lang}/${post.slug}`)
+  const description = post.metadata.description?.trim()
+  lines.push(`- [${post.metadata.title}](${url})${description ? `: ${description}` : ""}`)
+}
+```
+
+Beachte, dass ich in `llms.txt` dem Bot selbst sage, dass jede Seite sauberen Markdown zurückgeben kann, wenn sie mit dem `Accept: text/markdown`-Header angefordert wird. Also ist die Datei gleichzeitig Index und Bedienungsanleitung. Der Bot liest den Index, wählt einen Beitrag aus, lädt ihn in Markdown und fertig. Ein Blick:
+
+```bash
+curl https://dev.paczesny.pl/llms.txt
+```
+
+```
+# Bartek Paczesny
+
+> Developer, IT-Spezialist und der "Ich kann deinen Computer reparieren"-Typ.
+
+Developer-Blog und Portfolio. Jede Seite gibt sauberen Markdown zurück, wenn sie mit dem `Accept: text/markdown`-Header angefordert wird.
+
+## Blog-Beiträge
+...
+```
+
+Wichtiges Wort: **kuratiert**. Das ist nicht dasselbe wie eine Sitemap. Eine Sitemap ist eine rohe Liste aller URLs für Suchmaschinen-Crawler, ohne Beschreibungen und ohne Reihenfolge. `llms.txt` ist eine Version "für Menschen, die Modelle sind": mit Beschreibungen, in der Reihenfolge, die du einstellst, ohne Müll. Ich sortiere es von dem neuesten Beitrag, also bekommt der Bot zuerst das, was frisch ist.
+
+## API-Katalog: maschineller Verzeichnis von Ressourcen unter .well-known
+
+Der letzte Baustein, der "unternehmensreichste" aus dem ganzen Paket: [RFC 9727](https://www.rfc-editor.org/rfc/rfc9727), also der API-Katalog. Das ist ein Dokument unter einer festen, kanonischen Adresse `/.well-known/api-catalog`, das maschinelle Ressourcen der Seite als `application/linkset+json` auflistet. Derselbe Gedanke wie der Link-Header, nur als vollständiges Dokument, das der Bot herunterladen und parsen kann, ohne ein `HEAD` auf der Startseite zu machen.
+
+Das Wesentliche ist ein `linkset` mit Beziehungen aus RFC 8288: `service-doc` zeigt auf die Dokumentation, die für Menschen lesbar ist (bei mir `llms.txt`), `service-desc` auf maschinelle Beschreibungen von Diensten (Feeds), und `describedby` auf etwas, das die Ressource beschreibt (Sitemap):
+
+```typescript
+const linkset = [
+  {
+    anchor: runtimeAbsoluteUrl("/"),
+    "service-doc": [
+      { href: runtimeAbsoluteUrl("/llms.txt"), type: "text/plain" },
+    ],
+    "service-desc": [
+      { href: runtimeAbsoluteUrl("/feed.json"), type: "application/feed+json" },
+      { href: runtimeAbsoluteUrl("/feed.xml"), type: "application/rss+xml" },
+    ],
+    describedby: [
+      { href: runtimeAbsoluteUrl("/sitemap.xml"), type: "application/xml" },
+    ],
+  },
+]
+```
+
+Ich gebe es mit dem Header `Content-Type: application/linkset+json` zurück, gemäß der Spezifikation. Liest jeder Bot das heute? Nein. Aber das ist genau die Kategorie von Dingen, bei denen der Aufwand null ist, und wenn der Standard sich durchsetzt, dann hast du es bereits. Außerdem ist es schön, ein Komplettset zu haben.
+
+## Bringt es einen realen Nutzen
+
+Hier habe ich Verschwiegenheit versprochen, also gehe ich ohne Umschweife. Ich beginne mit dem, was real auf der Plus-Seite steht:
+
+* **Billig zu implementieren.** Das ganze ist nur ein paar Routen und ein bisschen Middleware. Ein Abend, keine neuen Abhängigkeiten, keine Migration. Das Risiko eines Regressionsfehlers ist minimal, weil es alles an der Seite hängt und nicht das Rendern der Seite oder die Komponenten berührt.
+* **Es schadet nicht.** Im schlimmsten Fall hast du ein paar Endpunkte, die niemand besucht. Keines dieser Elemente verschlechtert das SEO oder verlangsamt die Seite für Menschen.
+* **Es erleichtert das Zitieren durch AI.** Oberflächen mit AI-Antworten bekommen reinen Markdown anstelle meines HTML zu parsen. Je weniger der Modellkosten für die Extraktion von Inhalten aus mir, desto größer die Chance, dass er mich zitiert und nicht jemand anderen, der lesbarer ist.
+* **Bots crawlen billiger.** `llms.txt` und API-Katalog sind für Bots ein Shortcut, also weniger Anfragen, weniger Belastung deines Servers. Ein Nebeneffekt, aber ein schöner.
+
+Und jetzt ehrlich über die Nachteile, denn ohne das wäre es ein Werbeprospekt und kein Beitrag:
+
+* **Es ist kein Hockeyschläger in den Statistiken.** Niemand hat hier +300% Verkehr durch `llms.txt` gemacht. Der Verkehr, den es gibt, ist ein langer Schwanz, der über Monate aufgebaut wird.
+* **Einige Bots ignorieren Standards.** `Content-Signal` oder API-Katalog sind so gut wie ihre Beachtung auf der anderen Seite. Ein schlechter Akteur wird dich trotzdem scrapen, und ein neuer Standard wird sich über Jahre durchsetzen.
+* **Kein harter Beweis für die ROI.** Ich werde ehrlich sein: Ich habe keine Zahl, die sagt "das hat X eingebracht". Es ist eine Wette auf die Richtung, in die das Web geht, und nicht ein gemessener Umsatz.
+
+Die gute Nachricht ist, dass es sich letztendlich **messen** lässt. Es reicht, in die Google Search Console zu schauen, ob die neuen Endpunkte indexiert werden, und in die Server-Logs, wer sie anfordert und mit welchem `User-Agent`. Ich habe einen bequemeren Weg, weil ich den gesamten Bot-Verkehr durch meinen eigenen [MCP-Server](/blog/de/how-to-build-mcp-server-for-analytics) sehe: Ich frage Claude "wer klopft an meine `llms.txt` in dieser Woche" und bekomme eine Antwort, ohne ein Dashboard anzuklicken. Nach einer Weile komme ich zurück, mit Zahlen anstelle von Weissagungen.
+
+## FAQ
+
+**Wie unterscheidet sich `llms.txt` von `sitemap.xml`?**
+Eine Sitemap ist eine rohe Liste aller URLs für Suchmaschinen-Crawler, ohne Beschreibungen und ohne Reihenfolge. `llms.txt` ist eine kuratierte, markdown-Datei, die speziell für Modelle gedacht ist: Titel, Beschreibungen, Reihenfolge, die du einstellst, plus Hinweis, wie man jede Seite in reinem Markdown bekommt. Eines ersetzt nicht das andere, ich stelle beides bereit.
+
+**Muss ich meine Seite auf einen anderen Framework umstellen, um das zu tun?**
+Nein. Bei mir ist es nur ein paar Route-Handler und Middleware, die an die bestehende Next.js-Seite angehängt werden. Nichts davon berührt das Rendern von Seiten oder Komponenten. Auf jedem Stack, der eigene HTTP-Header setzen und eine Textdatei zurückgeben kann, machst du dasselbe.
+
+**Bedeutet `Content-Signal: ai-train=yes`, dass jeder meine Inhalte trainieren kann?**
+Das ist eine Erklärung deiner Zustimmung, die anständige AI-Bots respektieren. Das ist kein Firewall: Es wird niemanden daran hindern, der den Standard ignoriert. Wenn du das Training streng verbieten möchtest, stelle `ai-train=no`, aber denke daran, dass auch das nur bei Bots funktioniert, die `robots.txt` überhaupt lesen.
+
+**Woher weiß der Bot, dass meine Seite Markdown zurückgeben kann?**
+Aus zwei Quellen. Der Link-Header bewirbt `llms.txt`, und `llms.txt` schreibt direkt, dass jede Seite sauberen Markdown zurückgibt, wenn sie mit `Accept: text/markdown` angefordert wird. Dazu haben die Antworten `Vary: Accept`, also weiß der Cache, dass dieselbe URL zwei Versionen hat.
+
+**Hilft es bei dem normalen SEO für Google?**
+Indirekt. Ein anständiger `robots.txt`, Sitemap und Feeds sind Hygiene, die Google schon immer mag. Der Rest, also `llms.txt`, Content-Signal und API-Katalog, zielt mehr auf AI-Oberflächen als auf den klassischen Ranking. Eines behindert das andere nicht, also mache ich beides.
+
+## Zusammenfassung
+
+Und das war's. Kurz gesagt: Agent-ready ist nicht eine einzige magische Marke, sondern ein Beutel mit langweiligen Standards, von denen jeder einem Bot eine Frage beantwortet. `robots.txt` mit Content-Signals sagt "darf", der Link-Header sagt "Eingänge sind hier", die Content-Verhandlung gibt sauberen Markdown, `llms.txt` gibt einen Index aller Inhalte in einer Datei, und der API-Katalog vervollständigt es mit einer kanonischen Adresse für Maschinen. Ein paar Routen und Middleware, ein Abend, keine Migration. Der Code aus diesem Beitrag kann man getrost kopieren.
+
+Und jetzt die versprochene Überraschung. Ich habe einen Abend damit verbracht, meine Seite ideal lesbar für Roboter zu machen: sauberer Markdown, Index für LLMs, API-Katalog. Dann fragte mich mein Kumpel, ein lebendiger Mensch, wo überhaupt der RSS-Button ist, weil er ihn nicht finden konnte. Na und? Ich habe die Seite agent-ready gemacht, bevor ich sie ordentlich human-ready gemacht habe.
+
+Im nächsten Beitrag gehe ich von diesem agentischen High-Tech auf den Boden der Tatsachen herunter, denn agent-ready ist auch ein anständiger hreflang und eine Version der Seite in vier Sprachen. Die Übersetzungen macht mir ein LLM, und bei einer dieser Übersetzungen hat das gleiche Modell, das so schön meinen Markdown liest, meine internen Links fröhlich zerstört, weil es beschlossen hat, die Slugs zu übersetzen. Aber das ist eine Geschichte für den nächsten Mal. Bleib gesund!

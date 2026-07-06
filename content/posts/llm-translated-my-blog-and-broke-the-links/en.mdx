@@ -1,0 +1,196 @@
+---
+title: "An LLM translated my blog into four languages and broke half the links on the way"
+description: "I write in Polish; llama on Groq spins up the EN/DE/FR versions. Smooth until it translated the slugs in my links and served 404s. Real pipeline inside."
+date: 2026-07-06T11:00:00.000Z
+tags: ai, llm, tłumaczenia, i18n, nextjs, groq, llama, automatyzacja
+---
+
+## Introduction
+
+Hey! A little scene to start. A week after I proudly announced to myself that I have a multilingual blog (Polish, English, German, French, all generated automatically), I sit down one evening and out of boredom start clicking through the German version of my own posts. I click a link to "part two of my Proxmox series". 404. I click the next internal link. 404. I click a third one. 404 as well. Fuck. Half of the internal links in the DE version lead nowhere, and I'd been strutting around proud as a peacock for a whole week.
+
+Before I explain what happened, a quick plug for the previous post: I set up this whole multilingual thing so that [the site would be ready for AI agents](/blog/en/how-to-make-your-website-agent-ready) and would have proper `hreflang`. Nice SEO, nice language alternates, one canonical language and the rest translated. A beautiful plan. Right up until I looked at the links.
+
+In this post you get three things:
+
+1. what my **translation pipeline** looks like (a real script, no bullshit),
+2. what exactly **llama** broke and **why** it even had the chance to happen,
+3. why **a nice prompt won't fix it** and what it does instead.
+
+Someone has probably already written about this kind of screwup in English. In Polish, as usual, silence, so I'm taking it on myself. And as usual: if I don't spell something out, sorry, I'm still learning xd.
+
+## My translation pipeline, or how this even works
+
+The rule is simple: **Polish is canonical**. I write the post in Polish, then I run a command and the foreign-language versions build themselves:
+
+```bash
+bun run translate:post --slug moj-post --lang en
+```
+
+Underneath sits a single model: `llama-3.3-70b-versatile`, hosted on [Groq](https://groq.com). I call it through the [Vercel AI SDK](https://ai-sdk.dev), specifically through the `@ai-sdk/openai` adapter, because Groq exposes an OpenAI-compatible API. The whole config is literally a few lines:
+
+```typescript
+const groq = createOpenAI({
+  apiKey: process.env.GROQ_API_KEY,
+  baseURL: "https://api.groq.com/openai/v1",
+})
+
+const translator = groq.chat("llama-3.3-70b-versatile")
+```
+
+So the "llama" from the title isn't some local model on my laptop, it's Llama 3.3 70B running on Groq's infrastructure. Fast as hell, cheap, perfect for translating prose.
+
+The call itself is `generateText` with two parameters worth discussing:
+
+```typescript
+const { text } = await generateText({
+  model: translator,
+  temperature: 0.2,
+  // Groq's default cap cuts long posts off mid-sentence, but the on_demand
+  // account limit (TPM = 12000) caps prompt+output per single request.
+  // So you can't just max it out: output is about 1.3x the length of the
+  // source, so we take a value with headroom, leaving room for prompt tokens.
+  maxOutputTokens: 7000,
+  prompt,
+})
+```
+
+`temperature: 0.2`, because from a translator I want boredom and predictability, not creativity. And `maxOutputTokens: 7000` is a whole separate story, the one from the "raise translator output cap" commit. Initially I had the default, lower limit there and long posts got cut off mid-sentence. The natural reflex: bump it to the max. Except my Groq plan (`on_demand`) has a TPM limit (tokens per minute) of 12000, and that limit covers prompt plus output per single request. The output of a translation is roughly 1.3x the length of the source. If I maxed out the output, there'd be no room left for the prompt itself and the request would blow up. So 7000 isn't "as much as possible", it's "with headroom, but not up to the ceiling". A boring number for a boring reason, but without it half of the longer posts don't go through.
+
+The result lands in a cache: next to the `pl.mdx` file, an `en.mdx`, `de.mdx` or `fr.mdx` gets created. And here we get to the structure that's at the heart of today's whole screwup.
+
+## The content structure, or where the mine is buried
+
+Every post is a directory. Inside, one file per language, and the directory name is **the same slug for all languages**:
+
+```
+content/posts/
+  proxmox-czesc-druga/
+    pl.mdx
+    en.mdx
+    de.mdx
+    fr.mdx
+  how-to-setup-vaultwarden-on-linux/
+    pl.mdx
+    en.mdx
+    ...
+```
+
+The URL is made of the language and the slug: `/blog/{lang}/{slug}`. So the German version of my Proxmox post lives at `/blog/de/proxmox-czesc-druga`, the French one at `/blog/fr/proxmox-czesc-druga`, and the Polish one at `/blog/pl/proxmox-czesc-druga`. Notice: the slug is identical everywhere. It does **not** get translated, because it's the name of a directory on disk, one for all languages. This is the key contract of the whole system.
+
+And now guess what llama didn't know about this contract.
+
+## What exactly llama broke
+
+The model got a Polish post to translate. In the Polish post there are internal links, for example to part two of the Proxmox series: `/blog/pl/proxmox-czesc-druga`. The task: translate the post into German. The model politely swapped `pl` for `de` in the path (good!), and then, in a fit of conscientiousness, **it also translated the words in the slug itself** (catastrophe).
+
+Because `proxmox-czesc-druga` is, after all, "proxmox część druga", and in German "część druga" is "teil zwei". So the model produced `/blog/de/proxmox-teil-zwei`. Pretty, logical, in German. And completely dead, because the directory is called `proxmox-czesc-druga`, not `proxmox-teil-zwei`. 404.
+
+It wasn't a single case. It was a pattern, consistently, in every target language. Here are the real diffs from the commit where I fixed it:
+
+| Language | Canonical slug (works) | What llama generated (404) |
+|---|---|---|
+| DE | `/blog/de/proxmox-czesc-druga` | `/blog/de/proxmox-teil-zwei` |
+| EN | `/blog/en/proxmox-czesc-druga` | `/blog/en/proxmox-part-two` |
+| FR | `/blog/fr/proxmox-czesc-druga` | `/blog/fr/proxmox-partie-deux` |
+| FR | `/blog/fr/how-to-setup-vaultwarden-on-linux` | `/blog/fr/comment-installer-vaultwarden-sur-linux` |
+| DE | `/blog/de/proxmox-first-install` | `/blog/de/proxmox-erste-installation` |
+
+Notice the best part. The canonical slug `proxmox-czesc-druga` is **itself in Polish**, because I wrote it back when the blog was monolingual. And the model, translating to German, "corrected" that Polish slug into German for me. Translating to French, into French. Every single time it was convinced it was doing me a favor. Every single time it gave me a 404. The worst thing is that even if my slug had been in English (like `how-to-setup-vaultwarden-on-linux`), it would still translate it into the French `comment-installer-vaultwarden-sur-linux`. The model shows no mercy, it translates everything that looks like words.
+
+## Why a nice prompt doesn't catch this
+
+Here comes the natural question: alright Bartek, but you're the one writing the prompt, so tell it not to touch the links. And here's the punchline of this whole section: **I did tell it**. Literally. Here's a fragment of my actual prompt from the `buildPrompt` function:
+
+```typescript
+return `You are a meticulous technical translator. Translate the following
+Polish MDX blog post to ${targetLang.toUpperCase()} while preserving:
+- YAML frontmatter keys: title, description, date...
+- Markdown structure, headings, code blocks, inline formatting, links, and lists.
+- Developer tone (keep technical jargon) and mirror the author's informal voice.
+```
+
+See that? "preserving [...] **links**". Point blank. In black and white, in the list of things to preserve, there's the word "links". And the model translated the words in the paths anyway, because to it a link is still text, and text gets translated. The model "preserved" the link in the sense that it left the `[text](url)` syntax alone. But the words inside the URL it treated like any other phrase to render.
+
+And this is lesson number one of this post: **a slug is an identifier, not prose**. To a human, `proxmox-czesc-druga` inside the parentheses is an obvious technical key you don't touch. To an LLM it's a string of little Polish words joined by hyphens, waiting to be translated. The model doesn't tell "translate this" apart from "leave this alone" if both look the same, that is, like words. A polite request in the prompt won't lock this down 100%. You can write "do not translate slugs" in all caps three times and it'll still slip one in ten through, because the temperature isn't zero, and the model isn't a parser.
+
+## And that's not the end of the surprises
+
+The slugs were the loudest screwup, but not the only one. When you hand content over to a model, you get a whole set of quiet bugs sent home with you, ones you need to brace for. A few I've already taken to the face:
+
+**The model wraps the whole output in ` ``` `.** You ask for clean markdown, you get markdown packed into a code block, because the model decided that was more polite. Hence the function in the code that strips this fence back off:
+
+```typescript
+function sanitizeModelOutput(output: string) {
+  const trimmed = output.trim()
+  const fenceRegex = /^```(?:mdx|markdown)?\s*([\s\S]*?)\s*```$/i
+  const match = fenceRegex.exec(trimmed)
+  if (match) return match[1].trim()
+  return trimmed
+}
+```
+
+**The model loses the frontmatter.** Sometimes while translating a post it just eats the YAML block with the title and date, or mangles its syntax. And frontmatter without a title is a ghost post. That's why, before I save anything to the cache, I parse the frontmatter and if it's missing, I blow up loudly instead of quietly saving garbage:
+
+```typescript
+const cleaned = sanitizeModelOutput(text)
+// Make sure the output STILL has frontmatter, BEFORE you save it.
+parseFrontmatter(cleaned)
+```
+
+**The heading anchors stay in Polish.** This is the same class of bug as the slugs, only sneakier. An anchor (`#przygotowanie-lxc-na-proxmoxie`) is generated from the heading text. If in the German version the heading gets translated but the anchor link stays the old one, then a link to a section on the same page suddenly points into the void. In one of my links it came out even funnier: the model translated the slug itself but left the anchor `#przygotowanie-lxc-na-proxmoxie` in Polish. Once it tried too hard, once too little, in the very same link.
+
+## How I fixed it (no bullshit)
+
+I'll be honest, because half the posts on the internet at this point pretend the author immediately shipped an elegant solution. Not me. First I **manually glued the slugs back together by hand**. I opened `de.mdx`, `en.mdx`, `fr.mdx` one by one across a few posts, found every broken link and typed the canonical slug back in with my fingers. This is exactly that commit from the history: `fix: dead internal links in translated posts (llama had translated the slugs)`. Six files, manual correction, an evening gone. No magic, just Bartek and Ctrl+F.
+
+But conclusions are born from evenings like that, so I'll also write down the **direction of hardening** here, and I stress: this is a conclusion and a plan, not something that's already running in production. The idea is this: stop trusting the prompt and, after the translation, **deterministically rewrite every internal link back to the canonical slug**. I can do it, because I **know** the canonical slug: it's the directory name in `content/posts`. Let the model translate the prose, and I'll run over it with a regex afterwards and fix what it had no business touching.
+
+The simplest version of this idea looks roughly like this. The slugs in the translation should be in the same order as in the Polish original (because the translation preserves the structure), so I pull the list of canonical slugs from the source and overwrite whatever the model produced with them:
+
+```typescript
+// DIRECTION, not implemented yet. I know the slugs: they're directory names in content/posts.
+// Pull the slugs from the canonical (PL) source, in order of appearance.
+const canonicalSlugs = [...canonicalMarkdown.matchAll(/\/blog\/pl\/([a-z0-9-]+)/g)]
+  .map((m) => m[1])
+
+// In the translation, run over the /blog/{lang}/... links and force the canonical slug.
+let i = 0
+translated = translated.replace(
+  /\/blog\/(en|de|fr)\/[a-z0-9-]+/g,
+  (_whole, lang) => `/blog/${lang}/${canonicalSlugs[i++]}`,
+)
+```
+
+Boring? Very. But that's exactly its strength. A deterministic regex has no mood, no temperature, and it doesn't try to do me a favor. It does exactly one thing and it does it every single time. **A polite request in the prompt works 90% of the time, a regex works 100%**, and it's that 100% that matters here, because a dead link has no in-between states. Same moral as with the hooks in the [previous series](/blog/en/how-to-setup-claude-code-hooks-skills): if something has to be certain, don't ask the model, close it off with code.
+
+## FAQ
+
+**Why is Polish canonical in the first place, and not English?**
+Because I write naturally in Polish and it's the language this blog is created in. English, German and French are a distribution layer, not the source. Side effect: my oldest slugs are in Polish (`proxmox-czesc-druga`), which the model took as an invitation to translate. If I were starting today, I'd make the slugs English from the start, but that still doesn't cure the cause, it just shrinks the blast radius.
+
+**Wouldn't a different, bigger model avoid breaking this?**
+Maybe it would break it less often. But it's still a model, it still operates on text, and it still has no hard notion of "this is an identifier, don't touch it". Paying for a more expensive model so it guesses right more often isn't solving the problem, it's just deferring it. A regex costs zero and doesn't guess.
+
+**Why not cut the links out of the prompt and paste them back afterwards?**
+That's essentially a variant of the target solution and it makes sense: mask the links with placeholders before translating, and after translating put the originals back. Then the model physically doesn't see the path, so there's nothing to translate. For now it's simpler for me to run the result through a regex, but the direction is the same: keep identifiers away from the model.
+
+**Does this mean automatic LLM translation is a bad idea?**
+No, quite the opposite. It translates prose brilliantly and practically for free. The bad idea is trusting it with things that aren't prose: slugs, anchors, keys, paths, IDs. The line runs not between languages, but between "text to read" and "text that is an address".
+
+## Summary
+
+And that would be it! The gist in one sentence: **the model is brilliant at translating prose and completely mindless about what isn't prose.** It'll render a German sentence better than many a human. But put in front of the string `proxmox-czesc-druga` it has no mechanism that would say "this is an address, leave it", so it translates, because translation is its only hammer, and everything around looks like nails.
+
+And now the ironic cherry on top. I built myself a super fast, multilingual blog practically for free, with one command, the model did the work of four translators for me. After which I spent an evening manually gluing back together slugs the model had no business even touching. I saved four evenings on translation and gave back one on fixing something I broke for myself with automation. Net, I still won, but the aftertaste stayed.
+
+And right at that moment, looking at all these regexes, hooks and patches I'd piled up on top of this Next.js, temptation got me. The internet happened to be buzzing about a certain hype framework, promising that all of this is done simpler, cleaner and altogether differently. I thought: maybe throw it all out and start from scratch on something new? I devoted a whole weekend of pondering to that idea. Why I ultimately backed out and didn't rewrite the blog from scratch will be the next post. Take care, dude!
+
+## Links
+
+- [Groq](https://groq.com), where the llama from this post runs
+- [Vercel AI SDK](https://ai-sdk.dev), through which I call the model
+- [My previous post: how to make your website ready for AI agents](/blog/en/how-to-make-your-website-agent-ready)
+- [Part two of the Proxmox series](/blog/en/proxmox-czesc-druga), one of the translator's victims
+- [Self-hosting Vaultwarden on Linux](/blog/en/how-to-setup-vaultwarden-on-linux), another victim
+- [SearXNG on Coolify](/blog/en/how-to-self-host-searxng-on-coolify), links died here too
