@@ -67,9 +67,9 @@ export async function generateMetadata({
     post.localizedMetadata?.[CANONICAL_LANG]?.coverImage
   const ogImagePath =
     coverImage ??
-    `/og/blog?title=${encodeURIComponent(post.metadata.title)}&lang=${
+    `/og/post?title=${encodeURIComponent(post.metadata.title)}&lang=${
       post.lang
-    }`
+    }&tags=${encodeURIComponent(tags.join(","))}`
   const ogImageSize = coverImage
     ? getPublicImageSize(coverImage)
     : { width: 1200, height: 600 }
