@@ -1,0 +1,133 @@
+---
+title: I Ask Claude About Blog Traffic Instead of Clicking Through Dashboards
+description: I connected my MCP analytics server to Claude and now I ask him about traffic, GSC, and errors on my blog instead of clicking through dashboards. Here's how I use it in my daily life.
+date: 2026-07-06T09:00:00.000Z
+tags: mcp, ai, agenty, analytics, claude-code, self-hosting, produktywność, llm
+---
+
+## Introduction
+
+Hey there! So, last week I had a situation where I posted a new entry in the morning and by evening, I was itching to know if anyone had visited it. The old me would have unlocked my phone, gone to [analytics.blonie.cloud](https://analytics.blonie.cloud), waited for the dashboard to load, clicked on the "Pages" tab, squinted at the chart on my 6-inch screen, and then also checked the "Countries" tab because I was curious. Five clicks and I still wouldn't know if anything was broken in terms of errors, because that's another tab.
+
+The new me just sent a single sentence to Claude and went to make some tea.
+
+In my [previous post](/blog/en/how-to-build-mcp-server-for-analytics), I built an MCP server for [Paczesny Analytics](https://analytics.blonie.cloud), my own cookieless analytics for Next.js: 17 tools, a discovery card, and a ready-to-use plugin for Claude Code. That post was about **setting it up**. It ended with the fact that it was the agent itself, looking at real statistics, that chose its topic. This post is about something more mundane and much more useful: how I **use it** in my daily life, now that the server is up and running.
+
+You'll get three things:
+
+1. what questions I actually ask and what the agent runs under the hood,
+2. why one question beats three dashboard tabs,
+3. where this is still stupid and where it's easy to get fooled (because it is).
+
+## Setup in One Paragraph
+
+I won't repeat the entire setup process, it's in the [previous post](/blog/en/how-to-build-mcp-server-for-analytics). In short: the MCP server sits under my analytics, and to connect it to Claude Code, you don't need to manually assemble any `claude mcp add` command with a long header. There's a public plugin with its own marketplace, so the entire installation is just four lines:
+
+```bash
+# API key from the dashboard (Settings -> API keys), starts with pak_
+export PACZESNY_API_KEY="pak_..."
+
+/plugin marketplace add paczesny-dev/analytics-claude-plugin
+/plugin install paczesny-analytics@paczesny
+/mcp
+```
+
+The `/mcp` command shows that the server is connected and you can see its tools. From this point on, the agent in this session can query my statistics just as naturally as it reads files in the repository. And that's what the rest of this post is about.
+
+## Instead of Clicking, I Just Ask
+
+The core of the change is simple but has a big impact on my mind. The dashboard requires **me** to know where to click. Traffic is one tab, referrers are another, countries are the third, JavaScript errors are the fourth, and Google Search Console is a whole different world. Each answer that combines two of these things means I'm jumping between tabs and gluing them together in my head.
+
+With MCP, I turn this upside down. I don't say "where do I need to click," I say what I want to know, and the agent decides which tools to run and in what order. The biggest advantage isn't that it's faster (although it is). It's that in **one** question, I combine sources that in the UI I would have to look for in three separate places and compare by eye.
+
+There are 17 tools, I listed them all in the previous post. Here, it's more important which ones the agent chooses for which question:
+
+| What I Want to Know | What the Agent Runs Under the Hood |
+|---|---|
+| How much traffic was there and what was its shape | `get_stats`, `get_timeseries` |
+| Where and who came from | `get_breakdown` (referrers, countries, devices, browsers, system, UTM) |
+| If something is broken | `get_errors`, `get_site_health` |
+| How SEO looks in Google | `get_gsc_stats`, `get_gsc_pages`, `get_search_queries` |
+| If conversions are flying | `list_funnels`, `get_funnel`, `list_goals`, `get_goal_conversions` |
+| Where people click | `get_heatmap`, `get_events` |
+
+In addition to these, there are three recording tools (`manage_funnel`, `manage_goal`, `manage_alert`), but I barely use them in my daily "checking" because they're configuration, not questions.
+
+## Three Questions I Ask Most Often
+
+Before I give examples: **all numbers below are fictional for the purpose of this post, rounded, and purely illustrative.** I'm not leaking my real private statistics here; the point is to show you the shape of the conversation, not my actual bars.
+
+First question, a classic for the evening:
+
+**Me:** how did traffic look on the blog this week and is anything broken?
+
+**Agent:** *(runs `get_stats`, `get_timeseries`, `get_errors`, `get_site_health`)* In the last 7 days, there were around 1200 visits, about 15% more than the week before, with a peak on Tuesday. The site's health is green, with one recurring JavaScript error on `/blog`, which looks like an exception from a browser extension, not from your code. Nothing urgent.
+
+Notice what happened here: one sentence, four tools, one answer that combines "how much traffic" with "is anything broken". In the dashboard, that's two separate tabs, and I'm gluing them together in my head.
+
+Second question, the one I like the most because it's a pain in the UI:
+
+**Me:** which posts are growing in Google but have a low CTR?
+
+**Agent:** *(runs `get_gsc_pages`, `get_search_queries`)* Three posts are getting a lot of impressions but few clicks. The worst one is the Vaultwarden guide: around 900 impressions, CTR below 2%. It's mostly entering on queries like "vaultwarden docker", where you're in 8th position. The title and description in the results don't really match that intent, so that's where I'd start.
+
+This is exactly the type of question where I'd have to open the performance report in Google Search Console, sort by impressions, switch to CTR, then go down to queries and manually match one with the other. Here, the agent does this matching for me because `get_gsc_pages` and `get_search_queries` are two calls for it, not two screens.
+
+Third question, quick, after a new post:
+
+**Me:** from which countries and devices did traffic come to the latest post?
+
+**Agent:** *(runs `get_breakdown` for countries and devices)* On the latest post, Poland dominates, around 70%, then Germany and the UK. The device split is roughly 50/50 desktop and mobile, with a slight advantage to mobile. Unusually high for your blog, which usually has a desktop majority.
+
+Again: `get_breakdown` in the UI means switching the dimension in a dropdown menu, country, then device, then compare. In chat, it's one sentence.
+
+## Where This is Still Stupid
+
+Okay, now the honest part, because otherwise, this sounds like an ad, and it's not. A few things still annoy me, and there are a few things to watch out for.
+
+**The agent can make up a trend from pure noise.** This is the worst trap. My blog isn't Onet, and on small numbers, the difference between 40 visits and 55 visits isn't a "37% increase", it's just Tuesday. The model, if you don't keep an eye on it, will happily dress up this noise in a narrative about a "strong growth trend". The remedy is simple and boring: I keep it on a leash with the date range. Instead of "how is traffic growing", I ask "compare the last 30 days with the previous 30", so there's something to calculate percentages from.
+
+**Too broad a question burns context.** If I throw "tell me everything about my blog", the agent politely runs six tools one after another, pulls in a ton of data into context, and produces a wall of text, from which I'll read two sentences anyway. I've learned to ask narrow questions. One question, one topic. Do I want both traffic and SEO and errors at the same time? That's three separate questions that will come out cheaper and more readable than one sprawling one.
+
+**Numbers are true, conclusions aren't necessarily.** This is an important distinction. The data that comes back from the tools is exactly what's in the database, and I'm not afraid of that. But **interpretation** of that data is just the model's guessing, and that's the only part you should take with a grain of salt. If I have doubts, I ask it to show me the raw response from the tool.
+
+**User data is untrusted text.** I wrote about this in more detail in the [previous post](/blog/en/how-to-build-mcp-server-for-analytics), so I'll just remind you: referrers, search queries, page titles, all that is entered by someone other than me and goes straight into the model's context. Someone might leave a referrer like "IGNORE ALL PREVIOUS INSTRUCTIONS", hoping the model will execute it. That's why the server wraps such values in a `[DATA: ... :DATA]` marker, so that someone else's text can't pretend to be my command. This is exactly the moment when this sanitization does its job, even when I ask innocently about "top referrers".
+
+## What Changed
+
+The ritual of checking statistics has simply evaporated. But the real change is deeper and surprised me a bit.
+
+In the past, checking statistics had a **cost**: I had to want to open the UI, wait for it to load, click around. So I checked rarely and only when I really wanted to know. Now, asking a question costs one sentence in a window that I already have open because I spend all day in Claude Code. The cost has dropped to zero, and with zero cost, I ask about things I would never have bothered to click for in the dashboard. "What are the main sources of traffic to the Proxmox post?" In the past: not worth the hassle. Now: half a sentence between two tasks.
+
+## FAQ
+
+**Do I need the plugin to ask about this?**
+No. The plugin is just a convenient wrapper under Claude Code. Under the hood, it's a regular MCP server over HTTP, so it will work with any MCP client that can authenticate with a bearer. The plugin just saves you the hassle of manually assembling the configuration.
+
+**How do I know the agent isn't making up numbers?**
+Because the numbers don't come from the model, they come from the tool calls to my API. The model doesn't make them up, it just receives and summarizes them. What it can make up is **interpretation**, and that's the only part you should take with a grain of salt. If I have doubts, I ask it to show me the raw response from the tool.
+
+**Can the agent mess up my configuration through this?**
+Only if the key has `read-write` scope, and only within the three recording tools (funnels, goals, alerts). For just viewing statistics, a read-only key is enough, and that's what I recommend for daily questioning. Then, even if the agent wants to, it can't touch anything.
+
+**Isn't this just a slower dashboard?**
+For one specific number that I look at every day, the dashboard is indeed faster because I see the chart right away. MCP wins where the question combines multiple sources ("traffic plus errors plus GSC at once"), because in the UI, that's three tabs, and in chat, it's one sentence. I use both, just for different things.
+
+**Does this work on a phone?**
+For me, it's mainly in the terminal on my computer, but Claude Code also works in the app and in the browser, so as long as the plugin is connected, I can ask a question from anywhere I have a session. The `pak_` key is in an environment variable, so it's a matter of where I set it up.
+
+## Summary
+
+And that's it. In short: I stopped clicking through tabs and started asking sentences, the agent chooses the tools, and the biggest value comes from questions that combine multiple sources at once. You just need to remember that numbers can be trusted, but conclusions can't, and that someone else's text in statistics is untrusted input, not a command.
+
+And now, an ironic cherry on top. I set up the entire MCP server, a dozen tools, and a plugin, literally just to **stop** staring at statistics and clicking through dashboards. The effect is that I check my traffic more often than ever before. Because asking a question is free, I ask about every nonsense that I would never have bothered to open the UI for. I wanted to click less, and it turned out I'm checking more. A closed loop, and I'm sitting in the middle of it.
+
+The next post is already being written. My agent is reading this analytics because I gave it a key. But what if I wanted **other people's** bots, ChatGPT, Perplexity, some random AI crawler, to also be able to read my site just as conveniently, without a key and without guessing? I made my blog "agent-ready", and that's what the next post will be about. Stay tuned!
+
+## Links
+
+- [Previous post: how I built this MCP server](/blog/en/how-to-build-mcp-server-for-analytics)
+- [Post about hooks, skills, and sub-agents in Claude Code](/blog/en/how-to-setup-claude-code-hooks-skills)
+- [Plugin for Claude Code (paczesny-dev/analytics-claude-plugin)](https://github.com/paczesny-dev/analytics-claude-plugin)
+- [Paczesny Analytics](https://analytics.blonie.cloud)
+- [Model Context Protocol specification](https://modelcontextprotocol.io)

@@ -1,0 +1,196 @@
+---
+title: "Chciałem przepisać bloga na hype'owy framework i dlaczego się wypisałem"
+description: "Wpadł mi w oko Fresh na Deno i chciałem przepisać na niego bloga z Next.js. Policzyłem koszt: przepisanie od zera plus regresja w SEO i i18n. Wypisałem się."
+date: 2026-07-06T12:00:00.000Z
+tags: nextjs, framework, deno, fresh, architektura, seo, decyzje, webdev
+---
+
+## Wprowadzenie
+
+Siemanko! Wtorek, wieczór, scrolluję sobie X zamiast iść spać i wpada mi w feed [usefresh.dev](https://usefresh.dev). Framework Fresh, wersja druga, ładna strona, hasła w stylu "zero build stepu", "brak node_modules", "architektura wysp", "prawie zero JS na kliencie". Klikam, czytam, i czuję to znajome swędzenie: o kurde, na to bym przepisał bloga.
+
+Znasz to swędzenie, prawda. To ten sam głos, który każe Ci przepisać działający projekt na nowy hype co pół roku. Otworzyłem nowy terminal, prawie wklepałem `deno`, i w ostatniej chwili zamiast tego zrobiłem coś nudnego: usiadłem policzyć, ile by mnie to realnie kosztowało. Godzinę później byłem wypisany. Ten wpis to zapis tej godziny.
+
+Dostaniesz trzy rzeczy:
+
+1. **co to jest Fresh** i czemu na papierze wygląda idealnie pod bloga,
+2. **ile by mnie kosztowało przepisanie**, z konkretnymi liczbami wyciągniętymi z mojego repo,
+3. **czemu ostatecznie odpuściłem** i kiedy taki ruch naprawdę ma sens (bo ma, tylko nie u mnie).
+
+To ostatni wpis z tej serii o dłubaniu przy blogu i agentach, więc potraktuj go jak domknięcie wątku. Potem wracam do normalnych how-to o self-hostingu.
+
+## Co to jest Fresh i czemu kusi
+
+[Fresh](https://usefresh.dev) to full-stackowy framework webowy na [Deno](https://deno.com). Kilka rzeczy, które sprzedają go od pierwszego ekranu:
+
+- **Runtime to Deno**, nie Node. Importy po URL-ach, TypeScript out of the box, bez `package.json` i bez `node_modules`.
+- **Preact + Preact Signals** zamiast Reacta. Lżejsza biblioteka, inny model reaktywności oparty na sygnałach zamiast na hookach.
+- **Architektura wysp (islands).** Domyślnie serwer renderuje czysty HTML, a interaktywność dostają tylko wyspy, które sam oznaczysz. Reszta strony to zero JS.
+- **Zero build stepu.** Nie ma bundlowania na starcie, framework serwuje to, co napisałeś.
+- **SSR z automatu**, routing plikowy, obsługa formularzy po stronie serwera z progressive enhancement, HTML partials, view transitions.
+
+Przeczytaj tę listę jeszcze raz z perspektywy człowieka, który prowadzi bloga contentowego. Blog to głównie tekst, mało interaktywności, priorytet to szybkość i SEO. Framework, który domyślnie wysyła prawie zero JS i renderuje wszystko na serwerze, brzmi jak uszyty dokładnie pod ten przypadek. Właśnie dlatego swędziało tak mocno.
+
+To jest dobry framework. Chcę to powiedzieć wprost, zanim zacznę tłumaczyć, czemu go nie wziąłem, bo to nie jest wpis "Fresh jest zły". Fresh jest bardzo w porządku. Problem nie leży we Freshu, leży w tym, co ja już mam.
+
+## Co ja właściwie mam
+
+Mój obecny stack, żeby było jasne, od czego bym odchodził:
+
+- **[Next.js](https://nextjs.org) 16**, App Router, React Server Components, dev na Turbopacku.
+- **React 19**.
+- **Bun** jako menedżer pakietów, deploy przez **Coolify na push** (self-hosted na moim Oracle VPS, nie Vercel).
+
+I teraz kluczowa obserwacja, od której wszystko się posypało: przejście z Next na Fresh to **nie jest migracja**. To przepisanie od zera. Zobacz, ile rzeczy się zmienia jednocześnie:
+
+- inny runtime: Deno zamiast Bun/Node,
+- inna biblioteka UI: Preact zamiast React 19,
+- inny model reaktywności: Preact Signals zamiast hooków Reacta,
+- inne API routingu: `define.handlers` we Freshu zamiast App Routera i RSC.
+
+Kiedy zmienia się runtime, biblioteka, model reaktywności i routing naraz, to nie migrujesz kodu. Przepisujesz go. Praktycznie nic się nie przenosi poza dwiema rzeczami: treścią postów w MDX i klasami Tailwinda. Cała reszta to nowa aplikacja, która ma tylko wyglądać jak stara.
+
+Żeby nie było gołosłownie, tak wygląda ta sama trasa w obu światach. Fresh:
+
+```tsx
+// Fresh: routes/blog/[slug].tsx
+import { define } from "../../utils.ts";
+
+export const handler = define.handlers({
+  async GET(ctx) {
+    const post = await loadPost(ctx.params.slug);
+    return page({ post });
+  },
+});
+
+export default define.page<typeof handler>(({ data }) => (
+  <article>
+    <Head>
+      <title>{data.post.title}</title>
+      <meta name="description" content={data.post.description} />
+      {/* i każdy kolejny meta tag ręcznie, jeden po drugim */}
+    </Head>
+    <PostBody post={data.post} />
+  </article>
+));
+```
+
+A tak to samo w Next, które mam teraz:
+
+```tsx
+// Next: app/blog/[lang]/[slug]/page.tsx
+export async function generateMetadata({ params }) {
+  const post = await loadPost(params.slug);
+  return {
+    title: post.title,
+    description: post.description,
+    alternates: { languages: hreflangFor(post) }, // 4 języki, hreflang
+    openGraph: { images: [ogImageFor(post)] },      // obrazek OG z next/og
+  };
+}
+
+export default async function Page({ params }) {
+  const post = await loadPost(params.slug);
+  return <PostBody post={post} />;
+}
+```
+
+To nie jest "przepisz nawiasy". To dwa różne modele tego, jak w ogóle powstaje strona i jej metadane. I dopiero jak zacząłem liczyć, ile takich plików mam, zrobiło się konkretnie.
+
+## Ile by mnie to kosztowało, w liczbach z repo
+
+Puściłem agenta po repo, żeby to policzył za mnie (ironia tego, że research przeciwko przepisywaniu robiłem narzędziem, o którym pisze ten blog, dotrze do mnie później). Wyszło tak:
+
+- **52 pliki TS/TSX** do przejścia,
+- **około 19 route'ów** do odtworzenia w innym API routingu,
+- **24 posty MDX razy 4 języki**, czyli blisko setka plików treści, które teoretycznie się przenoszą, ale muszą się poprawnie renderować w nowym rendererze,
+- **10 komponentów z `"use client"`**, które w modelu wysp trzeba przemyśleć od nowa,
+- **21 plików dotykających bibliotek, które istnieją tylko w świecie Reacta**.
+
+Te 21 plików to jest właśnie ten moment, gdzie hype spotyka się z rachunkiem. Bo część mojego stacku po prostu **wypada** przy przejściu na Preact/Deno i trzeba jej szukać zamienników albo pisać od zera:
+
+| Biblioteka | Co robi u mnie | Los w świecie Fresh |
+|---|---|---|
+| `next-mdx-remote` | renderuje posty z MDX | wypada, szukasz odpowiednika pod Preact |
+| `next/og` | generuje obrazki OG przez Satori (trasy `og/blog`, `og/home`) | wypada, przepisujesz generowanie od zera |
+| `next/image` | optymalizacja obrazków | wypada, robisz samodzielnie |
+| `next/font` | self-hosting fontów bez CLS | wypada, robisz samodzielnie |
+| `sonner` | toasty | React-only, wypada |
+| `use-scramble` | efekt scramble na tekście | React-only, wypada |
+| `lucide-react` | ikony | ma wariant na Preact, przeżyje |
+| `shiki` | podświetlanie składni w blokach kodu | działa wszędzie, przeżyje |
+
+Dwie rzeczy przeżywają, reszta idzie do wymiany. I zwróć uwagę, że to nie są losowe zależności, tylko fundamenty tego, jak ten blog działa: renderowanie treści, obrazki OG, fonty. Najbardziej boli jednak nie tabelka wyżej, tylko jedna rzecz, której w tabelce nie ma.
+
+## Co bym stracił i co boli najbardziej
+
+Najdopieszczeńsza część tego bloga to nie layout ani nie animacje. To **SEO, metadane i i18n**, czyli dokładnie to, przy czym siedziałem najwięcej przez ostatnie miesiące. I to jest część, którą Fresh każe mi napisać od nowa, gorzej.
+
+W Next mam to podane na tacy przez Metadata API: `generateMetadata`, `alternates` z hreflangami dla czterech języków, `openGraph`, obrazki OG generowane w locie przez `next/og`. Do tego cała robota agent-ready, o której pisałem osobno: llms.txt, Content-Signals w robots.txt, negocjacja treści po markdownie. Jak to poskładałem, opisałem [w tym wpisie o robieniu strony gotowej na agentów](/blog/pl/how-to-make-your-website-agent-ready). Plus pipeline tłumaczeń, ten sam, przy którym [llama pomieszała mi slugi w linkach](/blog/pl/llm-translated-my-blog-and-broke-the-links) i musiałem to potem sprzątać.
+
+We Freshu nie ma Metadata API. Każdy meta tag ustawiasz ręcznie w komponencie `<Head>`, w każdej trasie z osobna. Hreflang dla czterech języków? Ręcznie. Canonical? Ręcznie. Obrazki OG? Sam Satori działa i na Deno, ale całą trasę generującą obrazek przepisujesz od zera, bo `next/og` to opakowanie od Next. Efekt netto: **biorę najbardziej dopracowaną część aplikacji i przepisuję ją po to, żeby dostać ją w gorszym stanie**. Nie ma w tym żadnego zysku, jest sama regresja, tylko rozłożona na kilka wieczorów mozolnego przeklejania meta tagów.
+
+To był moment, w którym swędzenie przestało swędzieć.
+
+## Obietnica Fresh kontra realnie u mnie
+
+Wróćmy do listy z początku, tych błyszczących haseł ze strony Fresh, i przyłóżmy je do mojego konkretnego przypadku. Bo obietnica frameworka jest prawdziwa w ogólności, ale liczy się to, ile z niej zostaje akurat u Ciebie.
+
+| Obietnica Fresh | Realnie na moim blogu |
+|---|---|
+| "prawie zero JS na kliencie" | RSC w Next już renderuje blog jako czysty HTML z minimalną hydratacją. Blog to nie SPA. Zysk marginalny. |
+| "brak build stepu" | `next dev --turbopack` startuje praktycznie natychmiast. Build mnie tu nie boli. |
+| "prostszy model wysp" | Owszem, wyspy są prostsze niż granica RSC/klient. Ale ten model już mam działający, więc nie kupuję prostoty, tylko przepisywanie. |
+| "Deno-native" | Dla mnie to **koszt, nie zysk**. Cała infra, skrypty i deploy przez Coolify siedzą na Bun/Node. Deno by mi to wszystko rozjechało. |
+
+Podsumujmy rachunek jednym zdaniem. **Koszt**: kilka dni przepisywania plus regresja w SEO, OG, renderowaniu MDX i i18n. **Zysk**: kilka kilobajtów mniej JS na stronie, która i tak dostaje 95+ w Lighthouse. Ruch zresztą widzę [przez własny serwer MCP](/blog/pl/how-to-build-mcp-server-for-analytics) i to nie są liczby, które usprawiedliwiają przepisywanie czegokolwiek. Zwrot z tej inwestycji jest po prostu ujemny. Płacę tygodniem wieczorów za coś, czego mój użytkownik nawet nie zauważy.
+
+## Kiedy Fresh MIAŁby sens
+
+Teraz uczciwie w drugą stronę, bo łatwo z takiego wpisu wyjść z przekonaniem "nie tykaj nowych frameworków", a to głupota. Fresh ma swoje miejsce i całkiem konkretne. Wziąłbym go bez wahania, gdyby:
+
+- to był **greenfield**, projekt od zera, gdzie nie przepisuję niczego, tylko piszę pierwszą linijkę,
+- **świadomie chciał iść w Deno**, bo reszta stacku albo zespół już tam żyje,
+- budował coś **mocno interaktywnego**, gdzie realnie walczę z rozmiarem bundla Reacta i chcę ręcznie decydować, co się hydratuje, a co zostaje statyczne.
+
+Popatrz na te trzy warunki i zauważ, że **żaden z nich nie opisuje bloga contentowego**, który już jest serwerowo renderowany, lekki i dopieszczony pod SEO. Fresh rozwiązuje problemy, których akurat na tym projekcie nie mam. Dopasowanie narzędzia do problemu, a nie do liczby gwiazdek, to cała ta decyzja w jednym zdaniu.
+
+## Co z tego wyszło
+
+Wyszło to, że nie przepisałem nic. Zamknąłem kartę z usefresh.dev, wróciłem do repo, które działało godzinę wcześniej i działa dalej. Ale wróciłem z czymś, czego nie miałem przed tym wieczorem: z **liczbą**. Wiem teraz, że przejście na Fresh to grubo ponad 50 plików, wywalenie sześciu bibliotek, przepisanie SEO i i18n od zera, a po drugiej stronie kilka kB oszczędności na już szybkiej stronie. Następnym razem, jak swędzenie wróci, a wróci, mam gotowy rachunek do przyłożenia.
+
+I tu jest cała pointa, do której zmierzam: research kosztował jeden wieczór, przepisanie kosztowałoby tydzień. Policzenie plików, sprawdzenie co wypada, oszacowanie regresji, to wszystko zrobiłem z agentem w godzinę. To jest realny zwrot z posiadania dobrego tokena i narzędzi wokół niego: nie to, że szybciej coś budujesz, tylko że szybciej się dowiadujesz, czego **nie** budować.
+
+## FAQ
+
+**Czy przepisanie z Next na Fresh to migracja?**
+Nie. To przepisanie od zera. Zmienia się runtime (Deno zamiast Node/Bun), biblioteka (Preact zamiast React), model reaktywności (Signals zamiast hooków) i API routingu naraz. Przenosi się praktycznie tylko treść MDX i klasy Tailwinda, reszta powstaje na nowo.
+
+**Czy Fresh jest gorszy od Next.js?**
+Nie, to nie jest ranking. Fresh jest bardzo dobrym frameworkiem do innych zastosowań: greenfield na Deno albo mocno interaktywne appki, gdzie walczysz z bundlem. Do bloga, który już jest lekki i serwerowy, akurat nie daje mi nic, za co warto zapłacić przepisywaniem.
+
+**Co konkretnie bym stracił, przechodząc na Fresh?**
+Metadata API z Next: `generateMetadata`, hreflang dla czterech języków, `openGraph`, obrazki OG przez `next/og`. Do tego renderowanie MDX przez `next-mdx-remote`, `next/image`, `next/font` oraz biblioteki React-only jak `sonner` i `use-scramble`. Wszystko do wymiany albo do napisania od nowa.
+
+**To kiedy w ogóle warto przepisać projekt na nowy framework?**
+Kiedy nowy framework rozwiązuje problem, który realnie masz, a koszt przepisania jest mniejszy niż wartość rozwiązania. Jak nie umiesz nazwać tego problemu jednym zdaniem, to prawdopodobnie kupujesz hype, nie rozwiązanie.
+
+**Jak w ogóle policzyć taki koszt, zanim się rzucę?**
+Policz pliki do przejścia, wypisz zależności, które wypadają, i osobno oznacz część aplikacji najbardziej dopieszczoną, bo to ją stracisz najbardziej. U mnie zajęło to wieczór z agentem grzebiącym w repo. Taniej niż tydzień przepisywania i dużo mniej boli.
+
+## Podsumowanie
+
+I to by było na tyle. Najlepszy framework to ten, na którym nie musisz nic przepisywać. Hype mierzy się w gwiazdkach na GitHubie, a koszt w Twoich wieczorach, i to są dwie zupełnie różne waluty, których kurs prawie nigdy Ci się nie zgadza.
+
+A teraz ironiczna wisienka. Cały ten research, który uratował mi tydzień, zrobiłem po to, żeby na koniec... nie zrobić nic. Wypisałem się i wróciłem dokładnie do tego, co miałem przed otwarciem usefresh.dev, co do pliku. Z zewnątrz wygląda to jak wieczór zmarnowany na gapienie się we własne repo. Tyle że teraz wiem, czemu tego nie ruszam, i to jest jedyna różnica, która się liczy. Czasem najlepsze, co możesz wdrożyć, to świadoma decyzja, żeby nie wdrażać nic.
+
+Na tym domykam serię o dłubaniu przy blogu i agentach. Następnym razem wracam do normalnych how-to, pewnie coś o self-hostingu, bo tam akurat wciąż jest co przepisywać. Trzymaj się mordo!
+
+## Linki
+
+- [Fresh](https://usefresh.dev), framework, o którym mowa
+- [Deno](https://deno.com), runtime, na którym stoi Fresh
+- [Next.js](https://nextjs.org), na którym stoi ten blog
+- [Mój wpis o robieniu strony gotowej na agentów](/blog/pl/how-to-make-your-website-agent-ready)
+- [Jak llama pomieszała mi linki w tłumaczeniach](/blog/pl/llm-translated-my-blog-and-broke-the-links)
+- [Własny serwer MCP, przez który agent czyta statystyki bloga](/blog/pl/how-to-build-mcp-server-for-analytics)
