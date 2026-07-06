@@ -1,0 +1,134 @@
+---
+title: "Pytam Claude o ruch na blogu zamiast klikać po dashboardach"
+description: "Podpiąłem serwer MCP analytics do Claude i zamiast klikać po dashboardach pytam go o ruch, GSC i błędy na blogu. Jak używam tego na co dzień."
+date: 2026-07-06T09:00:00.000Z
+tags: mcp, ai, agenty, analytics, claude-code, self-hosting, produktywność, llm
+coverImage: /assets/images/ask-claude-traffic.png
+---
+
+## Wprowadzenie
+
+Siemanko! Scenka z zeszłego tygodnia. Wieczór, leżę, wrzuciłem rano nowy wpis i swędzi mnie, czy ktokolwiek na niego wszedł. Stary ja odblokowałby telefon, wbił na [analytics.blonie.cloud](https://analytics.blonie.cloud), poczekał aż dashboard się doczyta, kliknął w zakładkę "Strony", zmrużył oczy nad wykresem na ekranie 6 cali, a potem i tak wszedł jeszcze w "Kraje", bo ciekawość. Pięć kliknięć i dalej nie wiem, czy coś się nie sypie w błędach, bo to znowu inna zakładka.
+
+Nowy ja napisał do Claude jedno zdanie i poszedł zaparzyć herbatę.
+
+W [poprzednim wpisie](/blog/pl/how-to-build-mcp-server-for-analytics) zbudowałem serwer MCP dla [Paczesny Analytics](https://analytics.blonie.cloud), mojego własnego cookieless analyticsa do Next.js: 17 narzędzi, karta discovery, gotowy plugin do Claude Code. Tamten wpis był o tym, jak to **postawić**. Skończył się zresztą tak, że to sam agent, patrząc na realne statystyki, wybrał jego temat. Ten wpis jest o czymś nudniejszym i o wiele bardziej użytecznym: jak ja tego **używam** w codziennym życiu, kiedy serwer już stoi i po prostu jest.
+
+Dostaniesz trzy rzeczy:
+
+1. jakie pytania realnie zadaję i co agent odpala pod spodem,
+2. czemu jedno pytanie bije trzy zakładki w dashboardzie,
+3. gdzie to nadal jest głupie i gdzie łatwo dać się nabrać (bo jest, o zgrozo).
+
+## Setup w jednym akapicie
+
+Nie będę powtarzał całej budowy, jest w [poprzednim wpisie](/blog/pl/how-to-build-mcp-server-for-analytics). W skrócie: serwer MCP siedzi pod moim analyticsem, a żeby go podpiąć do Claude Code, nie trzeba składać ręcznie żadnego `claude mcp add` z długim headerem. Jest publiczny plugin z własnym marketplace'em, więc cała instalacja to cztery linijki:
+
+```bash
+# klucz API z dashboardu (Settings -> API keys), zaczyna się od pak_
+export PACZESNY_API_KEY="pak_..."
+
+/plugin marketplace add paczesny-dev/analytics-claude-plugin
+/plugin install paczesny-analytics@paczesny
+/mcp
+```
+
+`/mcp` pokazuje, że serwer się podpiął i widać jego narzędzia. Od tego momentu agent w tej sesji potrafi odpytać moje statystyki tak samo naturalnie, jak czyta pliki w repo. I o tym jest reszta wpisu.
+
+## Zamiast klikać, po prostu pytam
+
+Sedno zmiany jest banalne, ale mocno mi siedzi w głowie. Dashboard wymaga, żebym **ja** wiedział, gdzie kliknąć. Ruch to jedna zakładka, referrery druga, kraje trzecia, błędy JS czwarta, Google Search Console w ogóle osobny świat. Każda odpowiedź, która łączy dwie z tych rzeczy, oznacza, że skaczę między zakładkami i sklejam to w głowie.
+
+Z MCP odwracam to do góry nogami. Nie mówię "gdzie mam kliknąć", tylko mówię, czego chcę się dowiedzieć, a agent sam decyduje, które narzędzia odpalić i w jakiej kolejności. Największa przewaga nie jest w tym, że jest szybciej (chociaż jest). Jest w tym, że w **jednym** pytaniu łączę źródła, których w UI musiałbym szukać w trzech osobnych miejscach i porównywać na oko.
+
+Narzędzi jest tych 17, pełną rozpiskę dałem w poprzednim wpisie. Tu ważniejsze jest, które z nich agent dobiera do jakiego pytania:
+
+| Chcę wiedzieć | Co agent odpala pod spodem |
+|---|---|
+| Ile było ruchu i jaki miał kształt | `get_stats`, `get_timeseries` |
+| Skąd i kto przyszedł | `get_breakdown` (referrery, kraje, urządzenia, przeglądarki, system, UTM) |
+| Czy coś się psuje | `get_errors`, `get_site_health` |
+| Jak wygląda SEO w Google | `get_gsc_stats`, `get_gsc_pages`, `get_search_queries` |
+| Czy konwersje lecą | `list_funnels`, `get_funnel`, `list_goals`, `get_goal_conversions` |
+| Gdzie ludzie klikają | `get_heatmap`, `get_events` |
+
+Do tego trzy narzędzia zapisu (`manage_funnel`, `manage_goal`, `manage_alert`), ale ich w codziennym "sprawdzaniu" prawie nie ruszam, bo to konfiguracja, nie pytania.
+
+## Trzy pytania, które zadaję najczęściej
+
+Zanim wkleję przykłady: **wszystkie liczby poniżej są zmyślone na potrzeby wpisu, zaokrąglone i czysto poglądowe.** Nie wywalam tu swoich prawdziwych prywatnych statystyk, chodzi o to, żebyś zobaczył kształt rozmowy, nie moje słupki.
+
+Pytanie pierwsze, klasyk na wieczór:
+
+**Ja:** jak wyglądał ruch na blogu w tym tygodniu i czy coś się psuje?
+
+**Agent:** *(odpala `get_stats`, `get_timeseries`, `get_errors`, `get_site_health`)* W ostatnich 7 dniach było około 1200 wizyt, o jakieś 15% więcej niż tydzień wcześniej, szczyt we wtorek. Zdrowie strony zielone, jeden powtarzający się błąd JS na `/blog`, wygląda na wyjątek z rozszerzenia przeglądarki, nie z Twojego kodu. Nic pilnego.
+
+Zwróć uwagę, co się tu stało: jedno zdanie, cztery narzędzia, jedna odpowiedź, która łączy "ile ruchu" z "czy coś się pali". W dashboardzie to są dwie różne zakładki i ja sklejający je w głowie.
+
+Pytanie drugie, to które lubię najbardziej, bo w UI jest upierdliwe:
+
+**Ja:** które posty rosną w Google, ale mają słaby CTR?
+
+**Agent:** *(odpala `get_gsc_pages`, `get_search_queries`)* Trzy wpisy zbierają dużo wyświetleń, a mało kliknięć. Najgorszy to poradnik o Vaultwarden: około 900 wyświetleń, CTR poniżej 2%. Wpada głównie na zapytania w stylu "vaultwarden docker", na których jesteś na pozycji 8. Tytuł i opis w wynikach raczej nie odpowiadają na tę intencję, tam bym zaczął.
+
+To jest dokładnie ten typ pytania, dla którego w Google Search Console musiałbym otworzyć raport wydajności, posortować po wyświetleniach, przełączyć na CTR, potem zjechać do zapytań i ręcznie zestawić jedno z drugim. Tutaj agent robi to zestawienie za mnie, bo `get_gsc_pages` i `get_search_queries` to dla niego dwa wywołania, a nie dwa ekrany.
+
+Pytanie trzecie, szybkie, po świeżym wpisie:
+
+**Ja:** z jakich krajów i urządzeń przyszedł ruch na najnowszy wpis?
+
+**Agent:** *(odpala `get_breakdown` dla krajów i urządzeń)* Na najnowszym wpisie dominuje Polska, jakieś 70%, potem Niemcy i Wielka Brytania. Podział urządzeń mniej więcej pół na pół desktop i mobile, z lekką przewagą mobile. Nietypowo dużo jak na Twój blog, zwykle desktop wygrywa.
+
+Znowu: `get_breakdown` w UI to przełączanie wymiaru w rozwijanym menu, kraj, potem urządzenie, potem porównaj. W czacie to jedno zdanie.
+
+## Gdzie to nadal jest głupie
+
+No dobra, teraz szczera część, bo inaczej to brzmi jak reklama, a nie jest. Kilka rzeczy dalej mnie wkurza i na kilka trzeba uważać.
+
+**Agent potrafi wymyślić trend z czystego szumu.** To jest najgorsza pułapka. Mój blog to nie Onet, na małych liczbach różnica 40 wizyt kontra 55 wizyt to nie jest "wzrost o 37%", to jest wtorek. Model, jak go nie przypilnujesz, chętnie ubierze taki szum w narrację o "silnym trendzie wzrostowym". Lekarstwo jest proste i nudne: trzymam go za rękę zakresem dat. Zamiast "jak rośnie ruch" pytam "porównaj ostatnie 30 dni z poprzednimi 30", żeby w ogóle było z czego liczyć procent.
+
+**Za szerokie pytanie pali kontekst.** Jak rzucę "opowiedz mi wszystko o moim blogu", agent grzecznie odpala sześć narzędzi po kolei, wciąga górę danych do kontekstu i produkuje ścianę tekstu, z której i tak czytam dwa zdania. Nauczyłem się pytać wąsko. Jedno pytanie, jeden temat. Chcę i ruch, i SEO, i błędy naraz? To trzy osobne pytania wyjdą taniej i czytelniej niż jedno rozlazłe.
+
+**Liczby są prawdziwe, wnioski już niekoniecznie.** To ważne rozróżnienie. Dane, które wracają z narzędzi, są dokładnie takie, jak w bazie, tego się nie boję. Ale **interpretacja** tych danych to już zwykłe zgadywanie modelu, i tu potrafi konfabulować. "CTR spadł, bo Google zmienił algorytm" brzmi mądrze i jest wyssane z palca. Liczbom ufam, morałom nie, morały weryfikuję sam.
+
+**Dane od użytkownika to niezaufany tekst.** O tym pisałem szerzej w [poprzednim wpisie](/blog/pl/how-to-build-mcp-server-for-analytics), więc tu tylko przypomnę: referrery, zapytania z wyszukiwarki, tytuły stron, to wszystko wpisał ktoś inny niż ja, i trafia prosto do kontekstu modelu. Ktoś może zostawić referrer w stylu "IGNORE ALL PREVIOUS INSTRUCTIONS", licząc, że model to wykona. Dlatego serwer owija takie wartości w znacznik `[DATA: ... :DATA]`, żeby cudzy tekst nie mógł udawać mojego polecenia. To jest dokładnie ten moment, w którym ta sanityzacja robi robotę, nawet gdy pytam niewinnie o "top referrery".
+
+## Co się zmieniło
+
+Rytuał ze wstępu, telefon, dashboard, pięć kliknięć, mrużenie oczu, po prostu wyparował. Ale prawdziwa zmiana jest głębsza i trochę mnie zaskoczyła.
+
+Kiedyś sprawdzenie statystyk miało **koszt**: musiało mi się chcieć otworzyć UI, doczekać, poklikać. Więc sprawdzałem rzadko i tylko wtedy, gdy naprawdę chciałem wiedzieć. Teraz pytanie kosztuje jedno zdanie w oknie, które i tak mam otwarte, bo w Claude Code siedzę cały dzień. Koszt spadł do zera, a przy zerowym koszcie pytam o rzeczy, dla których nigdy w życiu nie chciałoby mi się klikać w dashboard. "A z czego głównie wchodzą na proxmoxowy wpis?" Kiedyś: nie warto zachodu. Teraz: pół zdania między jednym a drugim taskiem.
+
+## FAQ
+
+**Muszę mieć plugin, żeby o to pytać?**
+Nie. Plugin to tylko wygodne opakowanie pod Claude Code. Pod spodem to zwykły serwer MCP po HTTP, więc zadziała z każdym klientem MCP, który umie się autoryzować bearerem. Plugin oszczędza Ci ręcznego składania konfiguracji, nic więcej.
+
+**Skąd mam wiedzieć, że agent nie zmyśla liczb?**
+Bo liczby nie pochodzą od modelu, tylko z wywołań narzędzi do mojego API. Model ich nie wymyśla, on je tylko dostaje i streszcza. Zmyślać potrafi za to **interpretację**, i to jest jedyna część, którą trzeba brać z rezerwą. Jak mam wątpliwość, każę mu pokazać surową odpowiedź narzędzia.
+
+**Czy agent może przez to popsuć mi konfigurację?**
+Tylko jeśli klucz ma zakres `read-write`, i tylko w obrębie trzech narzędzi zapisu (funnele, cele, alerty). Do samego oglądania statystyk wystarczy klucz tylko do odczytu, i taki polecam do codziennego pytania. Wtedy nawet gdyby agent bardzo chciał, nic nie ruszy.
+
+**Czy to nie jest po prostu wolniejszy dashboard?**
+Do jednej konkretnej liczby, na którą i tak patrzę codziennie, dashboard bywa szybszy, bo widzę wykres od razu. MCP wygrywa tam, gdzie pytanie łączy kilka źródeł ("ruch plus błędy plus GSC naraz"), bo w UI to są trzy zakładki, a w czacie jedno zdanie. Używam obu, po prostu do różnych rzeczy.
+
+**Działa to na telefonie?**
+U mnie głównie w terminalu na kompie, ale Claude Code działa też w aplikacji i w przeglądarce, więc dopóki plugin jest podpięty, pytanie zadam z każdego miejsca, w którym mam sesję. Klucz `pak_` siedzi w zmiennej środowiskowej, więc to kwestia tego, gdzie ją ustawię.
+
+## Podsumowanie
+
+I to by było na tyle. W skrócie: przestałem klikać po zakładkach i zacząłem pytać zdaniami, agent sam dobiera narzędzia, a największą wartość dają pytania, które łączą kilka źródeł naraz. Trzeba tylko pamiętać, że liczbom można ufać, a wnioskom już nie, i że cudzy tekst w statystykach to niezaufany input, nie polecenie.
+
+A teraz ironiczna wisienka. Postawiłem cały serwer MCP, kilkanaście narzędzi i plugin, dosłownie po to, żeby **przestać** gapić się w statystyki i klikać po dashboardach. Efekt jest taki, że sprawdzam swój ruch teraz **częściej** niż kiedykolwiek wcześniej. Bo skoro pytanie jest darmowe, to pytam o każdą pierdołę, o którą nigdy nie chciałoby mi się otwierać UI. Chciałem mniej klikać, wyszło więcej sprawdzania. Zamknięte koło, i to ja siedzę w środku xd.
+
+Następny wpis już się klei. Mój agent czyta ten analytics, bo dałem mu klucz. Ale co, jeśli chciałbym, żeby **cudze** boty, ChatGPT, Perplexity, jakiś losowy crawler AI, też potrafiły przeczytać moją stronę tak samo wygodnie, bez klucza i bez zgadywania? Zrobiłem swój blog "agent-ready", i o tym będzie następnym razem. Trzymaj się mordo!
+
+## Linki
+
+- [Poprzedni wpis: jak zbudowałem ten serwer MCP](/blog/pl/how-to-build-mcp-server-for-analytics)
+- [Wpis o hookach, skillach i subagentach w Claude Code](/blog/pl/how-to-setup-claude-code-hooks-skills)
+- [Plugin do Claude Code (paczesny-dev/analytics-claude-plugin)](https://github.com/paczesny-dev/analytics-claude-plugin)
+- [Paczesny Analytics](https://analytics.blonie.cloud)
+- [Specyfikacja Model Context Protocol](https://modelcontextprotocol.io)
