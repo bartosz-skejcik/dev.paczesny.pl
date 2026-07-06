@@ -60,10 +60,11 @@ export async function ensureTranslation({ slug, targetLang }: TranslateParams) {
     model: translator,
     temperature: 0.2,
     // Groq's default completion cap truncates long posts mid-sentence, but the
-    // account's on_demand TPM limit (12000) caps prompt+output per request, so
-    // this can't just be maxed out — pick something with margin over expected
-    // output (~1.3x source length) while leaving room for prompt tokens.
-    maxOutputTokens: 7000,
+    // account's on_demand TPM limit (12000) caps prompt+output per request. On
+    // long posts prompt+7000 blew past 12000 and got rejected, so cap output at
+    // 6000: still well above expected output (~1.3x source length) while leaving
+    // room for prompt tokens under the TPM ceiling.
+    maxOutputTokens: 6000,
     prompt,
   })
 
@@ -91,10 +92,11 @@ function buildPrompt({
   markdown: string
 }) {
   return `You are a meticulous technical translator. Translate the following Polish MDX blog post to ${targetLang.toUpperCase()} while preserving:
-- YAML frontmatter keys: title, description, date (date must stay ${
+- YAML frontmatter: translate title and description; keep date exactly as ${
     metadata.date
-  }).
+  }; copy the tags and coverImage lines VERBATIM (they are identifiers, never translate them).
 - Markdown structure, headings, code blocks, inline formatting, links, and lists.
+- Internal link paths: for any /blog/<lang>/<slug> link, you may change only the <lang> segment to the target language. NEVER translate the words inside a slug or URL path, the slug is a shared identifier and translating it produces a dead link.
 - Developer tone (keep technical jargon) and mirror the author's informal voice.
 
 Do not wrap the translation in code fences. Respond with valid Markdown that starts with the updated YAML frontmatter, followed by the translated body.
