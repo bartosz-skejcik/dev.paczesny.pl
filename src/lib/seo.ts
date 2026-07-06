@@ -46,6 +46,8 @@ export function buildLocalizedMetadata({
   const { hrefLang, openGraphLocale, dir } = getLanguageConfig(lang)
   const canonical = absoluteUrl(path)
   const ogImage = absoluteUrl(openGraphImagePath ?? "/og/home")
+  // The /og/* generators render 1200x630; callers override for static covers.
+  const ogImageSize = openGraphImageSize ?? { width: 1200, height: 630 }
   const languages = {
     ...(alternates ?? {}),
   }
@@ -77,7 +79,7 @@ export function buildLocalizedMetadata({
         {
           url: ogImage,
           alt: title,
-          ...(openGraphImageSize ?? {}),
+          ...ogImageSize,
         },
       ],
       ...(publishedTime && type === "article" ? { publishedTime } : {}),

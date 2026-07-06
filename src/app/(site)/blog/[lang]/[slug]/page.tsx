@@ -70,9 +70,7 @@ export async function generateMetadata({
     `/og/blog?title=${encodeURIComponent(post.metadata.title)}&lang=${
       post.lang
     }`
-  const ogImageSize = coverImage
-    ? getPublicImageSize(coverImage)
-    : { width: 1200, height: 600 }
+  const ogImageSize = coverImage ? getPublicImageSize(coverImage) : undefined
   const baseDescription = resolvePostDescription(post)
   const description = buildKeywordRichDescription(
     baseDescription,
@@ -236,19 +234,37 @@ function resolvePostDescription(post: MDXFileData) {
   )
 }
 
+// Social/SERP snippets get cut around this length; longer descriptions
+// also trip preview validators.
+const MAX_META_DESCRIPTION = 160
+
+function truncateAtWord(text: string, max: number) {
+  if (text.length <= max) {
+    return text
+  }
+  const cut = text.slice(0, max - 1)
+  const lastSpace = cut.lastIndexOf(" ")
+  const head = lastSpace > max / 2 ? cut.slice(0, lastSpace) : cut
+  return `${head.replace(/[ ,;:.!?]+$/, "")}…`
+}
+
 function buildKeywordRichDescription(
   baseDescription: string,
   tags: string[],
   lang: SupportedLang
 ) {
+  const normalized = truncateAtWord(
+    baseDescription.trim(),
+    MAX_META_DESCRIPTION
+  )
   if (!tags.length) {
-    return baseDescription
+    return normalized
   }
   const label = getTagHeadingLabel(lang)
   const tagSummary = tags.slice(0, 4).join(", ")
-  const normalized = baseDescription.trim()
-  const needsTerminal = /[.!?]$/.test(normalized) ? "" : "."
-  return `${normalized}${needsTerminal} ${label}: ${tagSummary}.`
+  const needsTerminal = /[.!?…]$/.test(normalized) ? "" : "."
+  const withTags = `${normalized}${needsTerminal} ${label}: ${tagSummary}.`
+  return withTags.length <= MAX_META_DESCRIPTION ? withTags : normalized
 }
 
 const TAG_HEADING_LABELS: Record<SupportedLang, string> = {
