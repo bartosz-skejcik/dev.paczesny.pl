@@ -191,7 +191,7 @@ export function PostsList({ posts }: PostsProps) {
         id={searchResultsId}
         role={isSearching ? "listbox" : undefined}
         aria-label="Blog posts"
-        className="space-y-8 sm:space-y-4"
+        className="space-y-6 sm:space-y-5"
       >
         {filteredPosts.map((item, index) => (
           <div
