@@ -9,6 +9,7 @@
     "lint": "next lint",
     "translate:top": "tsx scripts/pretranslate.ts",
     "translate:post": "tsx scripts/translate.ts",
+    "fix:post-integrity": "tsx scripts/fix-integrity.ts",
     "describe:post": "tsx scripts/describe.ts",
     "test": "vitest run"
   },
