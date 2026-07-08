@@ -1,0 +1,55 @@
+---
+title: My homepage greeted me by name twice and I looked for the culprit in the wrong place
+description: The tab title showed "Bartek Paczesny" twice. I spent half an hour searching for the second name in the page code, but it was sitting in the layout template.
+date: 2026-07-08T12:00:00.000Z
+tags: nextjs, metadata, seo, title, debugging, app-router, webdev
+---
+
+## Introduction
+
+Hey! I refreshed my homepage after making some minor changes, glanced at the tab title, and read: "Bartek Paczesny | Bartek Paczesny". My name twice, with a dash in the middle, like a business card from someone who got stuck halfway. First thought: I must have copied something wrong somewhere. Second, calmer thought: but I only entered my name in the metadata once.
+
+You'll get three things:
+
+1. **where the duplicate name came from**,
+2. **why I spent half an hour looking for it in the wrong place**,
+3. **how to fix it with one line of code**.
+
+## Where I looked, or rather, where I didn't
+
+I went into `src/app/(site)/page.tsx`, because that's the file for the homepage, logical. I set the metadata there once:
+
+```tsx
+title: "Bartek Paczesny",
+```
+
+One name, one string. I grepped the entire repository for the second occurrence, thinking that some component was appending the service name to the title. Nothing. For a while, I was sure it was the navigation component or some old layout doing it. I wasted time searching in places that had nothing to do with the title.
+
+## Where it actually was
+
+In the root layout, `src/app/layout.tsx`, which I hadn't touched in weeks:
+
+```tsx
+title: {
+  default: "Bartek Paczesny",
+  template: "%s | Bartek Paczesny",
+},
+```
+
+And that's the whole point. The `template` in Next takes the title set by each subpage and inserts it in place of `%s`. The homepage set its title to "Bartek Paczesny", so `%s` is "Bartek Paczesny", and the template makes it "Bartek Paczesny | Bartek Paczesny". The mechanics worked exactly as I wrote them. I built a machine that appends "| Bartek Paczesny" to every title, and then I fed it a title that was already my name.
+
+## Fix
+
+A subpage that doesn't want the template sets `title.absolute` and exits the whole machine:
+
+```tsx
+title: { absolute: "Bartek Paczesny: Developer & Homelab Blog" },
+```
+
+By the way, I got a better title than just my name, because it's the same job with metadata that I was working on [in the post about making the site agent-ready](/blog/en/how-to-make-your-website-agent-ready). There, hreflang and OG, here, title, one system.
+
+## What came out of it
+
+The template wasn't broken. It did exactly what I told it to: append the service name to the title. The problem was that on the homepage, the title and service name are the same word, so I got it twice. Half an hour of grepping for the culprit, and the culprit was `%s`, which simply executed the command.
+
+The moral of the evening: if something is duplicated in the result, first check the template you set up and forgot about, and only then blame the code you didn't touch today. Keep it up!

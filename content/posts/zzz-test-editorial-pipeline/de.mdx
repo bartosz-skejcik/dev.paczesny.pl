@@ -1,0 +1,55 @@
+---
+title: Meine Startseite begrüßte mich zweimal mit meinem Namen und ich suchte den Schuldigen nicht dort, wo es notwendig war
+description: Der Titel des Reiters zeigte Bartek Paczesny zweimal. Eine halbe Stunde suchte ich nach dem zweiten Namen im Code der Seite, aber er saß im Layout-Templat.
+date: 2026-07-08T12:00:00.000Z
+tags: nextjs, metadata, seo, title, debugging, app-router, webdev
+---
+
+## Einführung
+
+Hallo! Ich aktualisiere meine Startseite nach einer kleinen Änderung, werfe einen Blick auf den Titel des Reiters im Browser und lese: "Bartek Paczesny | Bartek Paczesny". Mein Name zweimal, mit einem Strich in der Mitte, wie eine Visitenkarte von jemandem, der sich in der Mitte verheddert hat. Erster Gedanke: Irgendwo habe ich etwas verdoppelt, als ich es kopiert habe. Zweiter, ruhigerer Gedanke: Ich habe den Namen nur einmal in den Metadaten eingegeben.
+
+Du bekommst drei Dinge:
+
+1. **woher die doppelte Namensangabe kommt**,
+2. **warum ich eine halbe Stunde lang danach gesucht habe, ohne sie zu finden**,
+3. **wie man sie mit einer einzigen Zeile korrigiert**.
+
+## Wo ich gesucht habe, oder falsch gesucht
+
+Ich gehe in `src/app/(site)/page.tsx`, weil das die Datei der Startseite ist, logisch. Die Metadaten stelle ich dort einmal ein:
+
+```tsx
+title: "Bartek Paczesny",
+```
+
+Ein Name, ein String. Ich durchsuche das gesamte Repository nach dem zweiten Vorkommen, denke, dass irgendein Komponente den Namen des Dienstes zum Titel hinzufügt. Nichts davon. Für eine Weile war ich sicher, dass es der Navigationskomponente oder ein alter Layout ist, der es tut. Ich verschwendete Zeit darauf, Orte zu durchsuchen, die nichts mit dem Titel zu tun haben.
+
+## Wo es wirklich saß
+
+Im Root-Layout, `src/app/layout.tsx`, das ich seit Wochen nicht mehr geändert habe:
+
+```tsx
+title: {
+  default: "Bartek Paczesny",
+  template: "%s | Bartek Paczesny",
+},
+```
+
+Und hier ist das ganze Problem. `template` in Next nimmt den Titel, der von jeder Unterseite festgelegt wird, und setzt ihn an die Stelle von `%s`. Die Startseite hat ihren Titel auf "Bartek Paczesny" festgelegt, also ist `%s` "Bartek Paczesny", und der Template ergibt "Bartek Paczesny | Bartek Paczesny". Die Mechanik funktioniert genau so, wie ich sie geschrieben habe. Ich habe eine Maschine gebaut, die zu jedem Titel "| Bartek Paczesny" hinzufügt, und dann habe ich sie mit einem Titel gefüttert, der bereits mein Name war.
+
+## Korrektur
+
+Eine Unterseite, die den Template nicht haben möchte, legt `title.absolute` fest und verlässt die gesamte Maschine:
+
+```tsx
+title: { absolute: "Bartek Paczesny: Developer & Homelab Blog" },
+```
+
+Zufällig habe ich auch einen besseren Titel erhalten, als nur meinen Namen, weil es dieselbe Arbeit mit den Metadaten ist, bei der ich saß [im Beitrag über die Vorbereitung der Website für Agenten](/blog/de/how-to-make-your-website-agent-ready). Dort waren es hreflang und OG, hier der Titel, ein und dasselbe System.
+
+## Was daraus wurde
+
+Das Template war nicht defekt. Es hat genau das getan, was ich ihm befohlen habe: Es hat den Namen des Dienstes zum Titel hinzugefügt. Das Problem war, dass auf der Startseite der Titel und der Name des Dienstes dasselbe Wort sind, also bekam ich es zweimal. Eine halbe Stunde lang suchte ich nach dem Schuldigen, aber der Schuldige war `%s`, der einfach nur den Befehl ausführte.
+
+Die Moral der Geschichte: Wenn dir etwas im Ergebnis doppelt vorkommt, überprüfe zunächst das Template, das du selbst festgelegt hast und das du vergessen hast, und erst dann beschuldige den Code, den du heute nicht angerührt hast. Bleib dran!

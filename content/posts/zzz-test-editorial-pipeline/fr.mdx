@@ -1,0 +1,55 @@
+---
+title: Mon site d'accueil m'a salué deux fois avec mon nom et j'ai cherché le coupable au mauvais endroit
+description: Le titre d'onglet affichait Bartek Paczesny deux fois. Le coupable n'était pas dans le code de la page, mais dans le modèle du layout.
+date: 2026-07-08T12:00:00.000Z
+tags: nextjs, metadata, seo, title, debugging, app-router, webdev
+---
+
+## Introduction
+
+Salut ! Je rafraîchis ma page d'accueil après une petite modification, je jette un coup d'œil au titre de l'onglet dans le navigateur et je lis : "Bartek Paczesny | Bartek Paczesny". Mon nom deux fois, avec un trait d'union au milieu, comme une carte de visite de quelqu'un qui s'est trompé. Première pensée : quelque part, j'ai dû faire une erreur de copier-coller. Deuxième pensée, plus calme : je suis sûr d'avoir saisi mon nom une seule fois dans les métadonnées.
+
+Vous allez obtenir trois choses :
+
+1. **d'où vient ce nom en double**,
+2. **pourquoi j'ai passé une demi-heure à le chercher au mauvais endroit**,
+3. **comment le corriger en une seule ligne**.
+
+## Où j'ai cherché, ou plutôt mal
+
+Je vais dans `src/app/(site)/page.tsx`, car c'est le fichier de la page d'accueil, logique. J'ai défini les métadonnées une seule fois :
+
+```tsx
+title: "Bartek Paczesny",
+```
+
+Un seul nom, une seule chaîne de caractères. Je fais une recherche dans tout le référentiel pour trouver une deuxième occurrence, en pensant que peut-être un composant ajoute le nom du service au titre. Rien de tout cela. Pendant un moment, j'étais convaincu que c'était le composant de navigation ou un ancien modèle de mise en page qui me faisait cela. J'ai perdu du temps à chercher dans des endroits qui n'avaient rien à voir avec le titre.
+
+## Où se trouvait vraiment le problème
+
+Dans le modèle de mise en page racine, `src/app/layout.tsx`, que je n'avais pas touché depuis des semaines :
+
+```tsx
+title: {
+  default: "Bartek Paczesny",
+  template: "%s | Bartek Paczesny",
+},
+```
+
+Et voilà le problème. Le `template` dans Next prend le titre défini par chaque sous-page et le remplace par `%s`. La page d'accueil a défini son titre sur "Bartek Paczesny", donc `%s` est "Bartek Paczesny", et le modèle crée "Bartek Paczesny | Bartek Paczesny". La mécanique a fonctionné exactement comme je l'avais écrite. J'ai construit une machine qui ajoute "| Bartek Paczesny" à chaque titre, et puis je l'ai alimentée avec un titre qui était déjà mon nom.
+
+## Correction
+
+La sous-page qui ne veut pas du modèle définit `title.absolute` et sort de la machine :
+
+```tsx
+title: { absolute: "Bartek Paczesny: Developer & Homelab Blog" },
+```
+
+Au passage, j'ai obtenu un meilleur titre que juste mon nom, car c'est la même chose que les métadonnées que j'ai travaillées [dans l'article sur la préparation du site pour les agents](/blog/fr/how-to-make-your-website-agent-ready). Là, il s'agissait de hreflang et de OG, ici du titre, un seul système.
+
+## Conclusion
+
+Le modèle de mise en page n'était pas cassé. Il a fait exactement ce que je lui avais demandé : ajouter le nom du service au titre. Le problème, c'est que sur la page d'accueil, le titre et le nom du service sont la même chose, donc j'ai obtenu les deux. Une demi-heure à chercher le coupable, et le coupable, c'est `%s`, qui a simplement exécuté l'ordre.
+
+Moral de l'histoire : si quelque chose se répète dans le résultat, vérifiez d'abord le modèle que vous avez défini et que vous avez oublié, et ne blâmez le code que lorsque vous êtes sûr de ne pas avoir touché quelque chose. Restez cool !
