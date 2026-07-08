@@ -29,6 +29,27 @@ ls content/posts/
 for f in content/posts/*/pl.mdx; do grep -H -m1 '^title:' "$f"; done
 ```
 
+## 1b. Check freshness against the live feed
+
+Fetch the public JSON feed and work out how long the blog has gone without a new post. This is the
+freshness and streak signal that grounds the empty result message (D-03, D-04). It is derived fresh on
+every run from the live feed, never from a stored state file and never from re-reading Slack history.
+
+```bash
+curl -s https://dev.paczesny.pl/feed.json | jq -r '.items[0].date_published'
+```
+
+Fetch over HTTPS directly: `http://dev.paczesny.pl` answers with a 302 redirect, so a plain `http://`
+request never reaches the feed. The request itself is a plain unauthenticated GET, the feed is public.
+
+Feed that `date_published` value into the repo's `computeStreak` helper (`src/lib/streak.ts`) to get
+`weeksSinceLastPost` and, when it is 1 or more, a Polish `streakNote` such as
+`2. tydzień z rzędu bez nowego wpisu`. The helper is pure weeks-since arithmetic (`floor(daysSince / 7)`,
+fail closed on a bad date), so call it through the repo toolchain or replicate the same arithmetic inline
+if the session has no build step. If `computeStreak` returns `weeksSinceLastPost` null (a missing or
+unparseable feed date), treat it as no freshness signal available, not as zero weeks: say the freshness
+check could not read the feed, and never report a false all-clear off a bad feed.
+
 ## 2. Decide: did something real happen?
 
 Look at the signal and judge honestly.
@@ -68,5 +89,44 @@ Compare each candidate against the `content/posts/` slugs and frontmatter you re
 
 ## Output
 
-The structured candidate list (3 to 5 items, six fields each), or the explicit empty result with its
-honest reason. That is the whole output. The routine posts it to Slack; you do not.
+You produce the message ready text and its exact format. The routine posts it to Slack; you do not. Keep
+that division intact: never call Slack from this skill.
+
+### Non-empty result: one numbered message
+
+A single numbered list, 1 to 5 items. Each candidate shows its `title`, its one line `angle`, and its
+`why_now` inline, so the author can decide without leaving Slack (D-01). Close with a descriptive call to
+action that carries an example, phrased like "Odpisz 1-5, albo napisz własny temat jeśli żaden nie pasuje"
+(D-02), not a terse one word prompt.
+
+```text
+Tematy na ten tydzień:
+
+1. <title>
+   Angle: <angle>
+   Czemu teraz: <why_now>
+2. <title>
+   Angle: <angle>
+   Czemu teraz: <why_now>
+
+Odpisz 1-5, albo napisz własny temat jeśli żaden nie pasuje.
+```
+
+### Empty result: an honest, first-class success
+
+When nothing qualifies, keep it short but never a bare one liner. Name what you actually checked (the git
+window and the existing posts in `content/posts/`) and why none of it earned a post (D-03). When the
+freshness check from step 1b returned `weeksSinceLastPost` of 1 or more, include its `streakNote` so
+consecutive empty weeks are surfaced (D-04). If step 1b could not read the feed (`weeksSinceLastPost`
+null), say the freshness check was unavailable this run rather than inventing a streak count.
+
+```text
+Nic w tym tygodniu nie łapie się na osobny wpis.
+
+Sprawdziłem: commity z ostatnich 7 dni i tematy już opisane w content/posts/. Same drobne zmiany, nic na
+własny wpis.
+
+2. tydzień z rzędu bez nowego wpisu.
+```
+
+An empty result is a success, not a failure, consistent with step 2. This blog is not a content mill.
