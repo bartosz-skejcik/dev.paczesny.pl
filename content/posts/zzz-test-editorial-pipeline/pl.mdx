@@ -1,0 +1,55 @@
+---
+title: "Moja strona główna witała mnie imieniem dwa razy i szukałem winnego nie tam, gdzie trzeba"
+description: "Tytuł zakładki pokazywał Bartek Paczesny dwa razy. Pół godziny szukałem drugiego imienia w kodzie strony, a ono siedziało w szablonie layoutu."
+date: 2026-07-08T12:00:00.000Z
+tags: nextjs, metadata, seo, title, debugging, app-router, webdev
+---
+
+## Wprowadzenie
+
+Siemanko! Odświeżam sobie stronę główną po jakiejś drobnej zmianie, zerkam odruchowo na tytuł zakładki w przeglądarce i czytam: "Bartek Paczesny | Bartek Paczesny". Moje imię dwa razy, z kreską w środku, jak wizytówka od kogoś, kto się zaciął w połowie. Pierwsza myśl: gdzieś mi się coś podwoiło przy kopiowaniu. Druga, spokojniejsza: przecież ja to imię wpisałem w metadanych tylko raz.
+
+Dostaniesz trzy rzeczy:
+
+1. **skąd się wzięła ta podwójna nazwa**,
+2. **czemu przez pół godziny szukałem jej nie tam, gdzie siedziała**,
+3. **jak to się naprawia jedną linijką**.
+
+## Gdzie szukałem, czyli źle
+
+Wchodzę w `src/app/(site)/page.tsx`, bo to plik strony głównej, logiczne. Metadane ustawiam tam raz:
+
+```tsx
+title: "Bartek Paczesny",
+```
+
+Jedno imię, jeden string. Grepuję całe repo za drugim wystąpieniem, myślę, że jakiś komponent dokleja nazwę serwisu do tytułu. Nic z tego. Przez chwilę byłem pewien, że to komponent nawigacji albo jakiś stary layout mi to robi. Marnowałem czas na przeszukiwanie miejsc, które z tytułem nie mają nic wspólnego.
+
+## Gdzie to siedziało naprawdę
+
+W root layoucie, `src/app/layout.tsx`, którego nawet nie ruszałem od tygodni:
+
+```tsx
+title: {
+  default: "Bartek Paczesny",
+  template: "%s | Bartek Paczesny",
+},
+```
+
+I tu jest cały myk. `template` w Next bierze tytuł ustawiony przez każdą podstronę i wstawia go w miejsce `%s`. Strona główna ustawiła swój tytuł na "Bartek Paczesny", więc `%s` to "Bartek Paczesny", a szablon robi z tego "Bartek Paczesny | Bartek Paczesny". Mechanika zadziałała dokładnie tak, jak ją napisałem. Zbudowałem maszynkę, która do każdego tytułu dokleja "| Bartek Paczesny", a potem nakarmiłem ją tytułem, który już był moim imieniem.
+
+## Naprawa
+
+Podstrona, która nie chce szablonu, ustawia `title.absolute` i wychodzi z całej maszynki:
+
+```tsx
+title: { absolute: "Bartek Paczesny: Developer & Homelab Blog" },
+```
+
+Przy okazji dostałem lepszy tytuł niż samo imię, bo to ta sama robota z metadanymi, przy której siedziałem [we wpisie o robieniu strony gotowej na agentów](/blog/pl/how-to-make-your-website-agent-ready). Tam hreflangi i OG, tu tytuł, jeden system.
+
+## Co z tego wyszło
+
+Szablon nie był zepsuty. Zrobił idealnie to, co mu kazałem: dokleił nazwę serwisu do tytułu. Problem był ten, że na stronie głównej tytuł i nazwa serwisu to to samo słowo, więc dostałem je dwa razy. Pół godziny grepowania za winnym, a winny to `%s`, który po prostu wykonał polecenie.
+
+Morał wieczoru: jak coś dubluje Ci się w wyniku, sprawdź najpierw szablon, który sam ustawiłeś i o którym zdążyłeś zapomnieć, a dopiero potem obwiniaj kod, którego dziś nie tykałeś. Trzymaj się mordo!
