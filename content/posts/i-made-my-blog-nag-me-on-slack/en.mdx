@@ -1,0 +1,154 @@
+---
+title: I Made My Blog Remind Me on Slack When I Stop Writing
+description: propose-topics now counts weeks without a post using a fail-closed pure function, and sends topics or an honest 'nothing this week' to #blog-ideas.
+date: 2026-07-09T09:00:00.000Z
+tags: slack, automatyzacja, ideation, typescript, testy, agenci, webhook
+---
+
+## Introduction
+
+Wednesday, I check when I last published something, and instead of counting in my head "it's been a week, maybe more", I do something that's never happened before: I ask a bot I built myself. Because two days earlier, I added a feature that counts how many weeks I've been silent and reminds me on Slack before I even realize it.
+
+This is the moment when you realize you have a process for generating blog ideas, but the whole process relies on you remembering to start it. I had a `propose-topics` skill that read the git log and suggested topics. It worked well. The problem was that I had to remind myself to run it, and reminding myself about things is exactly what I'm worst at.
+
+You'll get three things from this post:
+
+1. **how `computeStreak` looks**, a pure function that counts weeks without a post, which fails closed instead of lying with zero,
+2. **why the feed fetch lives in the skill, not in a library**, and why it's not an architectural whim,
+3. **what the message looks like that now lands on #blog-ideas**, both the version with topics and the honest "nothing this week" version.
+
+## Starting Point: A Skill That Waits for You to Call It
+
+`propose-topics` already had its job covered: it read the `git log` from the last seven days, looked at what's in `content/posts/` to avoid duplicating a topic, and produced a list of 3 to 5 candidates or honestly said "nothing this week grabs a post". The problem wasn't in the logic. The problem was that I was the trigger. The skill didn't know when I last published something, so it couldn't tell me until I asked it.
+
+And I asked it when I happened to remember. Which was rare.
+
+## computeStreak: A Pure Function, Zero I/O
+
+I started the solution with the most boring possible thing: a function that calculates a date difference. All the logic sits in `src/lib/streak.ts`, without a fetch, without side effects, so it can be tested without mocking half the internet:
+
+```ts
+export function computeStreak(
+  lastPublishedIso: string | undefined,
+  options?: { now?: Date }
+): StreakResult {
+  const now = options?.now ?? new Date()
+
+  const timestamp = parsePublishedTimestamp(lastPublishedIso)
+  if (timestamp === null) {
+    // Fail closed: an unparseable or missing date is no signal, not zero weeks.
+    return { weeksSinceLastPost: null, streakNote: null }
+  }
+
+  const daysSince = (now.getTime() - timestamp) / MS_PER_DAY
+  const weeksSinceLastPost = Math.max(0, Math.floor(daysSince / DAYS_PER_WEEK))
+
+  const streakNote =
+    weeksSinceLastPost >= 1
+      ? `${weeksSinceLastPost}. week in a row without a new post`
+      : null
+
+  return { weeksSinceLastPost, streakNote }
+}
+```
+
+One decision here hurts the most from the outside, but it's the only right one: if `parsePublishedTimestamp` gets something it can't parse, the function returns `null`, not `0`. You see the difference? Zero weeks means "you're posting regularly, everything's fine". Null means "I have no idea, because the feed fell apart". Confusing these two is exactly what fail-closed is meant to avoid.
+
+I wrote this as the first test, before I even started the rest:
+
+```ts
+it("fails closed on an unparseable date, returning null rather than zero", () => {
+  const result = computeStreak("not-a-date", { now: NOW })
+
+  expect(result.weeksSinceLastPost).toBeNull()
+  expect(result.streakNote).toBeNull()
+})
+
+it("treats a missing date as no signal, returning null rather than zero", () => {
+  const result = computeStreak(undefined, { now: NOW })
+
+  expect(result.weeksSinceLastPost).toBeNull()
+  expect(result.streakNote).toBeNull()
+})
+```
+
+Six tests in total in `src/lib/streak.test.ts`, from zero weeks after a fresh post, through exactly one week of break, through a multi-week gap, to these two fail-closed cases and one checking that `now` defaults to the real clock when you don't pass it. Injectable `now` isn't a decoration, it's the only way to test "one week break" without it starting to flake after a month, because someone wrote it with a hardcoded "today" date.
+
+## Why Fetch Doesn't Sit in the Same Function
+
+I could have thrown `fetch("https://dev.paczesny.pl/feed.json")` straight into `computeStreak` and had one function for everything. I didn't do that, because the repo already has exactly the same split elsewhere: `feed.ts` holds the pure logic of building the feed, and `feed.json/route.ts` does I/O and serves it as an endpoint. `streak.ts` follows the same path, fetch stays in the skill step, and the function gets a ready string with the date and nothing else concerns it.
+
+The gain is banal but real: I can run six `computeStreak` tests without the internet, without mocking `fetch`, without any stub server. I pass a string, I get a result, end of story. All the uncertainty of the external world, a dead feed, wrong content-type, DNS, lands in one place, in the skill step, where I have to handle it manually anyway.
+
+## What Actually Lands on Slack Now
+
+The second half of this job isn't code, but `.claude/skills/propose-topics/SKILL.md`, where I defined the exact format of the message. When there's something to write about, it flies as a numbered list with a concrete call to action, not a dry single word:
+
+```text
+Topics for this week:
+
+1. <title>
+   Angle: <angle>
+   Why now: <why_now>
+
+Reply 1-5, or write your own topic if none fit.
+```
+
+And when the week was barren, it flies something that calls things by their name instead of being silent, along with a counter if the break lasts longer than a week:
+
+```text
+Nothing this week grabs a post.
+
+I checked: commits from the last 7 days and topics already described in content/posts/. Just minor
+changes, nothing for a separate post.
+
+2. week in a row without a new post.
+```
+
+This second format is more important than it looks. A bot that only speaks up when it has good news for you teaches you to ignore silence. A bot that says "I checked, there's nothing, and it's already the second week in a row" turns silence into a signal. That's the whole difference between an ideation tool and a tool that acts as your conscience.
+
+The message itself flies to `#blog-ideas` via a webhook, not through a Slack connector, because the connector is tied to a different workspace and doesn't have access to the `#blog-ideas` channel on the one I actually work on. A simple `curl` with `jq` building JSON takes care of it without any additional authorization on my part.
+
+## When Such a Freshness Check Makes No Sense
+
+Honestly, on the other hand, because it's easy to come out of this post with the conviction that every skill needs its own time counter. It doesn't. I would have built it differently or not at all if:
+
+- **the blog had multiple authors**, because then "X weeks without a post" stops being my private shame and becomes a team metric that requires a completely different conversation about who gets it on Slack,
+- **I published more often than once a week**, because then the week counter is too coarse and you'd need to count in days, which changes the whole arithmetic and thresholds in `computeStreak`,
+- **I didn't already have the `propose-topics` skill**, because all this work is a layer on top of something that already reads the git log. Building a freshness check from scratch, without that basis, is a lot more work for the same effect.
+
+None of these three conditions describes my situation: I blog alone, less often than once a week, and the skill for generating topics was already lying in my repo. Hence this specific shape of the solution, not another.
+
+## What Came Out of This
+
+PR #7, `d33836d`, went in on Wednesday evening. Three files: `streak.ts`, `streak.test.ts`, a new message format in `SKILL.md`. Sixty-four lines added in `SKILL.md` alone, because describing two message formats with words takes more space than writing the code that generates them.
+
+Now when I run `propose-topics`, I no longer get a dry list of topics detached from context. I get a list plus a sentence like "2. week in a row without a new post", which works like a bucket of cold water. You don't have to take my word for it that it works, because this is exactly the mechanism that made this post happen this week, not two weeks from now.
+
+And that's the irony I've been heading towards from the first sentence: I built a tool that reminds me to write, and the first text it reminded me to write is a description of that tool. The bot reminded me that I'm not writing, so I sat down and wrote a post about how the bot reminds me. A conscience that you've programmed yourself still is a conscience, only now it has access to your Slack.
+
+## FAQ
+
+**Why does `weeksSinceLastPost` return `null`, not `0`, when something goes wrong?**
+Because zero and null mean something completely different. Zero means "you published this week, everything's fine". Null means "I don't know how to count this, because the feed returned something I couldn't parse". Returning zero in the second situation is false reassurance, exactly what fail-closed is meant to avoid.
+
+**Why isn't the feed fetch part of `computeStreak`?**
+Because then the function stops being testable without mocking the network. The split between pure logic in `streak.ts` and I/O in the skill step copies a pattern that already exists in the repo between `feed.ts` and `feed.json/route.ts`. Six `computeStreak` tests run without the internet.
+
+**Why does the message fly through a webhook, not through a Slack connector?**
+Because the connector is tied to a different workspace and doesn't have access to the `#blog-ideas` channel on the one I actually work on. A webhook is a simple public endpoint URL, so `curl` with `jq` building JSON takes care of it without any additional authorization on my part.
+
+**What happens when there's nothing to write about?**
+The skill still sends a message, just a different one: it says what it checked (commits from the last 7 days, existing posts) and that nothing grabs a post. If the break lasts longer than a week, it appends a counter in the style "2. week in a row without a new post". Silence without explanation would be worse than honest "there's nothing".
+
+**Isn't it an overkill to build a bot to watch over your own blog?**
+This post was created because the bot reminded me to write it, so the answer probably defends itself. If I had co-authors or published daily, I would have done it differently or not at all, see the section on when a freshness check doesn't make sense.
+
+## Links
+
+- [My previous post about hooks, skills, and subagents in Claude Code](/blog/en/how-to-setup-claude-code-hooks-skills)
+- [How an LLM messed up my links in translations](/blog/en/llm-translated-my-blog-and-broke-the-links)
+- [I made my website agent-ready: llms.txt and Content-Signals](/blog/en/how-to-make-your-website-agent-ready)
+- [My own MCP server, through which the agent reads blog statistics](/blog/en/how-to-build-mcp-server-for-analytics)
+- [Public JSON feed of the blog](https://dev.paczesny.pl/feed.json)
+- [Slack Incoming Webhooks, documentation](https://api.slack.com/messaging/webhooks)
