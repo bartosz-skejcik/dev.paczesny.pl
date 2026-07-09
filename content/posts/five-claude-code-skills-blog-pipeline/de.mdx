@@ -1,0 +1,116 @@
+---
+title: Ich habe mir eine redaktionelle Pipeline mit fünf Claude-Code-Skills aufgebaut
+description: Fünf Claude-Code-Skills in einer Kette statt eines großen Prompts fürs Bloggen. Plus ein deterministischer Fixer, weil Prompts bei Slugs lügen.
+date: 2026-07-09T12:00:00.000Z
+tags: claude-code, ai, agenty, skille, automatyzacja, blog, redakcja, workflow
+---
+
+## Einleitung
+
+Im vorherigen Beitrag schrieb ich einen Satz, der jetzt wie ein Scherz klingt: "Damit schließe ich die Serie über das Bearbeiten von Blog-Beiträgen und Agenten ab, nächstes Mal kehre ich zu normalen Anleitungen zurück". Das war vor drei Tagen. Heute sitze ich und schreibe einen weiteren Beitrag über das Bearbeiten von Blog-Beiträgen und Agenten, und zwar genau über das, was ich beschreibe. Dazu komme ich später zurück, denn das ist der ganze Punkt dieses Textes, aber erst einmal der Grund, warum ich mein Versprechen gebrochen habe.
+
+Ich hatte genug von der manuellen Erstellung von Beiträgen. Nicht des Schreibens selbst, das gefällt mir, sondern all der Arbeit drumherum: Übersetzen in drei Sprachen, Überprüfen, ob die Links in den Übersetzungen auf die richtigen Slugs verweisen, Überprüfen, ob die `tags` nicht unterwegs verloren gegangen sind, Erstellen der Seite und Klicken auf vier Versionen eines Beitrags, um zu überprüfen, ob sie sich überhaupt rendern. Jedes Mal machte ich das manuell und jedes Mal entging mir etwas. Also verbrachte ich zwei Tage damit, etwas zu schreiben, das Beiträge für mich schreiben soll. Ironisch, von Anfang an, aber ich werde es noch schlimmer machen.
+
+Sie erhalten drei Dinge:
+
+1. **Wie die fünf Skills** aussehen, die in einer Kette zusammengesetzt sind, mit echten Zeilennummern aus diesem Commit,
+2. **Warum der Prompt allein nicht ausreichte** und ich deterministischen Code hinzufügen musste, um das zu korrigieren, was der Model lügt,
+3. **Wie dieser spezifische Beitrag entstand**, denn das ist der beste Beweis dafür, ob die Pipeline funktioniert oder nur schön im README aussieht.
+
+## Was ich genau verknüpft habe
+
+Der Commit `d10b1b1` (#6, gestern) fügte dem Repository fünf Dateien `.claude/skills/*/SKILL.md`, zwei Referenzdokumente unter `_shared/`, ein TypeScript-Modul mit Tests und ein Bash-Skript zum Überprüfen des Renderings hinzu. In Zahlen:
+
+```
+.claude/skills/_shared/definition-of-done.md |  27 ++
+.claude/skills/_shared/failure-modes.md      |  65 ++
+.claude/skills/draft-post-pl/SKILL.md        | 127 ++
+.claude/skills/open-post-pr/SKILL.md         |  66 ++
+.claude/skills/propose-topics/SKILL.md       |  72 ++
+.claude/skills/translate-post/SKILL.md       |  64 ++
+.claude/skills/verify-post/SKILL.md          |  94 ++
+scripts/fix-integrity.ts                     | 126 ++
+scripts/verify-post-render.sh                | 110 ++
+src/lib/post-integrity.test.ts               | 185 ++
+src/lib/post-integrity.ts                    | 228 ++
+```
+
+Fünf Skills sind fünf separate Schritte, jeder mit einem klaren Eingang und Ausgang, und nicht ein einziger großer Prompt wie "Schreibe mir einen Blog-Beitrag und alles drumherum":
+
+1. **propose-topics.** Liest `git log` und Frontmatter von bestehenden Beiträgen und schlägt entweder 3 bis 5 Themen vor, die in der realen Aktivität des Repositorys verankert sind, oder sagt ehrlich, dass es diese Woche nichts zu schreiben gibt. Dieser Beitrag ist genau aus dieser Quelle entstanden, als erste Position in der Liste.
+2. **draft-post-pl.** Schreibt `pl.mdx` in meiner Stimme, indem es den neuesten veröffentlichten Beitrag nachahmt, mit einem obligatorischen FAQ, einem Link-Bereich und einem Gegenargument, wenn das Thema eine Entscheidung beinhaltet.
+3. **translate-post.** Ruft den bestehenden `bun run translate:post` (Groq, `llama-3.3-70b-versatile`) auf und startet sofort den Fixer für die Integrität auf der frisch erstellten Datei.
+4. **verify-post.** Fährt durch neun Tore des Definition of Done und blockiert den PR, wenn eines davon nicht bestanden wird.
+5. **open-post-pr.** Erstellt einen Branch `claude/post-<slug>`, committet logische Teile und öffnet einen PR zum `dev`. Es merget nie.
+
+Jeder Skill verlinkt zu zwei gemeinsamen Dokumenten, anstatt dieselbe Liste fünf Mal zu wiederholen: `definition-of-done.md` mit neun Toren DoD-1 bis DoD-9 und `failure-modes.md` mit sechs bekannten Ausfallmodi, F1 bis F6. Das ist keine Dekoration, sondern eine konkrete Entscheidung: Wenn sich etwas einmal verschiebt, landet die Korrektur an einem Ort und nicht in fünf separaten Dateien, die man synchronisieren muss.
+
+## Warum der Prompt allein nicht ausreichte
+
+Hier liegt der Kern, und hier half die vorherige Nacht der Forschung, die Kosten eines Frameworks zu rechtfertigen, denn ich hatte eine klare Vorstellung davon, wie ich es berechnen konnte, anstatt einfach die Hand zu heben. Zwei Ausfallmodi aus `failure-modes.md` sind durch Code und nicht durch den Prompt geschlossen, da der Prompt regelmäßig lügt:
+
+**F3, Übersetzung von Slugs.** Der Model übersetzte Wörter innerhalb von Slugs, weil sie wie Text zum Übersetzen aussehen, aber tatsächlich Identifikatoren sind. Ein bestimmtes Beispiel aus der Geschichte dieses Repositorys: `/blog/de/proxmox-czesc-druga` änderte sich in `/blog/de/proxmox-teil-zwei`, was zu einem sauberen 404 führte. Ich sagte dem Prompt, das nicht zu tun. Es half nicht konsequent.
+
+**F6, Großbuchstaben in Frontmatter, entdeckt gestern während des vollständigen Retests der Kette.** Groq gibt manchmal einen Fragment des Prompts mit einem referenziellen Block `TITLE:`, `DESCRIPTION:`, `DATE:` als gültige Ausgangsschlüssel zurück. Da `parseFrontmatter` in `src/lib/blog.ts` case-sensitiv ist, wird `metadata.title` zu `undefined`, und `src/lib/related-posts.ts` ruft `tokenize(metadata.title)` ohne Sicherheit während des Prerenderings auf. Effekt: `undefined.toLowerCase()` wirft `bun run build` für die gesamte Seite aus, nicht nur für einen Beitrag. Ein schlechtes Übersetzen konnte den gesamten Deploy blockieren.
+
+Also schrieb ich `src/lib/post-integrity.ts`, ein reiner Modul ohne Zugriff auf die Festplatte, drei Funktionen hintereinander:
+
+```ts
+export function fixPostIntegrity(
+  canonicalSlug: string,
+  translatedContent: string,
+  options?: PostIntegrityOptions
+): PostIntegrityFixResult {
+  parseFrontmatter(translatedContent) // wirft bei fehlendem Frontmatter
+
+  const slugResult = rewriteInternalSlugLinks(translatedContent, canonicalSlug, knownSlugs)
+  const caseResult = normalizeFrontmatterKeyCasing(slugResult.content)
+  const tagResult = reinsertCanonicalTags(caseResult.content, canonicalTags)
+
+  return { changed: fixes.length > 0, fixes, content: tagResult.content }
+}
+```
+
+`rewriteInternalSlugLinks` überschreibt jeden Link `](/blog/<lang>/<slug>)`, dessen Slug kein bekannter Katalog ist, zurück auf den kanonischen. `normalizeFrontmatterKeyCasing` reduziert `TITLE:` auf `title:`, indem es nur den Schlüsselnamen berührt, der Wert bleibt byte-für-byte gleich. `reinsertCanonicalTags` fügt entweder hinzu oder ersetzt die Zeile `tags`, wenn sie fehlt oder sich mit den anderen Sprachen vermischt. Die Reihenfolge in der Mitte ist wichtig: Die Normalisierung der Groß- und Kleinschreibung geht vor der Verarbeitung von Tags, da `TAGS:` mit verrückter Groß- und Kleinschreibung an der Überprüfung von Tags vorbeifliegen würde. Dazu kommen neun Tests in `post-integrity.test.ts`, sodass diese drei Funktionen eine reale Abdeckung haben und nicht nur mein Wort.
+
+Das ist der Unterschied zwischen "Ich sagte dem Model, dass es das nicht tun soll" und "Es ist physisch nicht möglich, es zum PR zu senden". Prompts sind etwa so zuverlässig wie Menschen nach dem dritten Kaffee: Sie funktionieren, solange sie funktionieren, und wenn sie nicht funktionieren, fallen sie still um.
+
+## Wenn der Prompt dennoch ausreicht
+
+Ehrlich gesagt, in die andere Richtung, denn fünf Skills bedeuten nicht, dass alles in Code umgesetzt werden muss. `propose-topics` und `draft-post-pl` bleiben reine Prompts, und das ist eine bewusste Entscheidung, kein Faulheit. Die Beurteilung, ob ein Commit aus der letzten Woche "einen eigenen Beitrag wert" ist oder ob ein Satz wie ich klingt und nicht wie generierter Text, sind Aufgaben, die nicht in einem Regex abgeschlossen werden können. Deterministischer Code erhält nur zwei Dinge, die eine einzige korrekte Antwort haben, die programmgesteuert überprüft werden kann: Ob der Slug als Katalog existiert und ob die Zeile `tags` in allen vier Sprachen identisch ist. Alles, was Urteilsvermögen erfordert, bleibt ein Prompt mit einer harten Schranke am Ende, die es überprüft. Deterministischer Code, wo es eine einzige korrekte Antwort gibt, Prompt, wo es um Beurteilung und nicht um Zählen geht, und keines von beiden gibt vor, das andere zu sein.
+
+## Wie dieser Beitrag wirklich entstand
+
+Und jetzt die ironische Krönung, die ich am Anfang versprochen habe. `propose-topics` überprüfte den Git-Log der letzten Tage, sah den Commit `d10b1b1` und schlug ihn mir als erste Position in der Liste der Themen vor, mit einer konkreten Begründung: Fünf neue Skills plus deterministischer Fixer waren am Vortag ins Repository gelangt. Ich antwortete "1". `draft-post-pl` las den neuesten veröffentlichten Beitrag, um den Rhythmus zu erfassen, zog die echten Zeilennummern und den echten Code aus demselben Commit und schrieb das, was Sie jetzt lesen. Dieselbe Pipeline, über die Sie gerade gelesen haben, produzierte den Text, den Sie über sie lesen. Es ist keine große rekursive Finte, sondern einfach die natürliche Folge davon, dass ich ein Werkzeug aufgebaut und es sofort verwendet habe, aber ich gebe zu, dass es mir ein bisschen lächerlich vorkam, als es mir während des Schreibens bewusst wurde.
+
+## FAQ
+
+**Warum fünf separate Skills und nicht ein einziger großer Prompt für den gesamten Prozess?**
+Weil jeder Schritt ein anderes Eingang, ein anderes Ausgang und eine andere Art der Überprüfung hat. Ein einziger großer Prompt kann sich nicht in der Mitte selbst stoppen, wenn die Übersetzung einen Abschnitt abbricht oder einen Tag verliert. Fünf separate Schritte mit einer harten Schranke dazwischen können das.
+
+**Erzeugen diese Skills automatisch etwas für die Produktion?**
+Nein. `open-post-pr` endet mit dem Öffnen eines PR zum `dev` und merget nie oder pushet direkt zum `dev` oder `prod`. Die Veröffentlichung ist immer eine manuelle Aktion, ich lese den PR und merge ihn selbst.
+
+**Was genau macht der deterministische Fixer, was der Prompt nicht zuverlässig machte?**
+Er überschreibt übersetzte Slugs zurück auf die kanonischen (F3), normalisiert die Groß- und Kleinschreibung von Frontmatter-Schlüsseln wie `TITLE:` auf `title:` (F6) und fügt die fehlende Zeile `tags` wieder ein (F4). Alles in `src/lib/post-integrity.ts`, kein weiterer Prompt.
+
+**Was passiert, wenn Groq den täglichen Token-Limit während der Übersetzung erreicht?**
+`translate-post` fängt diesen spezifischen Fehler ab und übersetzt die verbleibenden Sprachen mit dem Modell des Agents, der gerade die Sitzung leitet, immer noch mit denselben Toren DoD-4 und DoD-5. Am Ende erhalte ich einen Bericht, welche Sprachen durch Groq und welche durch diesen Backup-Weg gegangen sind.
+
+**Wie überprüfe ich, dass alle vier Versionen des Beitrags überhaupt gerendert werden?**
+`scripts/verify-post-render.sh` erstellt einen Build in derselben Sitzung, startet einen lokalen Server und curlt alle vier Seiten plus die URL des OG-Bildes, um den echten Statuscode 200 zu überprüfen, nicht nur den Fehler bei der Erstellung.
+
+## Zusammenfassung
+
+Ich habe mit fünf Dateien Skills, einem TypeScript-Modul mit neun Tests und einem Beitrag abgeschlossen, der sich selbst beweist. Nächstes Mal, wenn etwas in dieser Kette auseinanderfällt, werde ich genau wissen, wo: Entweder in einer der beiden Schranken, die der Code repariert, oder in einer der sieben, die hart fehlschlagen und auf mich warten.
+
+Und ehrlich gesagt: Ich habe mein Versprechen gebrochen, zu normalen Anleitungen über Self-Hosting zurückzukehren, um einen Beitrag über das System zu schreiben, das mir das Brechen dieses Versprechens vorschlug, es in meinem Stil schrieb und es selbst überprüfen würde, wenn es nicht gerade auf meinen manuellen Merge wartet. Der einzige Unterschied zwischen mir vor drei Tagen und mir jetzt ist, dass ich jetzt ein Werkzeug habe, das zumindest darauf achtet, dass die Links nicht auseinanderfallen. Self-Hosting kehrt nächstes Mal zurück. Vielleicht, es sei denn, etwas fügt sich wieder selbst hinzu.
+
+## Links
+
+- [Vorheriger Beitrag, in dem ich das Ende der Serie über Blog und Agenten versprach](/blog/de/why-i-didnt-rewrite-my-blog-to-a-new-framework)
+- [Beitrag über Hooks und Skills in Claude Code, der Ausgangspunkt für diese Pipeline](/blog/de/how-to-setup-claude-code-hooks-skills)
+- [Wie LLaMA meine Blog-Slugs durcheinandergebracht hat, die eigentliche Ursache für F3](/blog/de/llm-translated-my-blog-and-broke-the-links)
+- [Mein eigener MCP-Server, mit dem ich den Verkehr auf meinem Blog überprüfe](/blog/de/how-to-build-mcp-server-for-analytics)
+- [Claude Code, Dokumentation der Skills](https://docs.claude.com/en/docs/claude-code)
+- [Groq, Anbieter des Übersetzungsmodells](https://groq.com)

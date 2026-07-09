@@ -1,0 +1,116 @@
+---
+title: J'ai construit un pipeline éditorial avec cinq compétences Claude Code
+description: Cinq compétences Claude Code enchaînées au lieu d'un gros prompt pour écrire un article. Plus un correctif déterministe, les prompts mentent sur les slugs.
+date: 2026-07-09T12:00:00.000Z
+tags: claude-code, ai, agenty, skille, automatyzacja, blog, redakcja, workflow
+---
+
+## Introduction
+
+Dans mon dernier article, j'ai écrit une phrase qui ressemble maintenant à une plaisanterie : "je clôture ainsi la série sur le blog et les agents, la prochaine fois, je reviens aux tutoriels classiques". C'était il y a trois jours. Aujourd'hui, j'écrit un autre article sur le blog et les agents, mais cette fois, l'article lui-même a été créé en partie grâce à ce dont je parle. Je reviendrai sur cela plus tard, car c'est le point central de cet article, mais tout d'abord, la raison pour laquelle j'ai rompu ma promesse.
+
+J'en avais marre d'écrire des articles à la main. Non pas de l'écriture elle-même, que j'aime, mais de tout ce qui l'entoure : traduire en trois langues, vérifier que les liens dans les traductions pointent vers les slug réels, vérifier que les `tags` n'ont pas disparu en route, construire la page et cliquer sur les quatre versions d'un article pour vérifier s'ils se rendent bien. Chaque fois, je le faisais à la main et chaque fois, quelque chose m'échappait. Alors, au lieu d'écrire un autre article, j'ai passé deux jours à écrire quelque chose qui allait écrire les articles à ma place. Ironique dès le départ, mais soyez tranquille, cela va empirer.
+
+Vous allez obtenir trois choses :
+
+1. **comment les cinq compétences** sont assemblées en chaîne, avec de vrais nombres de lignes de ce commit,
+2. **pourquoi le prompt seul n'a pas suffi** et pourquoi j'ai dû ajouter un code déterministe pour corriger ce que le modèle menteur,
+3. **comment cet article a réellement été créé**, car c'est la meilleure preuve que le pipeline fonctionne, et non seulement qu'il a l'air joli dans le README.
+
+## Ce que j'ai réellement assemblé
+
+Le commit `d10b1b1` (#6, hier) a ajouté au repo cinq fichiers `.claude/skills/*/SKILL.md`, deux documents de référence sous `_shared/`, un module TypeScript avec des tests et un script bash pour vérifier le rendu. En chiffres :
+
+```
+.claude/skills/_shared/definition-of-done.md |  27 ++
+.claude/skills/_shared/failure-modes.md      |  65 ++
+.claude/skills/draft-post-fr/SKILL.md        | 127 ++
+.claude/skills/open-post-pr/SKILL.md         |  66 ++
+.claude/skills/propose-topics/SKILL.md       |  72 ++
+.claude/skills/translate-post/SKILL.md       |  64 ++
+.claude/skills/verify-post/SKILL.md          |  94 ++
+scripts/fix-integrity.ts                     | 126 ++
+scripts/verify-post-render.sh                | 110 ++
+src/lib/post-integrity.test.ts               | 185 ++
+src/lib/post-integrity.ts                    | 228 ++
+```
+
+Les cinq compétences sont cinq étapes distinctes, chacune avec une entrée et une sortie clairement définies, et non un seul grand prompt du type "écrivez-moi un article de blog et tout ce qui va avec" :
+
+1. **propose-topics.** Lit le `git log` et les métadonnées des articles existants, et propose soit 3 à 5 sujets ancrés dans l'activité réelle du repo, soit dit honnêtement qu'il n'y a rien à écrire cette semaine. Cet article est sorti de là, en tant que première position dans la liste.
+2. **draft-post-fr.** Écrit le `fr.mdx` dans ma voix, en imitant le dernier article publié, avec un FAQ obligatoire, une section Liens et un contre-argument, si le sujet implique une décision.
+3. **translate-post.** Appelle l'existant `bun run translate:post` (Groq, `llama-3.3-70b-versatile`), puis déclenche immédiatement le correctif d'intégrité sur le fichier fraîchement créé.
+4. **verify-post.** Passe par neuf portes de définition de terminaison et bloque le PR si l'une d'elles ne passe pas.
+5. **open-post-pr.** Crée une branche `claude/post-<slug>`, commit les parties logiques et ouvre un PR vers `dev`. Ne merge jamais.
+
+Chaque compétence fait référence à deux documents communs au lieu de répéter la même liste cinq fois : `definition-of-done.md` avec neuf portes DoD-1 à DoD-9 et `failure-modes.md` avec six modes de défaillance connus, F1 à F6. Ce n'est pas un ornement, mais une décision concrète : si quelque chose se casse un jour, la correction va dans un seul endroit, et non dans cinq fichiers distincts qui doivent être synchronisés.
+
+## Pourquoi le prompt seul n'a pas suffi
+
+Voici l'essentiel, et voici où la recherche de la veille au soir, au prix d'une semaine de réécriture du framework, m'a finalement servi, car j'avais la tête claire pour le calculer au lieu de simplement faire un geste : deux modes de défaillance dans `failure-modes.md` sont fermés par du code, et non par un prompt, car le prompt mentait régulièrement :
+
+**F3, traduction du slug.** Le modèle traduisait les mots à l'intérieur des slug URL, car ils ressemblent à du texte à traduire, mais ils sont des identificateurs. Un exemple concret de l'historique de ce repo : `/blog/de/proxmox-czesc-druga` changeait en `/blog/de/proxmox-teil-zwei`, ce qui donnait un 404 pur. J'ai demandé au prompt de ne pas le faire. Ça n'a pas fonctionné de manière cohérente.
+
+**F6, majuscules dans le frontmatter, détectées hier lors du retest complet de la chaîne.** Groq renvoie parfois un fragment de prompt avec un bloc de référence `TITLE:`, `DESCRIPTION:`, `DATE:` comme des clés de sortie valides. Puisque `parseFrontmatter` dans `src/lib/blog.ts` est sensible à la casse, `metadata.title` devient `undefined`, et `src/lib/related-posts.ts` appelle `tokenize(metadata.title)` sans protection lors du prerender. Résultat : `undefined.toLowerCase()` fait planter `bun run build` pour toute la page, et non pour un seul article. Une seule mauvaise traduction pouvait bloquer tout le déploiement.
+
+Alors, j'ai écrit `src/lib/post-integrity.ts`, un module pur sans accès au disque, trois fonctions l'une après l'autre :
+
+```ts
+export function fixPostIntegrity(
+  canonicalSlug: string,
+  translatedContent: string,
+  options?: PostIntegrityOptions
+): PostIntegrityFixResult {
+  parseFrontmatter(translatedContent) // jette si le frontmatter manque
+
+  const slugResult = rewriteInternalSlugLinks(translatedContent, canonicalSlug, knownSlugs)
+  const caseResult = normalizeFrontmatterKeyCasing(slugResult.content)
+  const tagResult = reinsertCanonicalTags(caseResult.content, canonicalTags)
+
+  return { changed: fixes.length > 0, fixes, content: tagResult.content }
+}
+```
+
+`rewriteInternalSlugLinks` réécrit chaque lien `](/blog/<lang>/<slug>)`, dont le slug n'est pas un répertoire connu, en slug canonique. `normalizeFrontmatterKeyCasing` ramène `TITLE:` à `title:`, en touchant uniquement le nom de la clé, la valeur reste inchangée. `reinsertCanonicalTags` rattache ou remplace la ligne `tags`, si elle a disparu ou s'est décalée avec les autres langues. L'ordre à l'intérieur est important : la normalisation de la casse des lettres passe avant la gestion des tags, car sinon `TAGS:` avec une casse des lettres décalée passerait inaperçu lors de la vérification des tags. Jusqu'à neuf tests dans `post-integrity.test.ts`, donc ces trois fonctions ont une couverture réelle, et non seulement ma parole.
+
+C'est la différence entre "j'ai demandé au modèle de ne pas le faire" et "physiquement, il n'est pas possible de l'envoyer en PR". Les prompts sont fiables à peu près autant que les gens après leur troisième café : ils fonctionnent, jusqu'à ce qu'ils ne fonctionnent plus, et alors, ils s'effondrent silencieusement.
+
+## Quand le prompt suffit tout de même
+
+Honnêtement, dans l'autre sens, car les cinq compétences ne signifient pas que tout doit être du code. `propose-topics` et `draft-post-fr` restent des prompts purs, et c'est une décision consciente, et non de la paresse. L'évaluation de savoir si un commit de la semaine dernière vaut un article à part entière, ou si une phrase sonne comme moi et non comme du texte généré, ce sont des tâches que l'on ne peut pas fermer dans un regex. Le code déterministe ne reçoit que les deux choses qui ont une seule réponse correcte, vérifiable par programme : si le slug existe en tant que répertoire et si la ligne `tags` est identique dans les quatre langues. Tout ce qui nécessite un jugement reste un prompt avec une porte de vérification dure à la fin, qui le vérifie. Code déterministe là où il y a une seule réponse correcte, prompt là où il faut évaluer et non compter, et aucun des deux ne fait semblant de l'autre.
+
+## Comment cet article a réellement été créé
+
+Et maintenant, cette ironique cerise sur le gâteau que j'ai promise au début. `propose-topics` a regardé le `git log` des derniers jours, a vu le commit `d10b1b1` et m'a proposé de l'écrire en tant que première position dans la liste des sujets, avec une raison concrète : les cinq nouvelles compétences plus le correctif déterministe étaient arrivés dans le repo la veille. J'ai répondu "1". `draft-post-fr` a lu le dernier article publié pour attraper le rythme, a extrait les vrais nombres de lignes et le vrai code de ce même commit, et a écrit ce que vous lisez maintenant. Le même pipeline, dont vous venez de lire, a produit le texte qui en parle. Ce n'est pas une grande astuce récursive, mais simplement l'effet naturel du fait que j'ai construit un outil et que je l'ai utilisé immédiatement, mais j'avoue que lorsque cela m'est venu à l'esprit pendant l'écriture, j'ai trouvé cela un peu drôle.
+
+## FAQ
+
+**Pourquoi cinq compétences distinctes, et non un seul grand prompt pour tout le processus ?**
+Parce que chaque étape a une entrée différente, une sortie différente et une manière différente de vérification. Un seul grand prompt ne peut pas s'arrêter en cours de route, quand la traduction coupe une section ou perd un tag. Cinq étapes distinctes avec une porte de vérification dure entre elles peuvent.
+
+**Est-ce que ces compétences génèrent automatiquement quelque chose pour la production ?**
+Non. `open-post-pr` se termine par l'ouverture d'un PR vers `dev` et ne merge jamais ni ne pousse vers `dev` ou `prod` directement. La publication est toujours un mouvement manuel, je lis le PR et je le merge moi-même.
+
+**Qu'est-ce que le correctif déterministe fait exactement, que le prompt ne faisait pas de manière fiable ?**
+Il réécrit les slug traduits en slug canoniques (F3), normalise la casse des lettres des clés frontmatter comme `TITLE:` en `title:` (F6) et rattache à nouveau la ligne `tags` manquante (F4). Tout cela est du code dans `src/lib/post-integrity.ts`, et non une autre instruction dans le prompt.
+
+**Que se passe-t-il si Groq épuise la limite quotidienne de tokens pendant la traduction ?**
+`translate-post` attrape cette erreur spécifique et, au lieu d'attendre des heures, traduit les autres langues avec le modèle de l'agent qui conduit actuellement la session, en gardant toujours les mêmes portes DoD-4 et DoD-5. À la fin, j'obtiens un rapport sur lesquels des langues sont passés par Groq et lesquels par ce chemin de secours.
+
+**Comment vérifiez-vous que les quatre versions de l'article se rendent bien ?**
+`scripts/verify-post-render.sh` fait un build dans la même session, démarre un serveur local et curl les quatre pages plus l'URL de l'image OG, en vérifiant le code 200 réel, et non seulement l'absence d'erreur lors du build.
+
+## Conclusion
+
+J'ai terminé avec cinq fichiers de compétences, un module TypeScript avec neuf tests et un article qui se prouve lui-même. La prochaine fois, si quelque chose dans cette chaîne se casse, je saurai exactement où : soit dans l'une des deux portes que le code corrige, soit dans l'une des sept portes qui échouent dur et m'attendent. 
+
+Et honnêtement : j'avais promis il y a trois jours que je reviens aux tutoriels classiques sur l'hébergement auto. J'ai rompu cette promesse pour écrire un article sur le système qui m'a lui-même proposé de la rompre, qui l'a écrit dans mon style et qui l'aurait vérifié s'il n'attendait pas juste mon merge manuel. La seule différence entre moi il y a trois jours et moi maintenant est que cette fois, j'ai un outil qui veillera au moins à ce que les liens ne se cassent pas. L'hébergement auto revient la prochaine fois. À moins que quelque chose ne se réécrive encore une fois tout seul.
+
+## Liens
+
+- [Article précédent, dans lequel j'ai promis la fin de la série sur le blog et les agents](/blog/fr/why-i-didnt-rewrite-my-blog-to-a-new-framework)
+- [Article sur les hooks et les compétences dans Claude Code, point de départ pour ce pipeline](/blog/fr/how-to-setup-claude-code-hooks-skills)
+- [Comment LLaMA a mélangé mes slug dans les traductions, ou la raison profonde de F3](/blog/fr/llm-translated-my-blog-and-broke-the-links)
+- [Mon propre serveur MCP, par lequel je vérifie le trafic sur le blog](/blog/fr/how-to-build-mcp-server-for-analytics)
+- [Claude Code, documentation des compétences](https://docs.claude.com/en/docs/claude-code)
+- [Groq, fournisseur du modèle de traduction](https://groq.com)

@@ -1,0 +1,116 @@
+---
+title: I Built a Five-Skill Editorial Pipeline with Claude Code
+description: Five Claude Code skills chained together instead of one large prompt for writing a blog post. Plus a deterministic fixer, because prompts lie about slugs.
+date: 2026-07-09T12:00:00.000Z
+tags: claude-code, ai, agenty, skille, automatyzacja, blog, redakcja, workflow
+---
+
+## Introduction
+
+In my previous post, I wrote a sentence that now sounds like a joke: "I'm wrapping up the series on blogging and agents, and next time I'll return to normal how-to posts." That was three days ago. Today, I'm sitting here writing another post about blogging and agents, and this time, the post itself was partially created by what I'm writing about. I'll get back to that later, but first, let's talk about why I broke my promise.
+
+I was tired of manually writing posts. Not the writing itself, which I enjoy, but all the surrounding tasks: translating into three languages, making sure links in translations pointed to the correct slugs, checking if `tags` didn't disappear along the way, building the site, and clicking through four versions of the same post to see if they rendered correctly. Each time, I did it manually, and each time, something slipped through. So, instead of writing another post, I spent two days writing something that would write posts for me. It's ironic from the start, but it gets worse.
+
+You'll get three things:
+
+1. **How the five skills look** chained together, with real line numbers from this commit,
+2. **Why a single prompt wasn't enough** and I had to add deterministic code to fix what the model lies about,
+3. **How this particular post was created**, because that's the best proof of whether the pipeline works or just looks good in the README.
+
+## What I Actually Linked
+
+Commit `d10b1b1` (#6, yesterday) added five files `.claude/skills/*/SKILL.md`, two reference documents under `_shared/`, one TypeScript module with tests, and a bash script to check rendering. In numbers:
+
+```
+.claude/skills/_shared/definition-of-done.md |  27 ++
+.claude/skills/_shared/failure-modes.md      |  65 ++
+.claude/skills/draft-post-pl/SKILL.md        | 127 ++
+.claude/skills/open-post-pr/SKILL.md         |  66 ++
+.claude/skills/propose-topics/SKILL.md       |  72 ++
+.claude/skills/translate-post/SKILL.md       |  64 ++
+.claude/skills/verify-post/SKILL.md          |  94 ++
+scripts/fix-integrity.ts                     | 126 ++
+scripts/verify-post-render.sh                | 110 ++
+src/lib/post-integrity.test.ts               | 185 ++
+src/lib/post-integrity.ts                    | 228 ++
+```
+
+The five skills are five separate steps, each with a clearly described input and output, not one large prompt like "write me a blog post and everything around it":
+
+1. **propose-topics.** Reads `git log` and frontmatter of existing posts, and either proposes 3 to 5 topics anchored in real repository activity or honestly says there's nothing to write about this week. This post came from here, as the first item on the list.
+2. **draft-post-pl.** Writes `pl.mdx` in my voice, imitating the latest published post, with a mandatory FAQ, Links section, and counterargument if the topic involves a decision.
+3. **translate-post.** Calls an existing `bun run translate:post` (Groq, `llama-3.3-70b-versatile`), then immediately runs a fixer on the freshly created file.
+4. **verify-post.** Goes through nine Definition of Done gates and blocks the PR if any of them fail.
+5. **open-post-pr.** Creates a branch `claude/post-<slug>`, commits logical pieces, and opens a PR to `dev`. It never merges.
+
+Each skill links to two common documents instead of repeating the same list five times: `definition-of-done.md` with nine DoD gates and `failure-modes.md` with six known failure modes. This isn't just for show; it's a deliberate decision: if something breaks, the fix goes to one place, not five separate files that need to be synchronized.
+
+## Why a Single Prompt Wasn't Enough
+
+This is the core issue, and this is where last night's research, at the cost of a week of rewriting the framework, suddenly became useful because I had a clear head to calculate instead of waving my hand again. Two failure modes from `failure-modes.md` are closed by code, not a prompt, because the prompt regularly lied:
+
+**F3, translating slugs.** The model translated words inside slugs, because they look like text to translate, but they're identifiers. A specific example from this repository's history: `/blog/de/proxmox-czesc-druga` changed to `/blog/de/proxmox-teil-zwei`, resulting in a clean 404. I told the prompt not to do this. It didn't help consistently.
+
+**F6, capital letters in frontmatter, detected yesterday during a full retest of the chain.** Groq sometimes reflects a prompt fragment with a reference block `TITLE:`, `DESCRIPTION:`, `DATE:` as actual output keys. Since `parseFrontmatter` in `src/lib/blog.ts` is case-sensitive, `metadata.title` becomes `undefined`, and `src/lib/related-posts.ts` calls `tokenize(metadata.title)` without protection during prerender. The effect: `undefined.toLowerCase()` crashes `bun run build` for the entire site, not just one post. One bad translation could block the entire deploy.
+
+So, I wrote `src/lib/post-integrity.ts`, a pure module without disk access, three functions one after another:
+
+```ts
+export function fixPostIntegrity(
+  canonicalSlug: string,
+  translatedContent: string,
+  options?: PostIntegrityOptions
+): PostIntegrityFixResult {
+  parseFrontmatter(translatedContent) // throws if frontmatter is missing
+
+  const slugResult = rewriteInternalSlugLinks(translatedContent, canonicalSlug, knownSlugs)
+  const caseResult = normalizeFrontmatterKeyCasing(slugResult.content)
+  const tagResult = reinsertCanonicalTags(caseResult.content, canonicalTags)
+
+  return { changed: fixes.length > 0, fixes, content: tagResult.content }
+}
+```
+
+`rewriteInternalSlugLinks` rewrites every link `](/blog/<lang>/<slug>)` whose slug isn't a known directory back to the canonical one. `normalizeFrontmatterKeyCasing` brings `TITLE:` down to `title:`, touching only the key name, leaving the value byte-for-byte the same. `reinsertCanonicalTags` appends or replaces the `tags` line if it disappeared or got messed up with other languages. The order inside matters: case normalization goes before tag handling, or `TAGS:` with messed-up casing would slip past tag checking. Plus, nine tests in `post-integrity.test.ts`, so these three functions have real coverage, not just my word.
+
+This is the difference between "I told the model not to do this" and "it physically can't be sent to PR". Prompts are as reliable as people after their third cup of coffee: they work until they don't, and then they crash quietly.
+
+## When a Single Prompt Is Enough
+
+Honestly, on the other side, because five skills don't mean everything has to be code. `propose-topics` and `draft-post-pl` remain pure prompts, and that's a deliberate decision, not laziness. Evaluating whether a commit from the last week is "worth a separate post" or if a sentence sounds like me, not generated text, are tasks that can't be closed in a regex. Deterministic code gets only two things that have one correct answer, programmatically verifiable: whether a slug exists as a directory and whether the `tags` line is identical in four languages. Everything that requires judgment stays a prompt with a hard gate at the end that verifies it. Deterministic code where there's one correct answer, prompt where evaluation, not counting, is needed, and neither pretends to be the other.
+
+## How This Post Really Came to Be
+
+And now, the ironic cherry on top that I promised at the beginning. `propose-topics` looked through `git log` from the last few days, saw commit `d10b1b1`, and proposed it to me as the first item on the list of topics, with a specific justification: five new skills plus a deterministic fixer had been added to the repository the day before. I replied "1". `draft-post-pl` read the latest published post to catch the rhythm, pulled real line numbers and real code from the same commit, and wrote what you're reading now. The same pipeline that you just read about produced the text that you're reading about it. It's not some grand recursive trick; it's just the natural effect of building a tool and using it immediately. However, I admit that when it hit me while writing, it made me a bit amused.
+
+## FAQ
+
+**Why five separate skills, not one large prompt for the whole process?**
+Because each step has a different input, a different output, and a different way of verification. One large prompt can't stop itself in the middle when translation breaks a section or loses a tag. Five separate steps with a hard gate between them can.
+
+**Does this pipeline generate anything automatically for production?**
+No. `open-post-pr` ends with opening a PR to `dev` and never merges or pushes to `dev` or `prod` directly. Publication is always a manual move; I read the PR and merge it myself.
+
+**What exactly does the deterministic fixer do that the prompt didn't do reliably?**
+It rewrites translated slugs back to canonical ones (F3), normalizes the casing of frontmatter keys like `TITLE:` to `title:` (F6), and reappends the missing `tags` line (F4). All of this is code in `src/lib/post-integrity.ts`, not another instruction in the prompt.
+
+**What happens if Groq exhausts its daily token limit during translation?**
+`translate-post` catches this specific error and, instead of waiting hours, translates the remaining languages with the model of the agent that's currently leading the session, still keeping the same DoD-4 and DoD-5 gates. At the end, I get a report on which languages went through Groq and which through this backup route.
+
+**How do you check that all four versions of the post actually render?**
+`scripts/verify-post-render.sh` does a build in the same session, starts a local server, and curls all four pages plus the OG image URL, checking for a real 200 status code, not just the absence of a build error.
+
+## Summary
+
+I finished with five skill files, one TypeScript module with nine tests, and one post that proves itself. Next time something breaks in this chain, I'll know exactly where: either in one of the two gates that code fixes or in one of the seven that hard-fail and wait for me.
+
+And honestly: I promised three days ago that I'd return to normal how-to posts about self-hosting. I broke that promise to write a post about a system that proposed breaking it, wrote it in my style, and would have verified it if it weren't waiting for my manual merge. The only difference between me three days ago and me now is that now I have a tool that at least ensures links don't break. Self-hosting returns next time. Unless something writes itself again.
+
+## Links
+
+- [Previous post, where I promised the end of the series on blogging and agents](/blog/en/why-i-didnt-rewrite-my-blog-to-a-new-framework)
+- [Post about hooks and skills in Claude Code, the starting point for this pipeline](/blog/en/how-to-setup-claude-code-hooks-skills)
+- [How LLaMA messed up my blog's slugs in translations, the root cause of F3](/blog/en/llm-translated-my-blog-and-broke-the-links)
+- [My own MCP server, through which I check traffic on the blog](/blog/en/how-to-build-mcp-server-for-analytics)
+- [Claude Code, skill documentation](https://docs.claude.com/en/docs/claude-code)
+- [Groq, provider of the translation model](https://groq.com)
