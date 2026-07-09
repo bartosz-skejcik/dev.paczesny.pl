@@ -1,0 +1,116 @@
+---
+title: "Zbudowałem sobie redakcyjny pipeline z pięciu skilli Claude Code"
+description: "Pięć skilli Claude Code złożonych w łańcuch zamiast jednego wielkiego promptu do pisania bloga. Plus deterministyczny fixer, bo prompty kłamią o slugach."
+date: 2026-07-09T12:00:00.000Z
+tags: claude-code, ai, agenty, skille, automatyzacja, blog, redakcja, workflow
+---
+
+## Wprowadzenie
+
+W poprzednim wpisie napisałem zdanie, które teraz brzmi jak żart: "na tym domykam serię o dłubaniu przy blogu i agentach, następnym razem wracam do normalnych how-to". To było trzy dni temu. Dziś siedzę i piszę kolejny wpis o dłubaniu przy blogu i agentach, tyle że tym razem sam ten wpis powstał w części dzięki temu, o czym pisze. Do tego jeszcze wrócę, bo to jest cała pointa tego tekstu, ale najpierw powód, czemu w ogóle złamałem obietnicę.
+
+Miałem dość ręcznego pisania postów. Nie samego pisania, tego lubię, tylko tego co dookoła: tłumaczenie na trzy języki, pilnowanie żeby linki w tłumaczeniach wskazywały na prawdziwe slugi, sprawdzanie czy `tags` nie zniknęły po drodze, budowanie strony i klikanie po czterech wersjach jednego posta, żeby sprawdzić czy się w ogóle renderują. Za każdym razem robiłem to ręcznie i za każdym razem coś umykało. Więc zamiast pisać kolejnego posta, spędziłem dwa dni pisząc coś, co ma pisać posty za mnie. Ironiczne już na starcie, ale spokojnie, będzie gorzej.
+
+Dostaniesz trzy rzeczy:
+
+1. **jak wygląda pięć skilli** złożonych w łańcuch, z prawdziwymi liczbami linii z tego commita,
+2. **czemu sam prompt nie wystarczył** i musiałem dopisać deterministyczny kod, który poprawia to, co model kłamie,
+3. **jak ten konkretny wpis powstał**, bo to jest najlepszy dowód na to, czy pipeline działa, czy tylko ładnie wygląda w README.
+
+## Co właściwie skleiłem
+
+Commit `d10b1b1` (#6, wczoraj) dorzucił do repo pięć plików `.claude/skills/*/SKILL.md`, dwa dokumenty referencyjne pod `_shared/`, jeden moduł TypeScript z testami i skrypt bashowy do sprawdzania renderu. W liczbach:
+
+```
+.claude/skills/_shared/definition-of-done.md |  27 ++
+.claude/skills/_shared/failure-modes.md      |  65 ++
+.claude/skills/draft-post-pl/SKILL.md        | 127 ++
+.claude/skills/open-post-pr/SKILL.md         |  66 ++
+.claude/skills/propose-topics/SKILL.md       |  72 ++
+.claude/skills/translate-post/SKILL.md       |  64 ++
+.claude/skills/verify-post/SKILL.md          |  94 ++
+scripts/fix-integrity.ts                     | 126 ++
+scripts/verify-post-render.sh                | 110 ++
+src/lib/post-integrity.test.ts               | 185 ++
+src/lib/post-integrity.ts                    | 228 ++
+```
+
+Pięć skilli to pięć osobnych kroków, każdy z jasno opisanym wejściem i wyjściem, a nie jeden wielki prompt typu "napisz mi wpis na bloga i wszystko dookoła":
+
+1. **propose-topics.** Czyta `git log` i frontmatter istniejących postów, i albo proponuje 3 do 5 tematów zakotwiczonych w realnej aktywności repo, albo uczciwie mówi, że w tym tygodniu nie ma o czym pisać. Ten wpis właśnie stąd wyszedł, jako pozycja numer jeden na liście.
+2. **draft-post-pl.** Pisze `pl.mdx` w moim głosie, naśladując najnowszy opublikowany post, z obowiązkowym FAQ, sekcją Linki i kontrargumentem, jeśli temat niesie jakąś decyzję.
+3. **translate-post.** Woła istniejący `bun run translate:post` (Groq, `llama-3.3-70b-versatile`), po czym od razu odpala fixer integralności na świeżo powstałym pliku.
+4. **verify-post.** Przejeżdża przez dziewięć bramek Definition of Done i blokuje PR, jeśli którakolwiek nie przejdzie.
+5. **open-post-pr.** Zakłada branch `claude/post-<slug>`, commituje logicznymi kawałkami i otwiera PR do `dev`. Nigdy nie mergeuje.
+
+Każdy skill linkuje do dwóch wspólnych dokumentów zamiast powtarzać tę samą listę pięć razy: `definition-of-done.md` z dziewięcioma bramkami DoD-1 do DoD-9 i `failure-modes.md` z sześcioma znanymi trybami awarii, F1 do F6. To nie jest ozdobnik, tylko konkretna decyzja: jak coś się kiedyś popsuje, poprawka trafia w jedno miejsce, a nie w pięć osobnych plików, które trzeba pamiętać zsynchronizować.
+
+## Czemu sam prompt nie wystarczył
+
+Tu jest sedno, i tu poprzedni wieczór research kosztem tygodnia przepisywania frameworka nagle się przydał, bo miałem jasną głowę żeby to policzyć zamiast znowu machnąć ręką. Dwa tryby awarii z `failure-modes.md` są zamknięte kodem, nie promptem, bo sam prompt regularnie kłamał:
+
+**F3, tłumaczenie sluga.** Model tłumaczył słowa wewnątrz slugów URL, bo wyglądają jak tekst do przetłumaczenia, a są identyfikatorem. Konkretny przykład z historii tego repo: `/blog/de/proxmox-czesc-druga` zmieniało się w `/blog/de/proxmox-teil-zwei`, co dawało czyste 404. Kazałem promptowi tego nie robić. Nie pomogło konsekwentnie.
+
+**F6, wielkie litery we frontmatterze, wykryte wczoraj podczas pełnego retestu łańcucha.** Groq czasem odbija fragment promptu z referencyjnym blokiem `TITLE:`, `DESCRIPTION:`, `DATE:` jako właściwe klucze wyjścia. Ponieważ `parseFrontmatter` w `src/lib/blog.ts` jest case sensitive, `metadata.title` staje się `undefined`, a `src/lib/related-posts.ts` woła `tokenize(metadata.title)` bez zabezpieczenia w trakcie prerenderu. Efekt: `undefined.toLowerCase()` wywala `bun run build` dla całej strony, nie dla jednego posta. Jedno kiepskie tłumaczenie mogło zablokować cały deploy.
+
+Więc napisałem `src/lib/post-integrity.ts`, czysty moduł bez dostępu do dysku, trzy funkcje jedna po drugiej:
+
+```ts
+export function fixPostIntegrity(
+  canonicalSlug: string,
+  translatedContent: string,
+  options?: PostIntegrityOptions
+): PostIntegrityFixResult {
+  parseFrontmatter(translatedContent) // rzuca na brak frontmatteru
+
+  const slugResult = rewriteInternalSlugLinks(translatedContent, canonicalSlug, knownSlugs)
+  const caseResult = normalizeFrontmatterKeyCasing(slugResult.content)
+  const tagResult = reinsertCanonicalTags(caseResult.content, canonicalTags)
+
+  return { changed: fixes.length > 0, fixes, content: tagResult.content }
+}
+```
+
+`rewriteInternalSlugLinks` przepisuje każdy link `](/blog/<lang>/<slug>)`, którego slug nie jest znanym katalogiem, z powrotem na kanoniczny. `normalizeFrontmatterKeyCasing` sprowadza `TITLE:` do `title:`, dotykając wyłącznie nazwy klucza, wartość zostaje bajt w bajt taka sama. `reinsertCanonicalTags` dokleja albo podmienia linię `tags`, jeśli zniknęła lub się rozjechała z resztą języków. Kolejność w środku ma znaczenie: normalizacja wielkości liter idzie przed obsługą tagów, bo inaczej `TAGS:` z rozjechaną wielkością liter przeleciałoby obok sprawdzenia tagów niezauważone. Do tego dziewięć testów w `post-integrity.test.ts`, więc te trzy funkcje mają realne pokrycie, a nie tylko moje słowo.
+
+To jest różnica między "kazałem modelowi żeby tego nie robił" a "fizycznie nie da się tego wysłać do PR-a". Prompty są niezawodne mniej więcej tak samo jak ludzie po trzeciej kawie: działają, dopóki nie działają, a wtedy walą się cicho.
+
+## Kiedy sam prompt jednak wystarcza
+
+Uczciwie w drugą stronę, bo pięć skilli nie znaczy, że wszystko musi być kodem. `propose-topics` i `draft-post-pl` zostają czystym promptem, i to jest świadoma decyzja, nie lenistwo. Ocena, czy commit z ostatniego tygodnia jest "wart osobnego wpisu", albo czy zdanie brzmi jak ja, a nie jak wygenerowany tekst, to zadania, których nie da się zamknąć w regexie. Kod deterministyczny dostają wyłącznie dwie rzeczy, które mają jedną poprawną odpowiedź, sprawdzalną programowo: czy slug istnieje jako katalog i czy linia `tags` jest identyczna w czterech językach. Wszystko, co wymaga osądu, zostaje promptem z twardą bramką na końcu, która go weryfikuje. Deterministyczny kod tam, gdzie jest jedna poprawna odpowiedź, prompt tam, gdzie trzeba ocenić, a nie policzyć, i żadne z tych dwóch nie udaje drugiego.
+
+## Jak ten wpis naprawdę powstał
+
+A teraz ta ironiczna wisienka, którą obiecałem na początku. `propose-topics` przejrzał git log z ostatnich dni, zobaczył commit `d10b1b1` i zaproponował mi go jako pozycję numer jeden na liście tematów, z konkretnym uzasadnieniem: pięć nowych skilli plus deterministyczny fixer trafiły do repo dzień wcześniej. Odpisałem "1". `draft-post-pl` przeczytał najnowszy opublikowany wpis, żeby złapać rytm, wyciągnął prawdziwe liczby linii i prawdziwy kod z tego samego commita, i napisał to, co teraz czytasz. Ten sam pipeline, o którym właśnie przeczytałeś, wyprodukował tekst, który o nim czytasz. Nie jest to jakaś wielka rekurencyjna sztuczka, po prostu naturalny efekt tego, że zbudowałem narzędzie i od razu go użyłem, ale przyznaję, że kiedy to do mnie dotarło w trakcie pisania, zrobiło mi się trochę śmiesznie.
+
+## FAQ
+
+**Czemu pięć osobnych skilli, a nie jeden wielki prompt na cały proces?**
+Bo każdy krok ma inne wejście, inne wyjście i inny sposób weryfikacji. Jeden wielki prompt nie potrafi w środku sam siebie zatrzymać, kiedy tłumaczenie urwie sekcję albo zgubi tag. Pięć osobnych kroków z twardą bramką między nimi potrafi.
+
+**Czy te skille cokolwiek generują automatycznie na produkcję?**
+Nie. `open-post-pr` kończy na otwarciu PR-a do `dev` i nigdy nie mergeuje ani nie pushuje do `dev` czy `prod` bezpośrednio. Publikacja to zawsze ręczny ruch, ja czytam PR i sam go mergeuję.
+
+**Co konkretnie robi deterministyczny fixer, czego prompt nie robił niezawodnie?**
+Przepisuje przetłumaczone slugi z powrotem na kanoniczne (F3), normalizuje wielkość liter kluczy frontmattera jak `TITLE:` na `title:` (F6) i dokleja z powrotem brakującą linię `tags` (F4). Wszystko to kod w `src/lib/post-integrity.ts`, nie kolejna instrukcja w prompcie.
+
+**Co się dzieje, jak Groq wyczerpie dzienny limit tokenów w trakcie tłumaczenia?**
+`translate-post` łapie ten konkretny błąd i zamiast czekać godzinami, tłumaczy pozostałe języki modelem agenta, który akurat prowadzi sesję, cały czas pilnując tych samych bramek DoD-4 i DoD-5. Na końcu dostaję raport, które języki poszły przez Groqa, a które przez ten zapasowy tor.
+
+**Jak sprawdzasz, że wszystkie cztery wersje posta w ogóle się renderują?**
+`scripts/verify-post-render.sh` robi build w tej samej sesji, odpala lokalny serwer i curl-uje wszystkie cztery strony plus URL obrazka OG, sprawdzając realny kod 200, a nie tylko brak błędu przy buildzie.
+
+## Podsumowanie
+
+Skończyłem z pięcioma plikami skilli, jednym modułem TypeScript z dziewięcioma testami i jednym wpisem, który sam siebie udowadnia. Następnym razem, jak coś w tym łańcuchu się posypie, będę wiedział dokładnie gdzie: albo w jednej z dwóch bramek, które naprawia kod, albo w jednej z siedmiu, które twardo failują i czekają na mnie.
+
+I teraz uczciwie: obiecałem trzy dni temu, że wracam do normalnych how-to o self-hostingu. Złamałem tę obietnicę, żeby napisać wpis o systemie, który sam zaproponował mi jej złamanie, sam go napisał w moim stylu i sam by go zweryfikował, gdyby akurat nie czekał teraz na mój ręczny merge. Jedyna różnica między mną sprzed trzech dni a mną teraz jest taka, że tym razem mam narzędzie, które przynajmniej dopilnuje, żeby linki się nie posypały. Self-hosting wraca następnym razem. Chyba że coś znowu mi się dopisze samo.
+
+## Linki
+
+- [Poprzedni wpis, w którym obiecałem koniec serii o blogu i agentach](/blog/pl/why-i-didnt-rewrite-my-blog-to-a-new-framework)
+- [Wpis o hookach i skillach w Claude Code, punkt wyjścia do tego pipeline'u](/blog/pl/how-to-setup-claude-code-hooks-skills)
+- [Jak llama pomieszała mi slugi w tłumaczeniach, czyli praprzyczyna F3](/blog/pl/llm-translated-my-blog-and-broke-the-links)
+- [Własny serwer MCP, przez który sprawdzam ruch na blogu](/blog/pl/how-to-build-mcp-server-for-analytics)
+- [Claude Code, dokumentacja skilli](https://docs.claude.com/en/docs/claude-code)
+- [Groq, dostawca modelu tłumaczącego](https://groq.com)
