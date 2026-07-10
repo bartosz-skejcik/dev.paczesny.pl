@@ -68,7 +68,26 @@ without his explicit OK (Repo B `CLAUDE.md`).
    gh pr create --base dev --head claude/post-<slug> --title "post: <title>" --body-file <body>
    ```
 
-5. Prepare the Slack summary content: the PR link, the tl;dr, and the DoD summary. This skill produces
+5. Compute and attach the live preview URL. The instant the PR is created and its number `N` is known,
+   compute the deterministic Coolify preview URL, with no API call and no build wait:
+   `https://preview-N.dev.paczesny.pl`. This matches Coolify's `preview-{{pr_id}}.dev.paczesny.pl`
+   template, where `pr_id` is the PR number. GitHub assigns the PR number at creation time and it cannot
+   be reliably pre-computed (a concurrent PR could take the next number), so this step runs AFTER the PR
+   opens, never in the step-2 body.
+
+   Append a single line of the exact form to the PR body via one follow-up edit, using the built-in GitHub
+   PR tool's body-edit capability, or `gh pr edit N --body-file <updated-body>` as the fallback:
+
+   ```
+   Live preview: https://preview-N.dev.paczesny.pl
+   ```
+
+   Do not poll Coolify or wait for the preview build. The URL is deterministic and the build is
+   asynchronous.
+
+6. Prepare the Slack summary content: the PR link, the live preview link
+   (`Live preview: https://preview-N.dev.paczesny.pl`), the tl;dr, and the DoD summary, as structured
+   output fields so Routine B can render the preview link in its Slack notification. This skill produces
    that content as structured output only. It does NOT call a Slack webhook: none exists in Repo B, and
    actual Slack delivery is a routine concern (Phase 2 or 3), not this skill's job.
 
@@ -82,4 +101,5 @@ without his explicit OK (Repo B `CLAUDE.md`).
 
 ## Output
 
-The open PR to `dev` and the prepared Slack summary content (PR link, tl;dr, DoD summary).
+The open PR to `dev` (with a `Live preview` link in the body) and the prepared Slack summary content (PR
+link, live preview link, tl;dr, DoD summary).
