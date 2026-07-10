@@ -32,14 +32,8 @@ without his explicit OK (Repo B `CLAUDE.md`).
    One commit per logical unit: the draft, the translations, and any integrity fixes. Only the branch is
    pushed, and only a `claude/`-prefixed branch. Never `dev`, never `prod`.
 
-2. Open the PR against `dev`. There is no `.github` PR template in this repo, so construct the full body
-   yourself:
-
-   ```bash
-   gh pr create --base dev --head claude/post-<slug> --title "post: <title>" --body-file <body>
-   ```
-
-   The PR body must carry, in this order:
+2. Construct the full PR body into a file (`<body>`). There is no `.github` PR template in this repo, so
+   write the whole thing yourself. The body must carry, in this order:
    - **tl;dr:** one or two lines on what the post is.
    - **DoD checklist:** every gate with pass or fail, taken verbatim from the verify-post report.
    - **Internal links added:** the list of internal `/blog/<lang>/<slug>` links the post introduces.
@@ -51,7 +45,30 @@ without his explicit OK (Repo B `CLAUDE.md`).
      OG images by eye and compares them against the recent posts, so give him the links to glance at how
      each card actually looks, not just a pass line.
 
-3. Prepare the Slack summary content: the PR link, the tl;dr, and the DoD summary. This skill produces
+3. Run the deterministic em dash guard over the body file BEFORE opening the PR. DoD-1 forbids em dashes
+   (U+2014) everywhere, but verify-post's DoD-1 scan only reads the four content `.mdx` files, never this
+   generated body, and a generated PR body once shipped 13 em dashes past clean content files. Prompts do
+   not reliably keep them out, so the guard is code, not a reminder:
+
+   ```bash
+   bun run fix:em-dash --file <body>   # strips every U+2014, replacing each with a comma
+   ```
+
+   After this runs the body file is guaranteed to contain zero U+2014. Never open the PR from an
+   unguarded body.
+
+4. Open the PR against `dev` using the built-in GitHub PR tool. This is how the skill actually fires: the
+   last live runs opened the PR through the harness's built-in GitHub integration, not the `gh` CLI. Give
+   it base `dev`, head `claude/post-<slug>`, title `post: <title>`, and the guarded `<body>` file from
+   steps 2 and 3 as the PR body.
+
+   Fallback, only when the environment exposes no built-in GitHub tool: the `gh` CLI does the same thing.
+
+   ```bash
+   gh pr create --base dev --head claude/post-<slug> --title "post: <title>" --body-file <body>
+   ```
+
+5. Prepare the Slack summary content: the PR link, the tl;dr, and the DoD summary. This skill produces
    that content as structured output only. It does NOT call a Slack webhook: none exists in Repo B, and
    actual Slack delivery is a routine concern (Phase 2 or 3), not this skill's job.
 
@@ -60,6 +77,8 @@ without his explicit OK (Repo B `CLAUDE.md`).
 - Never merge the PR. Only Bartek merges.
 - Never push to `dev` or `prod`, directly or via the PR. Only the `claude/post-<slug>` branch is pushed.
 - The human publish gate is mandatory. The PR targets `dev` and stops there.
+- The PR body must pass the em dash guard (`bun run fix:em-dash --file <body>`) before the PR opens. A
+  body carrying U+2014 must never reach GitHub, even when the four content files are clean.
 
 ## Output
 
