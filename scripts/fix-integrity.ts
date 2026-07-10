@@ -1,4 +1,5 @@
 import fs from "fs"
+import path from "path"
 import { CANONICAL_LANG, SUPPORTED_LANGS, type SupportedLang } from "@/lib/i18n"
 import { getPostFilePath, getPostSlugs, parseFrontmatter } from "@/lib/blog"
 import { fixPostIntegrity } from "@/lib/post-integrity"
@@ -100,6 +101,12 @@ function main() {
   const result = fixPostIntegrity(parsedSlug, targetContent, {
     knownSlugs,
     canonicalTags,
+    // Resolve a coverImage value the same way the app does (public/ rooted), so a
+    // dangling cover is stripped in favor of the dynamic OG. File I/O stays here.
+    coverImageAssetExists: (assetPath) =>
+      fs.existsSync(
+        path.join(process.cwd(), "public", assetPath.replace(/^\//, ""))
+      ),
   })
 
   if (!result.changed) {

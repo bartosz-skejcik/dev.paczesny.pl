@@ -182,4 +182,150 @@ describe("fixPostIntegrity", () => {
       result.fixes.filter((fix) => fix.startsWith("frontmatter"))
     ).toHaveLength(0)
   })
+
+  it("strips stray YAML list continuations left under a canonical tags line", () => {
+    const content = [
+      "---",
+      "title: Skille",
+      "description: desc",
+      "date: 2026-07-08T12:00:00.000Z",
+      "tags: nextjs, proxmox, selfhosting",
+      "- nextjs",
+      "- proxmox",
+      "- selfhosting",
+      "---",
+      "",
+      "Body [self](/blog/de/proxmox-czesc-druga).",
+      "",
+    ].join("\n")
+
+    const result = fixPostIntegrity("proxmox-czesc-druga", content, {
+      knownSlugs: ["proxmox-czesc-druga"],
+      canonicalTags: ["nextjs", "proxmox", "selfhosting"],
+    })
+
+    expect(result.changed).toBe(true)
+    // The canonical scalar tags line survives.
+    expect(result.content).toContain("tags: nextjs, proxmox, selfhosting")
+    // Every dangling list continuation is gone.
+    expect(result.content).not.toMatch(/^- nextjs$/m)
+    expect(result.content).not.toMatch(/^- proxmox$/m)
+    expect(result.content).not.toMatch(/^- selfhosting$/m)
+    // The body self-link is untouched.
+    expect(result.content).toContain("](/blog/de/proxmox-czesc-druga)")
+
+    const frontmatterFixes = result.fixes.filter((fix) =>
+      fix.startsWith("frontmatter")
+    )
+    expect(frontmatterFixes).toHaveLength(3)
+  })
+
+  it("removes an empty coverImage line", () => {
+    const content = [
+      "---",
+      "title: T",
+      "description: desc",
+      "date: 2026-07-08T12:00:00.000Z",
+      "tags: nextjs, proxmox",
+      "coverImage:",
+      "---",
+      "",
+      "Body [self](/blog/de/proxmox-czesc-druga).",
+      "",
+    ].join("\n")
+
+    const result = fixPostIntegrity("proxmox-czesc-druga", content, {
+      knownSlugs: ["proxmox-czesc-druga"],
+      canonicalTags: ["nextjs", "proxmox"],
+      // An empty coverImage is stripped unconditionally, even if the predicate
+      // would happily accept any asset.
+      coverImageAssetExists: () => true,
+    })
+
+    expect(result.changed).toBe(true)
+    expect(result.content).not.toContain("coverImage")
+    expect(result.fixes).toContain(
+      "frontmatter: removed empty coverImage line"
+    )
+  })
+
+  it("leaves a coverImage that points at a real asset untouched", () => {
+    const content = [
+      "---",
+      "title: T",
+      "description: desc",
+      "date: 2026-07-08T12:00:00.000Z",
+      "tags: nextjs, proxmox",
+      "coverImage: /assets/images/real.png",
+      "---",
+      "",
+      "Body [self](/blog/de/proxmox-czesc-druga).",
+      "",
+    ].join("\n")
+
+    const result = fixPostIntegrity("proxmox-czesc-druga", content, {
+      knownSlugs: ["proxmox-czesc-druga"],
+      canonicalTags: ["nextjs", "proxmox"],
+      coverImageAssetExists: (assetPath) =>
+        assetPath === "/assets/images/real.png",
+    })
+
+    expect(result.changed).toBe(false)
+    expect(result.content).toBe(content)
+    expect(result.content).toContain("coverImage: /assets/images/real.png")
+  })
+
+  it("removes a coverImage that points at a missing asset", () => {
+    const content = [
+      "---",
+      "title: T",
+      "description: desc",
+      "date: 2026-07-08T12:00:00.000Z",
+      "tags: nextjs, proxmox",
+      "coverImage: /assets/images/ghost.png",
+      "---",
+      "",
+      "Body [self](/blog/de/proxmox-czesc-druga).",
+      "",
+    ].join("\n")
+
+    const result = fixPostIntegrity("proxmox-czesc-druga", content, {
+      knownSlugs: ["proxmox-czesc-druga"],
+      canonicalTags: ["nextjs", "proxmox"],
+      // Only the real asset exists, so the ghost cover is dropped.
+      coverImageAssetExists: (assetPath) =>
+        assetPath === "/assets/images/real.png",
+    })
+
+    expect(result.changed).toBe(true)
+    expect(result.content).not.toContain("coverImage")
+    expect(result.fixes).toContain(
+      "frontmatter: removed coverImage line pointing at missing asset /assets/images/ghost.png"
+    )
+  })
+
+  it("is a no-op on a file with no continuation or coverImage defect", () => {
+    const content = [
+      "---",
+      "title: Fine",
+      "description: Fine description",
+      "date: 2026-07-08T12:00:00.000Z",
+      "tags: nextjs, proxmox",
+      "coverImage: /assets/images/real.png",
+      "---",
+      "",
+      "Body [self](/blog/de/proxmox-czesc-druga).",
+      "",
+    ].join("\n")
+
+    const result = fixPostIntegrity("proxmox-czesc-druga", content, {
+      knownSlugs: ["proxmox-czesc-druga"],
+      canonicalTags: ["nextjs", "proxmox"],
+      coverImageAssetExists: () => true,
+    })
+
+    expect(result.changed).toBe(false)
+    expect(result.fixes).toEqual([])
+    expect(result.content).toBe(content)
+  })
 })

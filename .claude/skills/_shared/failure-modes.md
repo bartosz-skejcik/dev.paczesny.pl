@@ -1,8 +1,8 @@
 # Known failure modes and required mitigations
 
 Learned the hard way during the manual dry run. The system must handle all of them. The five blog
-skills link here by name instead of repeating the list. F3 and F4 are closed by deterministic code:
-`src/lib/post-integrity.ts`, invoked via `bun run fix:post-integrity --slug <slug> --lang <lang>`.
+skills link here by name instead of repeating the list. F3, F4, F6, and F7 are closed by deterministic
+code: `src/lib/post-integrity.ts`, invoked via `bun run fix:post-integrity --slug <slug> --lang <lang>`.
 
 ## F1. Groq daily token cap (TPD 100000 per day)
 
@@ -63,3 +63,20 @@ any case variant of a known frontmatter key back to its canonical lowercase form
 untouched), run via `bun run fix:post-integrity`. Since `translate-post` already mandates the fixer after
 every translation, the crashing case can no longer reach the build. Prompts are unreliable for this at
 temperature 0.2, so the guard is code, not prose.
+
+## F7. Stray tags list continuations and dangling coverImage
+
+Seen twice in production and both times fixed by hand during verification (the PRs that produced
+`i-made-my-blog-nag-me-on-slack` and `five-claude-code-skills-blog-pipeline`), never by the fixer. A
+translation left a leftover YAML list under the tags line, a `- claude-code` / `- blog` block from a prior
+malformed tags block, after the tags line itself was already a canonical scalar. Separately, a
+hallucinated `coverImage` pointed at an empty value or a file that does not exist. The dangling list
+corrupts the frontmatter shape, and a bogus `coverImage` overrides the dynamic per topic OG with a broken
+cover (DoD-6).
+
+Mitigation: the deterministic step `stripStrayFrontmatterContinuations` in `src/lib/post-integrity.ts`
+removes any `- ` list line immediately under a scalar tags line, and removes a `coverImage` line whose
+value is empty or whose asset does not exist. Existence is resolved by the CLI (`public/` rooted, the same
+way the app resolves image paths), so the library itself stays filesystem free. It runs last in
+`fixPostIntegrity`, after tags has been canonicalized so any list below it is unambiguously stray, and is
+invoked via `bun run fix:post-integrity`. Prompts are unreliable here, so the guard is code, not prose.
