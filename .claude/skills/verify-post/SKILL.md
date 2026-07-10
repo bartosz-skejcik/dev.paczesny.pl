@@ -34,6 +34,10 @@ The `slug`. The four post files live at `content/posts/<slug>/{pl,en,de,fr}.mdx`
 
 DoD-9 (post-deploy sitemap) is Phase D and is NOT run here.
 
+The DoD-1 em dash scan here covers the four content `.mdx` files only. The PR body that `open-post-pr`
+later generates is a separate surface, guarded there by its own deterministic em dash pass
+(`bun run fix:em-dash`), because clean content files do not guarantee a clean PR body.
+
 ## DoD-3 also compares section headers, not just word count
 
 The word-count ratio is not enough. On a long post the translator can silently drop a whole trailing

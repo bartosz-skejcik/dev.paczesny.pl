@@ -10,6 +10,7 @@
     "translate:top": "tsx scripts/pretranslate.ts",
     "translate:post": "tsx scripts/translate.ts",
     "fix:post-integrity": "tsx scripts/fix-integrity.ts",
+    "fix:em-dash": "tsx scripts/strip-em-dashes.ts",
     "describe:post": "tsx scripts/describe.ts",
     "test": "vitest run"
   },
