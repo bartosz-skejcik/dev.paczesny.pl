@@ -283,6 +283,8 @@ instead. Never quote a secret to prove a point.
 The honesty section is not optional. It is what keeps a grounded draft from turning a "we planned to" into a
 "we did".
 
+Before emitting anything, scan every dossier body and every candidate field you wrote for the em dash character. If you find one outside a verbatim quote, rewrite that sentence with a comma, colon or period. If a verbatim quote itself contains one, replace it with a comma inside the quote. The no em dash rule is absolute for these files: they are committed to a repo whose hard rules forbid it.
+
 ## 6. Output
 
 You return three blocks and nothing else. The routine turns block CANDIDATES into the Slack card, commits each
