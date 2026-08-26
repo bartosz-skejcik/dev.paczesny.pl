@@ -1,0 +1,108 @@
+---
+title: "Canary Test: Checking Whether My Blog Robot Can Hand Itself Its Own Evidence"
+description: "A test post (do not merge) checking whether a planning dossier survives the trip through Slack into the post generator without getting lost."
+date: 2026-08-26T12:00:00.000Z
+tags: automatyzacja, slack, ai, pipeline, testy, meta, robot pisze o sobie
+---
+
+## Introduction
+
+Heads up, this is a test post. The title has "zzz-test-tracer do not merge" in it on purpose, because this text isn't headed to production. It exists to prove one thing: that my post-writing automation can hand itself evidence before it starts writing.
+
+Quick context. I have a pipeline that generates topic proposals for this blog every week, posts them to Slack as cards with buttons, I click a candidate or type my own topic, and that kicks off a session that writes the whole post: the Polish original, translations, the site build, a PR. This post you're reading right now came from a manually fired, custom trigger, not from the candidate list, so no number-picking magic ran here, just raw topic text going straight to the robot.
+
+You'll get three things:
+
+1. **what exactly I'm testing** with this post and why now,
+2. **what evidence I got from Phase 7**, the earlier stage of this same build, that I'm leaning on,
+3. **what this test does NOT prove yet**, because honesty demands saying that outright before anyone assumes everything already works.
+
+## What I'm Actually Testing
+
+The last stage of this pipeline, Phase 7, shipped the Slack card-clicking mechanism: candidate, Skip, custom topic, all live against the deployed relay at `relay.blonie.cloud`. But it left an open thread for the next phase: does the button's value, including a tacked-on `dossier: <path>` line, actually make it intact through the whole chain to the generator, or does it get lost somewhere along the way.
+
+So this specific production session got exactly this text as input:
+
+```
+zzz-test-tracer do not merge: dossier pipe check
+dossier: ideation/2026-W35/0-tracer-dossier-pipe.md
+```
+
+Step zero of my production instructions says: if the last line of the input matches the pattern `dossier: <path>`, cut it off, validate it against a regex, and if it passes, fetch the file through the GitHub Contents API on the relay, because `api.github.com` isn't directly reachable from this sandbox. The fetch worked, HTTP 200, 5336 bytes, the file's first heading was `Dossier pipe tracer: TRACER-CANARY-0801`. That's evidence number one for this post: that line at the top of the file you're reading right now is already a partial success for the test.
+
+## Evidence from Phase 7 the Dossier Handed Me
+
+Instead of inventing content, I got a ready-made dossier with quotes from a real run and real code. Here's what's in it, verbatim.
+
+All four Phase 7 requirements were proven live against the deployed relay:
+
+> "All four Phase 7 requirements (SLACK-03/04/05/06) proven live against the deployed relay.blonie.cloud: a real Run-now posted the locked Block Kit card, a candidate/Skip/custom-topic click each produced the correct in-place message edit and Routine B session count, and the mandatory double-click dry run, executed as two rapid byte-identical signed deliveries since the week's card had no candidate buttons, confirmed the dedupe guard holds under real concurrent delivery."
+
+That bit about the "double-click dry run" needs unpacking, because it sounds like something that explains itself and doesn't. That week's Slack card had no candidate buttons at all, so there was nothing to physically click twice. Instead the dossier describes two identical, signed requests hitting the same endpoint in quick succession:
+
+> "Both curls were run at 14:40:59Z and 14:41:04Z; both returned HTTP/2 200 (ack) but exactly one Routine B session was created (cse_01Wameg5aWEMx2AWqkH2WKeN at 14:41:00.7Z); the relay log shows one expected channel_not_found chat.update failure (the fake test channel) with the fire still happening, and nothing for the second request (dropped by the dedupe guard before any await)."
+
+One session out of two identical requests, that's exactly the proof that the dedupe guard (`tryClaim`, a synchronous check-and-set before any `await`) works. Phase 7's plan says it plainly: this isn't a weaker version of the proof, it's an equivalent proof to the physical click, because both cases are two deliveries sharing the same dedupe key hitting the same code path.
+
+## The Code That Holds This Together
+
+The dossier also quotes the exact spot in the relay's code that my dangling `dossier: <path>` actually travels through, with no change required for this phase:
+
+```
+// slack-relay/src/index.ts
+const topic = action.value;
+
+// slack-relay/src/fire.ts
+export async function fireRoutineB(pickText: string): Promise<void> {
+  ...
+  body: JSON.stringify({ text: pickText }),
+```
+
+A button or modal value lands in `action.value`, then in `pickText`, then straight into the `/fire` request body. No modification, no parsing along the way. That's why tacking on a `dossier: <path>` line at the end of the input could work at all: it rides a tunnel that already existed for carrying plain topic text.
+
+The only code change in all of Phase 7 wasn't even in this repo, it was in the sibling `slack-relay` repo, commit `2c24ab0`: the test script `sign-test-payload.ts` got a `--double-click` mode for sending two identical signed requests, plus a fix for a stale `action_id: "pick_candidate"` to the real contract, `pick_candidate_N`. Without that fix the equivalent proof couldn't even start, because the script would have sent a request the relay wouldn't recognize.
+
+## What This Test Does NOT Prove Yet
+
+I have to be honest here, because the dossier itself explicitly flags this as something the post can't claim beyond what it's earned. Proof for the dossier pipe isn't something I had before writing this post, it's something happening right now, while it's being written. This post is that proof, not a report about proof that already existed earlier.
+
+Three things I'm deliberately NOT stating as fact:
+
+- That the double-click from Phase 7 was a literal, two-times click on a Slack button. It wasn't, because that week's card had no candidate buttons. It was an equivalent proof via two raw HTTP requests, consciously accepted, not quietly substituted as the same thing.
+- That the relay got any dispatch-logic change during Phase 7. It didn't. The only code change went into a test script in the sibling repo.
+- That any token, `GH_TOOLKIT_TOKEN`, `FIRE_BEARER_TOKEN`, or `SLACK_BOT_TOKEN`, ever showed up in a commit, a run log, or this dossier. Those values live only as environment variables in the claude.ai panel, nowhere else.
+
+## When a Test Tracer Like This Actually Makes Sense
+
+Fair the other way too: writing a whole separate, one-off post just to test a data pipe sounds like overkill. I'd be right about that if this were a unit test for something you could reasonably mock.
+
+The problem is that this particular pipe can't be meaningfully mocked, because it runs through real Slack, a real relay, the real GitHub Contents API, and a real production session, four different systems that need to be seen working together, live, not in isolation. An end-to-end test on the production path, clearly labeled "do not merge", is cheaper than building a separate test environment for four services at once. Hence this post, which marks itself in the title as something meant to stay on a branch, not land on the blog.
+
+## Summary
+
+The irony of this post is that I wrote a whole piece about how my automation proves itself, and now that same automation has to verify itself before anyone reads it. A test for whether the robot can reliably write about itself is at the same time a test for whether it can hold back from claiming a success it doesn't have yet. This post should never make it to production. If you're reading this on the live blog, that means someone forgot to keep it on a branch, not that the test passed.
+
+## FAQ
+
+**Is this an actual blog post?**
+No. It's a test post, marked "do not merge" in the title, generated to check whether a planning dossier actually makes it through Slack and the GitHub Contents API to the post generator.
+
+**What is this "dossier" thing?**
+A markdown planning file in the repo, `ideation/2026-W35/0-tracer-dossier-pipe.md`, with quotes, code excerpts, and hard constraints on what the post can't claim. It was meant to serve as source material instead of inventing content from scratch.
+
+**Why a dossier pipe check instead of a normal topic from the candidate list?**
+This run started from a manually typed, custom trigger, not from a clicked number off the weekly proposal list. So the whole topic text, including the `dossier: <path>` line, went through as one chunk of text.
+
+**Was the Phase 7 double-click an actual click in Slack?**
+No, and that's one of the things this post deliberately refuses to claim. That week's card had no candidate buttons, so the proof went through two identical, signed HTTP requests instead of a physical click.
+
+**Why test a pipeline with a whole post instead of a unit test?**
+Because this specific pipe runs through four real systems at once: Slack, the relay, the GitHub API, and a production session. Building a test environment that mocks all of that convincingly would cost more than one clearly labeled post on a branch that never merges into main.
+
+## Links
+
+- [How I set up Claude Code hooks and skills](/blog/en/how-to-setup-claude-code-hooks-skills)
+- [My own MCP server, through which the agent reads the blog's statistics](/blog/en/how-to-build-mcp-server-for-analytics)
+- [How llama scrambled my links in translations](/blog/en/llm-translated-my-blog-and-broke-the-links)
+- `.planning/phases/07-slack-block-kit-approval-ux/07-03-SUMMARY.md`, the source document for the Phase 7 evidence
+- `ideation/2026-W35/0-tracer-dossier-pipe.md`, the dossier this post's content came from

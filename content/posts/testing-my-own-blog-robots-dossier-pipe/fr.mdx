@@ -1,0 +1,108 @@
+---
+title: "Test canari : mon robot de blog peut-il se fournir ses propres preuves"
+description: "Un article de test (à ne pas merger) qui vérifie si un dossier de planification survit vraiment au trajet via Slack jusqu'au générateur d'articles."
+date: 2026-08-26T12:00:00.000Z
+tags: automatyzacja, slack, ai, pipeline, testy, meta, robot pisze o sobie
+---
+
+## Introduction
+
+Attention, ceci est un article de test. Le titre porte volontairement "zzz-test-tracer do not merge", parce que ce texte ne part pas en production. Il sert à prouver une seule chose : que mon automatisation d'écriture d'articles peut se fournir des preuves à elle-même avant de commencer à écrire.
+
+Contexte rapide. J'ai un pipeline qui génère chaque semaine des propositions de sujets pour ce blog, les poste sur Slack sous forme de cartes avec des boutons, je clique sur un candidat ou je tape mon propre sujet, et ça lance une session qui écrit tout l'article : l'original polonais, les traductions, la construction du site, une PR. Cet article que tu lis en ce moment vient d'un déclenchement manuel et personnalisé, pas de la liste de candidats, donc aucune magie de numéro n'a tourné ici, juste du texte de sujet brut envoyé directement au robot.
+
+Tu vas avoir trois choses :
+
+1. **ce que je teste exactement** avec cet article et pourquoi maintenant,
+2. **quelles preuves la Phase 7 m'a données**, l'étape précédente de cette même construction, sur lesquelles je m'appuie,
+3. **ce que ce test ne prouve PAS encore**, parce que l'honnêteté oblige à le dire clairement avant que quelqu'un suppose que tout fonctionne déjà.
+
+## Ce que je teste vraiment
+
+La dernière étape de ce pipeline, la Phase 7, a livré le mécanisme de clic sur les cartes Slack : candidat, Skip, sujet personnalisé, tout en direct contre le relay déployé sur `relay.blonie.cloud`. Mais elle a laissé un fil ouvert pour la phase suivante : est-ce que la valeur du bouton, avec une ligne `dossier: <chemin>` accrochée au bout, arrive vraiment intacte au bout de toute la chaîne jusqu'au générateur, ou se perd-elle quelque part en chemin.
+
+Cette session de production précise a reçu exactement ce texte en entrée :
+
+```
+zzz-test-tracer do not merge: dossier pipe check
+dossier: ideation/2026-W35/0-tracer-dossier-pipe.md
+```
+
+L'étape zéro de mes instructions de production dit : si la dernière ligne de l'entrée correspond au motif `dossier: <chemin>`, la couper, la valider avec une regex, et si elle passe, récupérer le fichier via l'API GitHub Contents sur le relay, parce que `api.github.com` n'est pas accessible directement depuis ce bac à sable. La récupération a marché, HTTP 200, 5336 octets, le premier titre du fichier était `Dossier pipe tracer: TRACER-CANARY-0801`. C'est la preuve numéro un de cet article : cette ligne en haut du fichier que tu es en train de lire est déjà un succès partiel du test.
+
+## Les preuves de la Phase 7 que le dossier m'a données
+
+Au lieu d'inventer du contenu, j'ai reçu un dossier tout prêt avec des citations d'un run réel et de code réel. Voici ce qu'il contient, mot pour mot.
+
+Les quatre exigences de la Phase 7 ont été prouvées en direct contre le relay déployé :
+
+> "All four Phase 7 requirements (SLACK-03/04/05/06) proven live against the deployed relay.blonie.cloud: a real Run-now posted the locked Block Kit card, a candidate/Skip/custom-topic click each produced the correct in-place message edit and Routine B session count, and the mandatory double-click dry run, executed as two rapid byte-identical signed deliveries since the week's card had no candidate buttons, confirmed the dedupe guard holds under real concurrent delivery."
+
+Ce passage sur le "double-click dry run" a besoin d'être déplié, parce qu'il sonne comme s'il s'expliquait tout seul et il ne le fait pas. Cette semaine-là, la carte n'avait aucun bouton de candidat, donc il n'y avait physiquement rien à cliquer deux fois. À la place, le dossier décrit deux requêtes identiques et signées frappant le même point de terminaison à quelques secondes d'écart :
+
+> "Both curls were run at 14:40:59Z and 14:41:04Z; both returned HTTP/2 200 (ack) but exactly one Routine B session was created (cse_01Wameg5aWEMx2AWqkH2WKeN at 14:41:00.7Z); the relay log shows one expected channel_not_found chat.update failure (the fake test channel) with the fire still happening, and nothing for the second request (dropped by the dedupe guard before any await)."
+
+Une seule session issue de deux requêtes identiques, c'est exactement la preuve que le garde anti-doublon (`tryClaim`, un check-and-set synchrone avant tout `await`) fonctionne. Le plan de la Phase 7 le dit clairement : ce n'est pas une version affaiblie de la preuve, c'est une preuve équivalente au clic physique, parce que les deux cas sont deux livraisons partageant la même clé de dédoublonnage et frappant le même chemin de code.
+
+## Le code qui tient tout ça ensemble
+
+Le dossier cite aussi l'endroit exact dans le code du relay par lequel mon `dossier: <chemin>` accroché passe vraiment, sans aucune modification nécessaire pour cette phase :
+
+```
+// slack-relay/src/index.ts
+const topic = action.value;
+
+// slack-relay/src/fire.ts
+export async function fireRoutineB(pickText: string): Promise<void> {
+  ...
+  body: JSON.stringify({ text: pickText }),
+```
+
+La valeur d'un bouton ou d'une modale atterrit dans `action.value`, puis dans `pickText`, puis directement dans le corps de la requête `/fire`. Sans modification, sans analyse en chemin. C'est pour ça qu'accrocher une ligne `dossier: <chemin>` à la fin de l'entrée pouvait fonctionner du tout : elle emprunte un tunnel qui existait déjà pour transporter du texte de sujet ordinaire.
+
+Le seul changement de code de toute la Phase 7 n'était même pas dans ce dépôt, il était dans le dépôt voisin `slack-relay`, commit `2c24ab0` : le script de test `sign-test-payload.ts` a reçu un mode `--double-click` pour envoyer deux requêtes signées identiques, plus une correction d'un `action_id: "pick_candidate"` périmé vers le vrai contrat `pick_candidate_N`. Sans cette correction, la preuve équivalente n'aurait même pas pu démarrer, parce que le script aurait envoyé une requête que le relay n'aurait pas reconnue.
+
+## Ce que ce test ne prouve PAS encore
+
+Ici je dois être honnête, parce que le dossier lui-même signale explicitement ça comme une chose que l'article ne peut pas s'attribuer au-delà de ce qu'il a gagné. La preuve pour le tuyau de dossier n'est pas quelque chose que j'avais avant d'écrire cet article, c'est quelque chose qui se passe maintenant, pendant qu'il s'écrit. Cet article est cette preuve, pas un compte-rendu d'une preuve qui existait déjà avant.
+
+Trois choses que je n'affirme délibérément PAS comme des faits :
+
+- Que le double clic de la Phase 7 était un clic littéral, deux fois, sur un bouton Slack. Ce n'était pas le cas, parce que la carte de cette semaine n'avait pas de boutons de candidat. C'était une preuve équivalente via deux requêtes HTTP brutes, acceptée consciemment, pas substituée en douce comme étant la même chose.
+- Que le relay a reçu un quelconque changement de logique de dispatch pendant la Phase 7. Non. Le seul changement de code est allé dans un script de test du dépôt voisin.
+- Qu'un quelconque token, `GH_TOOLKIT_TOKEN`, `FIRE_BEARER_TOKEN` ou `SLACK_BOT_TOKEN`, ait jamais apparu dans un commit, un journal de run, ou ce dossier. Ces valeurs vivent uniquement comme variables d'environnement dans le panneau claude.ai, nulle part ailleurs.
+
+## Quand un test tracer comme celui-là a vraiment du sens
+
+Honnêtement dans l'autre sens aussi : écrire tout un article séparé juste pour tester un tuyau de données, ça sonne comme de l'excès. J'aurais raison si c'était un test unitaire pour quelque chose qu'on pourrait raisonnablement simuler.
+
+Le problème, c'est que ce tuyau précis ne peut pas être simulé de manière significative, parce qu'il traverse un vrai Slack, un vrai relay, la vraie API GitHub Contents et une vraie session de production, quatre systèmes différents qu'il faut voir fonctionner ensemble, en direct, pas isolés. Un test de bout en bout sur le chemin de production, clairement étiqueté "do not merge", coûte moins cher que de construire un environnement de test séparé pour quatre services à la fois. D'où cet article, qui se marque lui-même dès le titre comme quelque chose qui doit rester sur une branche, pas atterrir sur le blog.
+
+## Résumé
+
+L'ironie de cet article, c'est que j'ai écrit tout un texte sur la façon dont mon automatisation se prouve elle-même, et maintenant cette même automatisation doit se vérifier elle-même avant que qui que ce soit ne la lise. Un test pour savoir si le robot peut écrire de manière fiable sur lui-même est en même temps un test pour savoir s'il peut se retenir de s'attribuer un succès qu'il n'a pas encore. Cet article ne devrait jamais arriver en production. Si tu lis ça sur le blog en direct, ça veut dire que quelqu'un a oublié de le laisser sur une branche, pas que le test a réussi.
+
+## FAQ
+
+**Est-ce que c'est un vrai article de blog ?**
+Non. C'est un article de test, marqué "do not merge" dans le titre, généré pour vérifier si un dossier de planification arrive vraiment via Slack et l'API GitHub Contents jusqu'au générateur d'articles.
+
+**C'est quoi ce "dossier" ?**
+Un fichier markdown de planification dans le dépôt, `ideation/2026-W35/0-tracer-dossier-pipe.md`, avec des citations, des extraits de code et des contraintes strictes sur ce que l'article ne peut pas affirmer. Il devait servir de matériau source au lieu d'inventer du contenu à partir de rien.
+
+**Pourquoi une vérification de tuyau de dossier plutôt qu'un sujet normal de la liste de candidats ?**
+Ce run a démarré à partir d'un déclenchement manuel et personnalisé, pas d'un numéro cliqué dans la liste de propositions hebdomadaire. Donc tout le texte du sujet, avec la ligne `dossier: <chemin>`, est passé comme un seul bloc de texte.
+
+**Est-ce que le double clic de la Phase 7 était un vrai clic dans Slack ?**
+Non, et c'est une des choses que cet article refuse délibérément d'affirmer. La carte de cette semaine n'avait pas de boutons de candidat, donc la preuve est passée par deux requêtes HTTP identiques et signées au lieu d'un clic physique.
+
+**Pourquoi tester un pipeline avec tout un article plutôt qu'avec un test unitaire ?**
+Parce que ce tuyau précis traverse quatre systèmes réels à la fois : Slack, le relay, l'API GitHub et une session de production. Construire un environnement de test qui simule tout ça de manière crédible coûterait plus cher qu'un article clairement étiqueté sur une branche qui ne fusionne jamais dans main.
+
+## Liens
+
+- [Comment j'ai configuré les hooks et skills de Claude Code](/blog/fr/how-to-setup-claude-code-hooks-skills)
+- [Mon propre serveur MCP, par lequel l'agent lit les statistiques du blog](/blog/fr/how-to-build-mcp-server-for-analytics)
+- [Comment llama a mélangé mes liens dans les traductions](/blog/fr/llm-translated-my-blog-and-broke-the-links)
+- `.planning/phases/07-slack-block-kit-approval-ux/07-03-SUMMARY.md`, le document source des preuves de la Phase 7
+- `ideation/2026-W35/0-tracer-dossier-pipe.md`, le dossier dont vient le contenu de cet article
