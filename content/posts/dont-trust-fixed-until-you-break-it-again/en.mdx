@@ -1,0 +1,102 @@
+---
+title: "Don't Trust \"Fixed\" Until You Break It Again"
+description: "Eight commits in 22 minutes swept the passkey-vault backlog. Before I believed anything was fixed, I had to break it first and watch the test go red."
+date: 2026-08-26T12:00:00.000Z
+tags: testy, ci, backlog, jakość-kodu, agenty, ai, claude-code, deweloperka
+---
+
+## Introduction
+
+I keep a file in passkey-vault called `.planning/WINDOWS.md`. It's my backlog ledger, a list of things marked open across different phases of the project. On the evening of August 19th I opened it to clean it up, and my first thought was "easy, I'll just go item by item and close whatever's already fixed." Two minutes later I realized that's the exact same mistake that made this mess in the first place.
+
+Because how do I actually know something is fixed? Because the ledger says so. And the ledger is a text file that I updated myself at some point, or didn't, depending on whether I remembered to. Trusting a static text file's word that something is closed is the same carelessness that lets text files start lying in the first place. So instead of reading the code and nodding along, I did something dumber and slower: for every item that looked already fixed, I tried to break it first.
+
+You get three things out of this post:
+
+1. **what falsifying a fix actually looks like in practice**, using a concrete example with a retry button that may or may not have actually worked,
+2. **what the method actually caught**, including one bug that cost me ninety minutes of live debugging a month earlier, and one blind spot in an automated security guard I didn't even know existed,
+3. **when this approach is overkill**, because not every todo item earns that much ceremony.
+
+The whole thing landed as eight commits in about 22 minutes, starting August 19th at 21:29. Not because I worked fast. Because two fixer agents ran in parallel on separate worktrees, while two more just checked whether the fixers were lying the same way the ledger they were fixing had been lying.
+
+## A backlog that lies because nobody updates it
+
+`.planning/WINDOWS.md` grows with every phase of the project. Something happens, I write an item, sometimes I close it right away, sometimes it's "I'll close it when I get a chance." The problem is the code keeps moving regardless of that file. Three items I opened that evening turned out to already be stale, because something else had fixed them along the way. The code changed, the ledger text didn't.
+
+This is the exact moment where most people, myself included in earlier phases, just close the item. You see it working, you mark it done, you move on. Except "I see it working" is the same weakness that let the item sit open in the backlog too long in the first place. If I already got the state of this code wrong once, why would I trust an eyeball check to get it right this time.
+
+## Falsification: delete the fix, watch the test go red, only then believe it
+
+One of those three "already fixed" items was a retry button, along with the regression test meant to guard it (commit `02a75f4c`). Instead of trusting that the test actually checked anything, I did something that sounds like vandalism: I temporarily deleted the button's JSX, ran both new tests, and checked whether I got a red result.
+
+Because a test that always passes, even after you delete the thing it's supposed to guard, isn't a test. It's a piece of code pretending to be one. Only after confirming red did I restore the file, and not from memory or "looks fine," but byte for byte, verified with a diff against a pre-edit backup. Only then did I run the tests again and see green.
+
+The full cycle, in short: delete the fix, run the test, confirm red, restore exactly what was there, confirm green again. That's falsification, not inspection. The test just proved it could fail before I trusted that it meant anything when it passed.
+
+An important honesty check: I don't have confirmation that this same delete-and-restore procedure was used on all eight commits from that evening. I have it confirmed for the retry button. The rest took other paths, some were real fixes, some were closed based on reading the code directly. I'm not generalizing past what I actually verified.
+
+## A second pass, because one adversarial check is still just one opinion
+
+The whole thing ran as "2 worktree fixers + 2 investigators, each fixer adversarially verified by an independent opus pass that re-ran every falsification itself" (that's the description in the summary commit `fb93923f`). Meaning the mere fact that one agent deleted and restored a file wasn't the final word either. A second, independent pass repeated the same trust check: delete, confirm red, restore, confirm green, except it did it from scratch, with no memory of what the first pass had said.
+
+Sounds paranoid, and it kind of is. But it's the same logic as peer review in code, just applied to the verification process itself, not only to production code. If I don't trust the ledger's word, why would I trust one agent's word that it checked the ledger properly.
+
+## The bug this caught: a stale default WebAuthn origin port
+
+Not everything from that evening was archaeological cleanup. Commit `9aa54049` fixes a real, still-live bug: the default origin port for WebAuthn was out of date. This is the kind of configuration typo that works perfectly on one machine and blows up somewhere else without any useful error message.
+
+And here I have to be precise, because it's easy to tell this story wrong. This same bug cost me 90 minutes of live debugging on July 20th, a month before this cleanup. The August 19th sweep didn't catch it live, it fixed it now, after the fact, once it finally came up for review. This isn't a story about falsification catching a bug in real time. It's a story about a backlog holding an open item on something that had already bitten me once, and only a systematic pass through the ledger finally closed it instead of waiting for it to bite a second time.
+
+## A blind spot in the security guard I didn't know about
+
+Commit `ce602461` closes something I call SC#2 internally, an automated guard meant to police route security. The problem: this guard had always scanned only one file. If some category of routes lived somewhere else, the guard simply never looked there.
+
+This is the kind of gap that sounds terrifying in a headline and a lot calmer once you check the facts. The commit describes it as "the exact silent-escape shape SC#2 exists to prevent," flagged as a non-blocking warning at the close of phase 22, not as an actively exploited hole. In other words: nobody exploited this, because I have no evidence that anyone did, but if a route had ever been added outside that one file, the guard wouldn't have known. Closed now, before it became a problem, not cleaned up after an incident that never happened.
+
+## The bonus nobody asked about: a gap in how CI sees tests at all
+
+Commit `1a891811` is a third, less dramatic thing from the same cleanup. The exact same command CI uses to scope tests to a single crate wasn't seeing one of the new tests. The test existed, it passed locally, and CI simply didn't take it into account when scoping. That's the kind of bug that doesn't produce a red build, just a silent absence, the worst kind to catch because nothing screams that something's wrong.
+
+## When falsification is overkill
+
+Fair in the other direction, because not every todo item deserves deleting code and restoring it byte for byte. It makes sense when:
+
+- the item in the ledger involves something with a regression test, and you're not sure the test actually checks anything,
+- the cost of being wrong is high, like security or authorization, where "probably works" isn't enough,
+- the item has sat in the backlog long enough that you don't remember why you opened it in the first place.
+
+It doesn't make sense when you're closing a typo in a comment or something you'll see with your own eyes the next time you run the app. There it's ceremony for its own sake, time spent on methodology theater instead of real work. The whole skill is telling which item is which before you start deleting code on a branch you care about, trusting you have a backup.
+
+## What came out of it
+
+Eight commits, 22 minutes, three old ledger items closed on evidence instead of faith, one real bug fixed, one security guard blind spot closed before anyone found it the hard way, and one silent CI gap I had no idea existed. None of it needed a new feature or a refactor. All of the work was refusing to trust my own earlier notes.
+
+And here's the ironic cherry on top. I spent the whole evening proving to myself that the word "fixed" in my own file means nothing until I check it. The end result is a file, `.planning/WINDOWS.md`, that once again says "fixed" next to the same three items. The difference is that this time I know it's true, because I personally broke it, watched it break, and only then believed it was fixed. Next time I open that file and see a "done" from several phases back, I'll remember that word means exactly as much as the last time somebody tried to disprove it. And if nobody tried, it's just an old opinion, not a fact.
+
+To be fair, I'm not claiming this cleanup was the only activity in the repo that week. It's just the part I could verify all the way through.
+
+## FAQ
+
+**How is falsifying a fix different from regular code review?**
+Code review asks "does this code look right." Falsification asks "does the test actually detect the absence of this fix." Those are two different questions. You can pass review with a test that was never actually red, and nobody notices until someone deliberately removes the fix to check.
+
+**Do you have to do this for every backlog item?**
+No. It's worth it where the stakes are high, or where you have doubts about whether the test checks anything at all. Typos and cosmetics don't need this ritual.
+
+**How do you know the restored file is identical to the original?**
+A diff against a backup taken before the edit, byte for byte, not "eyeballed." If you don't have a backup before deleting, don't do this on a branch you actually care about.
+
+**Was the WebAuthn port bug caught by this sweep in real time?**
+No, and that distinction matters. This bug cost me 90 minutes of debugging a month earlier. The backlog sweep only fixed it now, because it finally came up for review, not because falsification caught it live.
+
+**Was this security guard hole ever actually exploited?**
+I have no evidence of that, and the commit explicitly flags it as a non-blocking warning, not an active incident. It was a closed theoretical blind spot, not an exploit.
+
+## Links
+
+- [How I set up hooks and skills in Claude Code](/blog/en/how-to-setup-claude-code-hooks-skills)
+- [My post on why I didn't rewrite my blog to a new framework](/blog/en/why-i-didnt-rewrite-my-blog-to-a-new-framework)
+- Cleanup commit: [`fb93923f`](https://github.com/bartosz-skejcik/passkey-vault/commit/fb93923f)
+- Retry button falsification: [`02a75f4c`](https://github.com/bartosz-skejcik/passkey-vault/commit/02a75f4c)
+- WebAuthn origin port fix: [`9aa54049`](https://github.com/bartosz-skejcik/passkey-vault/commit/9aa54049)
+- Security guard blind spot fix: [`ce602461`](https://github.com/bartosz-skejcik/passkey-vault/commit/ce602461)
