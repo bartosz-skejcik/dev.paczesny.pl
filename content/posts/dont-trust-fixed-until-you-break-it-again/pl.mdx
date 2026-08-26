@@ -1,0 +1,102 @@
+---
+title: "Nie ufaj słowu \"naprawione\", dopóki tego nie zepsujesz jeszcze raz"
+description: "Osiem commitów w 22 minuty posprzątało backlog passkey-vault. Zanim uwierzyłem, że coś jest naprawione, musiałem to zepsuć i zobaczyć czerwony test."
+date: 2026-08-26T12:00:00.000Z
+tags: testy, ci, backlog, jakość-kodu, agenty, ai, claude-code, deweloperka
+---
+
+## Wprowadzenie
+
+Mam w passkey-vault plik `.planning/WINDOWS.md`. To mój backlog ledger, lista rzeczy oznaczonych jako otwarte z różnych faz projektu. Wieczorem 19 sierpnia otworzyłem go, żeby posprzątać, i pierwsze co pomyślałem, to "spoko, po prostu przejdę pozycję po pozycji i zamknę to, co już naprawione". Dwie minuty później zdałem sobie sprawę, że to jest ten sam błąd, który stworzył ten bałagan w pierwszej kolejności.
+
+Bo skąd ja niby wiem, że coś jest naprawione? Bo tak pisze w ledgerze. A ledger to plik tekstowy, który ja sam kiedyś zaktualizowałem, albo nie zaktualizowałem, w zależności od tego, czy akurat pamiętałem. Ufanie słowu stałego pliku tekstowego, że coś jest zamknięte, to ta sama beztroska, przez którą pliki tekstowe w ogóle zaczynają kłamać. Więc zamiast czytać kod i kiwać głową, zrobiłem coś głupszego i wolniejszego: dla każdej pozycji, która wyglądała na już naprawioną, spróbowałem ją najpierw popsuć.
+
+Dostaniesz trzy rzeczy z tego wpisu:
+
+1. **jak wygląda falsyfikacja fixa w praktyce**, na konkretnym przykładzie z retry buttonem, który mógł, ale nie musiał, faktycznie działać,
+2. **co ta metoda faktycznie złapała**, w tym jeden błąd, który miesiąc wcześniej kosztował mnie półtorej godziny live debugowania, i jedną dziurę w automatycznym guardzie bezpieczeństwa, o której nawet nie wiedziałem, że istnieje,
+3. **kiedy to podejście jest przesadą**, bo nie każdy wpis w todo zasługuje na tyle ceremonii.
+
+Całość zeszła na osiem commitów w około 22 minuty, zaczynając 19 sierpnia o 21:29. Nie dlatego, że pracowałem szybko. Dlatego, że dwóch agentów fixerów działało równolegle na osobnych worktree, a dwóch kolejnych tylko sprawdzało, czy fixerzy nie kłamią tak samo jak ledger, który mieli naprawić.
+
+## Backlog, który kłamie, bo nikt go nie aktualizuje
+
+`.planning/WINDOWS.md` rośnie u mnie z każdą fazą projektu. Coś się dzieje, dopisuję pozycję, czasem ją zamykam od razu, czasem "zamknę jak będę miał chwilę". Problem w tym, że kod idzie do przodu niezależnie od tego pliku. Trzy pozycje, które otworzyłem tego wieczoru, okazały się już nieaktualne, bo w międzyczasie coś innego przy okazji je naprawiło. Kod się zmienił, tekst w ledgerze nie.
+
+To jest ten moment, w którym większość ludzi (ja też, we wcześniejszych fazach) po prostu zamyka pozycję. Widzisz, że coś już działa, zaznaczasz jako done, idziesz dalej. Tylko że "widzę, że działa" to ta sama słabość, przez którą pozycja w ogóle siedziała w backlogu otwarta zbyt długo. Skoro raz już się pomyliłem co do stanu tego kodu, czemu mam ufać, że tym razem ocena na oko będzie trafna.
+
+## Falsyfikacja: usuń fix, zobacz czerwony test, dopiero wtedy uwierz
+
+Jedna z tych trzech "już naprawionych" pozycji dotyczyła przycisku retry, razem z regresyjnym testem, który miał go pilnować (commit `02a75f4c`). Zamiast zaufać, że test faktycznie coś sprawdza, zrobiłem coś, co brzmi jak wandalizm: tymczasowo usunąłem JSX samego przycisku, uruchomiłem oba nowe testy i sprawdziłem, czy dostanę czerwony wynik.
+
+Bo test, który zawsze przechodzi, nawet jak usuniesz to, co ma pilnować, nie jest testem. Jest kawałkiem kodu, który udaje test. Dopiero po potwierdzeniu czerwonego wyniku przywróciłem plik, i to nie z pamięci ani "wygląda ok", tylko bajt po bajcie, zweryfikowane diffem względem kopii zapasowej sprzed edycji. Dopiero wtedy uruchomiłem testy jeszcze raz i zobaczyłem zielone.
+
+Cały cykl w skrócie: usuń fix, uruchom test, potwierdź czerwony, przywróć dokładnie to co było, potwierdź zielony ponownie. To jest falsyfikacja, nie inspekcja. Test dopiero co udowodnił, że umie zawieść, zanim zaufałem, że coś znaczy, kiedy przechodzi.
+
+Ważna uczciwość: nie mam potwierdzenia, że tej samej procedury delete-and-restore użyto przy wszystkich ośmiu commitach z tego wieczoru. Mam ją potwierdzoną dla retry buttona. Reszta poszła innymi ścieżkami, część to realne fixy, część to zamknięcia pozycji na podstawie przeczytania kodu wprost. Nie generalizuję ponad to, co faktycznie sprawdziłem.
+
+## Druga runda, bo jedna adwersarialna weryfikacja to nadal tylko jedna opinia
+
+Cała ta robota szła jako "2 worktree fixery + 2 investigatory, każdy fixer zweryfikowany adwersarialnie przez niezależny przebieg opusa, który sam od nowa powtórzył każdą falsyfikację" (tak brzmi opis w commicie podsumowującym `fb93923f`). To znaczy, że sam fakt usunięcia i przywrócenia pliku przez jednego agenta też nie był ostatnim słowem. Drugi, niezależny przebieg powtarzał ten sam test na zaufanie: usuń, sprawdź czerwony, przywróć, sprawdź zielony, tylko że robił to od zera, bez pamięci o tym, co powiedział pierwszy.
+
+Brzmi jak paranoja, i trochę nią jest. Ale to ta sama logika co peer review w kodzie, tylko zastosowana do samego procesu weryfikacji, a nie tylko do kodu produkcyjnego. Jeśli nie ufam ledgerowi na słowo, to czemu miałbym ufać jednemu agentowi na słowo, że dobrze sprawdził ledger.
+
+## Błąd, który to złapało: domyślny port origin dla WebAuthn
+
+Nie wszystko z tego wieczoru to było archeologiczne sprzątanie starych wpisów. Commit `9aa54049` naprawia realny, wciąż żywy błąd: domyślny port origin dla WebAuthn był nieaktualny. To ten typ literówki w konfiguracji, który działa idealnie na jednej maszynie i wywala się gdzieś indziej bez żadnego sensownego komunikatu błędu.
+
+I tu muszę być precyzyjny, bo łatwo to opowiedzieć źle. Ten sam błąd kosztował mnie 90 minut live debugowania 20 lipca, czyli miesiąc przed tym sprzątaniem. Sweep z 19 sierpnia go nie złapał na żywo, tylko naprawił go teraz, po fakcie, kiedy w końcu trafił na listę do przejrzenia. To nie jest historia "falsyfikacja złapała bug w czasie rzeczywistym". To jest historia "backlog trzymał otwartą pozycję na coś, co już raz mnie ugryzło, i dopiero systematyczne przejście przez ledger sprawiło, że to w końcu zamknąłem, zamiast czekać aż ugryzie mnie po raz drugi".
+
+## Ślepy punkt w guardzie bezpieczeństwa, o którym nie wiedziałem
+
+Commit `ce602461` zamyka coś, co nazywam u siebie SC#2, automatyczny guard, który ma pilnować bezpieczeństwa route'ów. Problem: ten guard od zawsze skanował tylko jeden plik. Jeśli jakaś kategoria route'ów żyła gdzie indziej, guard po prostu jej nie widział. Nie dlatego, że coś odrzucał niesłusznie, tylko dlatego, że nigdy tam nie zaglądał.
+
+To jest ten rodzaj dziury, który brzmi przerażająco w nagłówku i o wiele spokojniej, kiedy sprawdzisz fakty. Commit opisuje to jako "ten sam kształt cichej ucieczki, przed którym ma chronić SC#2", oznaczone jako niewiążące ostrzeżenie przy zamknięciu fazy 22, nie jako aktywnie wykorzystywana luka. Innymi słowy: nikt tego nie exploitował, bo nie mam na to żadnych dowodów, ale gdyby ktoś kiedyś dodał route poza tym jednym plikiem, guard by o tym nawet nie wiedział. Zamknięte teraz, zanim stało się to problemem, a nie po to, żeby posprzątać po incydencie, którego nie było.
+
+## Bonus, o którym nikt nie pytał: luka w tym, jak CI w ogóle widzi testy
+
+Commit `1a891811` to trzecia, mniej efektowna rzecz z tego samego sprzątania. Ta sama komenda, której CI używa na co dzień, żeby wyskopować testy z jednego konkretnego crate'a, nie widziała jednego z nowych testów. Test istniał, przechodził lokalnie, i w CI po prostu nie był brany pod uwagę przy scopowaniu. To ten rodzaj błędu, który nie daje czerwonego builda, tylko cichą nieobecność, najgorszy typ do wyłapania, bo nic nie krzyczy, że coś jest nie tak.
+
+## Kiedy falsyfikacja to przesada
+
+Uczciwie w drugą stronę, bo nie każdy wpis w todo zasługuje na usuwanie kodu i przywracanie go bajt po bajcie. Ma to sens, kiedy:
+
+- pozycja w ledgerze dotyczy czegoś, co ma test regresyjny, a Ty nie masz pewności, czy ten test faktycznie coś sprawdza,
+- koszt pomyłki jest wysoki, na przykład bezpieczeństwo albo autoryzacja, tam gdzie "chyba działa" nie wystarcza,
+- pozycja siedzi w backlogu na tyle długo, że nie pamiętasz już, czemu w ogóle ją otworzyłeś.
+
+Nie ma to sensu, kiedy zamykasz literówkę w komentarzu albo coś, co i tak zobaczysz gołym okiem przy najbliższym uruchomieniu aplikacji. Tam falsyfikacja to rytuał dla samego rytuału, czas poświęcony na teatr metodologii zamiast na realną robotę. Cała sztuka w tym, żeby rozpoznać, która pozycja jest która, zanim zaczniesz usuwać kod na produkcyjnej gałęzi z przekonaniem, że masz kopię zapasową.
+
+## Co z tego wyszło
+
+Osiem commitów, 22 minuty, trzy stare pozycje z ledgera zamknięte na podstawie dowodu, a nie na wiarę, jeden realny bug naprawiony, jedna dziura w guardzie bezpieczeństwa domknięta zanim ktokolwiek ją znalazł po swojemu, i jedna cicha luka w CI, o której istnieniu wcześniej nie miałem pojęcia. Zero z tego nie wymagało nowej funkcji ani refaktoru. Cała robota to było niezaufanie własnym wcześniejszym notatkom.
+
+I tu jest ta ironiczna wisienka, na którą czekałeś. Cały ten wieczór poświęciłem na to, żeby udowodnić sobie, że słowo "naprawione" w moim własnym pliku nic nie znaczy, dopóki tego nie sprawdzę. Efekt końcowy to plik `.planning/WINDOWS.md`, w którym znowu stoi słowo "naprawione" przy tych samych trzech pozycjach. Różnica jest taka, że tym razem wiem, że to prawda, bo osobiście to zepsułem, zobaczyłem, jak się psuje, i dopiero potem uwierzyłem, że jest naprawione. Następnym razem, kiedy otworzę ten plik i zobaczę "done" sprzed kilku faz, będę pamiętał, że to słowo znaczy dokładnie tyle, ile ostatni raz, kiedy ktoś próbował to obalić. A jak nikt nie próbował, to jest tylko opinia z przeszłości, nie fakt.
+
+Uczciwie dodam, że nie twierdzę, że to sprzątanie było jedyną aktywnością w repo w tym tygodniu. To po prostu ta część, którą dało się zweryfikować do końca.
+
+## FAQ
+
+**Czym różni się falsyfikacja fixa od zwykłego code review?**
+Code review pyta "czy ten kod wygląda dobrze". Falsyfikacja pyta "czy test faktycznie wykrywa brak tego fixa". To dwa różne pytania. Możesz przejść review z testem, który nigdy nie był czerwony, i nikt tego nie zauważy, dopóki ktoś celowo nie usunie fixa, żeby sprawdzić.
+
+**Czy trzeba to robić dla każdej pozycji w backlogu?**
+Nie. Ma sens tam, gdzie stawka jest wysoka albo gdzie masz wątpliwości, czy test w ogóle coś sprawdza. Literówki i kosmetyka nie potrzebują tego rytuału.
+
+**Skąd wiadomo, że przywrócony plik jest identyczny z oryginałem?**
+Diff względem kopii zapasowej sprzed edycji, bajt po bajcie, nie "na oko". Jak nie masz backupu przed usunięciem, nie rób tego na branchu, na którym Ci zależy.
+
+**Czy błąd z portem WebAuthn został złapany przez ten sweep na żywo?**
+Nie, i to jest ważne rozróżnienie. Ten błąd kosztował mnie 90 minut debugowania miesiąc wcześniej. Sweep z backlogu go dopiero teraz naprawił, bo w końcu trafił na listę do przejrzenia, a nie dlatego że falsyfikacja złapała go w czasie rzeczywistym.
+
+**Czy ta dziura w guardzie bezpieczeństwa była kiedykolwiek wykorzystana?**
+Nie mam na to dowodów i commit wprost oznacza to jako niewiążące ostrzeżenie, nie jako aktywny incydent. To był zamknięty teoretyczny ślepy punkt, nie exploit.
+
+## Linki
+
+- [Jak skonfigurowałem hooki i skille w Claude Code](/blog/pl/how-to-setup-claude-code-hooks-skills)
+- [Mój wpis o tym, czemu nie przepisałem bloga na nowy framework](/blog/pl/why-i-didnt-rewrite-my-blog-to-a-new-framework)
+- Commit ze sprzątaniem: [`fb93923f`](https://github.com/bartosz-skejcik/passkey-vault/commit/fb93923f)
+- Falsyfikacja retry buttona: [`02a75f4c`](https://github.com/bartosz-skejcik/passkey-vault/commit/02a75f4c)
+- Fix portu origin WebAuthn: [`9aa54049`](https://github.com/bartosz-skejcik/passkey-vault/commit/9aa54049)
+- Fix ślepego punktu w guardzie bezpieczeństwa: [`ce602461`](https://github.com/bartosz-skejcik/passkey-vault/commit/ce602461)
