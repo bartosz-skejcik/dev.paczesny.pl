@@ -1,0 +1,136 @@
+---
+title: "Je construis mon propre coffre à passkeys et je suis tombé dans un piège dont personne ne m'avait parlé"
+description: "Je développe une extension qui stocke des passkeys comme un gestionnaire de mots de passe. WebAuthn paraît simple, jusqu'à ce qu'on essaie de l'intercepter."
+date: 2026-08-27T12:00:00.000Z
+tags: webauthn, passkeys, rozszerzenia, przeglądarka, bezpieczeństwo, javascript, manifest-v3
+---
+
+## Introduction
+
+Salut ! Vendredi, vingt-trois heures, ma femme dort déjà, et je suis assis avec l'ordinateur portable sur les genoux en essayant de répondre à une question : pourquoi mon extension de navigateur dit-elle à la page que les passkeys ne sont pas disponibles, alors que je vois clairement dans la console que je les intercepte. C'est comme ça qu'a commencé mon projet perso : une application web plus une extension de navigateur qui doit servir de coffre personnel pour les passkeys. Un peu comme Bitwarden ou 1Password, mais plus léger et adapté à mes besoins, parce que je voulais enfin comprendre comment ça fonctionne vraiment sous le capot, au lieu de simplement cliquer sur "se connecter avec un passkey" en faisant confiance à quelqu'un d'autre pour avoir bien fait le travail.
+
+La documentation de WebAuthn a l'air de se résumer à deux fonctions, pas plus : `navigator.credentials.create()` et `navigator.credentials.get()`. J'ai lu. J'ai hoché la tête. Je me suis dit "bon, c'est simple". Trois soirées plus tard, j'étais toujours coincé au même endroit, parce qu'aucun tutoriel ne m'avait dit clairement une chose : une extension de navigateur n'a aucun crochet officiel pour intercepter ces appels. Il faut contourner ça. Et ce contournement a des conséquences en matière de sécurité, qu'il vaut mieux considérer avant de le mettre en production, pas après coup, comme moi.
+
+Tu vas trouver trois choses dans cet article :
+
+1. **à quoi ressemble vraiment WebAuthn sous le capot**, c'est-à-dire ce qui se passe entre le clic sur "se connecter avec un passkey" et l'enregistrement d'une clé,
+2. **comment une extension de navigateur peut s'y accrocher**, alors qu'il n'existe pas d'API dédiée pour ça,
+3. **où le compromis entre confort et sécurité m'a mordu**, parce que tout l'intérêt des passkeys est d'avoir une clé non exportable, et je construis un truc qui, par définition, veut déplacer cette clé entre plusieurs appareils.
+
+Ce n'est pas un produit fini et je ne vais pas prétendre que j'ai déjà tout réglé. C'est un instantané pris en plein milieu du chemin, exactement au moment où l'extension sait déjà faire quelque chose, mais où je me dispute encore avec moi-même pour savoir si c'est une bonne idée.
+
+## Comment fonctionne WebAuthn quand on descend d'un niveau
+
+Avant de se lancer dans l'extension, il vaut la peine de comprendre ce qui se passe au niveau de la page. L'enregistrement d'un passkey ressemble à peu près à ça du point de vue du JavaScript sur la page :
+
+```js
+const credential = await navigator.credentials.create({
+  publicKey: {
+    challenge: new Uint8Array(32), // données aléatoires venant du serveur, contre les attaques par rejeu
+    rp: { name: "mon-service.fr", id: "mon-service.fr" },
+    user: {
+      id: new TextEncoder().encode(userId),
+      name: "bartek@exemple.fr",
+      displayName: "Bartek",
+    },
+    pubKeyCredParams: [{ type: "public-key", alg: -7 }], // -7 correspond à ES256
+    authenticatorSelection: { residentKey: "required", userVerification: "preferred" },
+  },
+});
+```
+
+Ce qui revient dans `credential.response`, c'est un `AuthenticatorAttestationResponse`. À l'intérieur se trouve un `attestationObject`, encodé en CBOR, qui contient `authData` (entre autres la clé publique et l'identifiant de l'identifiant) ainsi que `clientDataJSON`, où se trouvent l'origine de la page et le challenge, signés de façon à ce que le serveur puisse vérifier que c'est bien cette page qui a fait la demande.
+
+Un point clé, facile à rater : `rp.id` doit correspondre au domaine depuis lequel l'appel est fait, et c'est le navigateur qui veille à ça, pas le serveur. C'est le fondement de la résistance au phishing des passkeys : la clé privée est mathématiquement liée à une origine précise, donc un faux site comme `mon-service-fr.ru` ne pourra physiquement jamais obtenir une signature valide, peu importe ce sur quoi l'utilisateur clique.
+
+Et voilà le nœud du problème : normalement, tout ça est géré par un "authenticator de plateforme", c'est-à-dire Touch ID, Windows Hello, une clé matérielle ou un gestionnaire de mots de passe intégré au navigateur. La clé privée n'en sort jamais. Moi, je veux que ce soit mon extension qui s'en charge à la place. Et c'est là que ça devient intéressant.
+
+## Les extensions n'ont pas d'API WebAuthn, il faut donc en simuler une
+
+J'ai longtemps cherché quelque chose comme `chrome.webAuthn` ou une API similaire dans Manifest V3. Ça n'existe pas. Zéro. Les extensions de navigateur n'ont aucun accès privilégié à la couche WebAuthn du système d'exploitation, point final. Ce que font réellement les gestionnaires de mots de passe (j'ai vérifié comment la documentation technique de Bitwarden décrit ça, parce qu'ils sont assez ouverts sur leur architecture), c'est remplacer `navigator.credentials` au niveau de la page, avant qu'un quelconque script de cette page ait la chance de s'y référer.
+
+Dans Manifest V3, on utilise pour ça `world: "MAIN"` dans un content script, c'est-à-dire du code injecté directement dans le contexte de la page, plutôt que dans le monde isolé de l'extension :
+
+```json
+{
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["inject.js"],
+      "world": "MAIN",
+      "run_at": "document_start"
+    }
+  ]
+}
+```
+
+Dans `inject.js`, je remplace les méthodes par les miennes, qui communiquent via `window.postMessage` avec le content script dans le monde isolé, lequel communique ensuite via `chrome.runtime.sendMessage` avec le service worker en arrière-plan, où vit réellement la logique du coffre :
+
+```js
+const originalCreate = navigator.credentials.create.bind(navigator.credentials);
+
+navigator.credentials.create = async function (options) {
+  if (!options?.publicKey) return originalCreate(options);
+  const response = await requestFromExtension("create", options.publicKey);
+  return response ?? originalCreate(options);
+};
+```
+
+Le timing ici est absolu. Si tu mets `run_at` sur `document_end` au lieu de `document_start`, la page aura déjà sauvegardé une référence vers le `navigator.credentials` d'origine dans son propre code avant que tu ne le remplaces, et ton remplacement ne fonctionnera tout simplement pas, parce que la page garde toujours l'ancienne référence. J'ai passé une soirée entière là-dessus avant de comprendre que l'ordre d'injection n'est pas un détail, c'est une condition indispensable.
+
+Le second piège, et c'est celui qui m'a tenu éveillé jusqu'à vingt-trois heures ce vendredi-là : il faut aussi remplacer `PublicKeyCredential.isConditionalMediationAvailable()`, parce que beaucoup de sites vérifient d'abord ce drapeau avant même d'afficher une interface de connexion par passkey. Oublie cette seule méthode et ton coffre n'aura jamais sa chance, parce que la page va décider que les passkeys ne sont pas disponibles, même si ton interception fonctionne parfaitement. J'ai juré tout bas pendant une bonne demi-heure avant de réaliser que le problème n'était pas dans mon code, mais dans une méthode que j'avais simplement oubliée.
+
+## Là où le compromis m'a mordu : une clé qui ne devait jamais sortir
+
+J'en arrive maintenant à ce qui m'a vraiment arrêté longtemps. Tout l'intérêt de WebAuthn repose sur le fait que la clé privée n'est pas exportable et ne quitte jamais l'appareil ou l'authenticator matériel. C'est de là que vient la résistance au phishing et au vol de données.
+
+Mais je construis un coffre dont tout le but est que le même passkey fonctionne sur un ordinateur portable et sur un téléphone. La clé doit donc être synchronisée d'une manière ou d'une autre. En pratique, ça veut dire que je génère une paire de clés via WebCrypto, mais au lieu de `extractable: false` (ce que recommande la spécification et ce que fait un vrai authenticator matériel), je dois utiliser `extractable: true`, pour pouvoir chiffrer la clé et l'envoyer vers ma propre base de synchronisation :
+
+```js
+const keyPair = await crypto.subtle.generateKey(
+  { name: "ECDSA", namedCurve: "P-256" },
+  true, // extractable: true, sinon la synchronisation est impossible
+  ["sign", "verify"]
+);
+```
+
+C'est exactement le même compromis que font (si j'ai bien compris leurs documents publics) Bitwarden et 1Password dans leurs implémentations de passkeys : ils appellent ça des "software-backed passkeys", par opposition aux "hardware-backed", et ils écrivent explicitement que c'est un niveau de sécurité plus faible qu'une clé enfermée dans une Secure Enclave ou un module TPM. Le confort de la synchronisation coûte une vraie baisse des garanties offertes par la spécification. Ce n'est pas un bug d'implémentation, c'est un choix architectural fondamental, et quiconque vend des "passkeys dans le cloud" comme identiques à une clé matérielle ment par omission.
+
+Mon plan actuel est de chiffrer la clé privée localement avec une clé dérivée d'un mot de passe maître (quelque chose comme PBKDF2 ou Argon2 pour l'étirement), avant que quoi que ce soit n'atteigne la synchronisation, pour que le serveur ne voie jamais la clé en clair. Mais ça reste malgré tout une solution logicielle avec tout le bagage que ça implique : si quelqu'un casse le mot de passe maître et accède à la base chiffrée, la partie est terminée. Une clé matérielle n'a pas ce problème, parce qu'il est tout simplement impossible de la "récupérer" à distance.
+
+## Quand construire son propre coffre a réellement du sens plutôt que d'en prendre un tout fait
+
+Pour être honnête : pour l'immense majorité des gens, la réponse est "ne fais pas ça, prends Bitwarden ou le gestionnaire intégré à ton navigateur ou ton système". Ces produits ont des équipes entières de sécurité, des audits, des programmes de bug bounty et des années de renforcement face à de vraies attaques. Mes trois soirées avec `postMessage` et CBOR n'arrivent pas à ce niveau de test, et je ne prétends pas le contraire.
+
+Je fais ça pour deux raisons qui ont du sens pour moi, mais pas forcément pour quelqu'un d'autre. D'abord, je veux comprendre le mécanisme assez profondément pour pouvoir juger moi-même si d'autres outils le font bien, au lieu de simplement croire le marketing sur parole. Ensuite, j'ai un cas particulier concret dans ma propre stack, où je veux une intégration avec mon propre système d'authentification, et les gestionnaires tout faits traitent ça au mieux comme un support de niche, au pire comme non supporté du tout. Si aucune de ces deux raisons ne s'applique à toi, franchement : ce n'est pas un projet à mettre en production pour de vrais utilisateurs, c'est un projet pour apprendre.
+
+## FAQ
+
+**Est-ce que les navigateurs ont une API officielle pour que les gestionnaires de mots de passe gèrent WebAuthn ?**
+Il n'existe pas d'API dédiée du type `chrome.webAuthn` pour les extensions. Tous les gestionnaires de mots de passe que je connais font la même chose que ce qui est décrit plus haut : ils remplacent `navigator.credentials` via un script injecté qui tourne dans le monde principal de la page.
+
+**Est-ce conforme aux règles des stores d'extensions ?**
+Modifier le comportement d'une page via un content script est une technique légale et largement utilisée (c'est aussi comme ça que fonctionnent beaucoup de bloqueurs de pub ou de traducteurs de page), donc ce n'est pas un problème en soi. Il faut par contre informer clairement l'utilisateur de ce que fait l'extension, et ne jamais intercepter quoi que ce soit en silence sans son consentement.
+
+**Quelle est la différence entre un passkey "software-backed" et "hardware-backed" ?**
+Hardware-backed signifie que la clé privée naît et vit exclusivement dans un module dédié (Secure Enclave, TPM, clé matérielle) et qu'elle ne peut physiquement pas être exportée. Software-backed signifie que la clé existe sous forme de données chiffrées qui, en théorie, pourraient être récupérées si quelqu'un cassait le chiffrement ou le mot de passe maître. La seconde option est plus pratique pour la synchronisation, mais a un modèle de menace plus faible.
+
+**Pourquoi `run_at: document_start` est-il si important ?**
+Parce que la page peut sauvegarder une référence vers le `navigator.credentials` d'origine juste après le chargement, avant que l'extension ait la chance de remplacer quoi que ce soit. Si le remplacement arrive trop tard, la page continue d'utiliser l'ancienne référence, et ton interception ne se déclenche jamais.
+
+**Comptes-tu publier ça ou rendre le code open source ?**
+Pour l'instant, c'est un projet personnel d'apprentissage, donc il n'y a pas encore de dépôt public ni de calendrier. Si ça atteint un stade que je juge assez solide pour que quelqu'un d'autre puisse l'utiliser en toute sécurité, j'écrirai sûrement un article dédié là-dessus.
+
+## Résumé
+
+Et voilà pour aujourd'hui ! En résumé : la surface d'API de WebAuthn ressemble à deux fonctions, mais en dessous se cache toute une chorégraphie de CBOR, d'origines et d'un modèle de confiance autour de l'authenticator. Une extension de navigateur ne peut s'y accrocher qu'en remplaçant `navigator.credentials` dans le monde principal de la page, avec un timing d'injection traître. Et si tu veux synchroniser des clés entre appareils, tu dois consciemment abandonner le modèle "la clé ne quitte jamais l'appareil" pour un modèle "la clé est chiffrée, mais théoriquement récupérable", et il n'y a pas de solution magique qui te donne les deux à la fois.
+
+Et maintenant, l'ironie de toute cette histoire : j'ai construit ça parce que je voulais me débarrasser de ma dépendance aux gestionnaires de mots de passe d'autres entreprises et avoir un truc à moi, entièrement sous mon contrôle. Trois soirées plus tard, j'arrive à la conclusion que la seule façon de rendre mon coffre aussi sûr que Bitwarden, c'est essentiellement de réécrire la moitié des décisions architecturales que Bitwarden a déjà prises, en pire, parce que je le fais seul, après le boulot. L'indépendance, parfois, ça veut juste dire redécouvrir les mêmes compromis que quelqu'un d'autre a déjà découverts et décrits dans sa documentation technique il y a bien longtemps, mdr.
+
+## Liens
+
+- [Spécification WebAuthn (W3C)](https://www.w3.org/TR/webauthn-3/)
+- [MDN : Web Authentication API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Authentication_API)
+- [Manifest V3 : content scripts et `world: "MAIN"`](https://developer.chrome.com/docs/extensions/reference/manifest/content-scripts)
+- [Bitwarden : comment les passkeys sont stockés](https://bitwarden.com/help/passkeys/)
+- [Mon article sur l'auto-hébergement de Vaultwarden](/blog/fr/how-to-setup-vaultwarden-on-linux)
