@@ -169,8 +169,10 @@ EVIDENCE:
   (2 to 5 entries, at least one of kind commit)
 TAGS: <comma separated, matching the style of an existing blog post's tags line>
 STORY_CONFIDENCE: high|med|low
-NOTES: <anything the synthesis pass should know, including "planning docs absent, story built from
-        README and diffs" when that is the case>
+NOTES: <ALWAYS open with one or two stranger-readable sentences saying what this project IS and its
+        overall arc, taken from the README and planning docs, because the synthesis step needs them
+        for framing. Then anything else the synthesis pass should know, including "planning docs
+        absent, story built from README and diffs" when that is the case>
 
 If nothing in the window is worth a post, return the same block with TITLE: NONE and a WHY_NOW that
 says what you looked at and why none of it qualified. An honest nothing is a correct answer.
@@ -212,6 +214,21 @@ report a false all-clear off a bad feed.
 ## 4. Synthesise: rank, merge, dedupe
 
 You now have up to 8 subagent returns plus the bound repo's own signal. Judge honestly.
+
+AUDIENCE AND SCOPE, a hard rule applied before any ranking:
+
+- Every candidate must be fully self-contained for a reader who has never heard of any of Bartek's
+  projects. A title or angle that presumes the reader already knows the project exists is a fail, not a
+  style nit.
+- Before ranking, check `content/posts/` in the bound repo (already cloned) for which projects and product
+  areas the blog has EVER covered. That list, not your own familiarity, decides what counts as introduced.
+- For any candidate whose repo or feature the blog has never introduced, the story MUST be the wide-scoped
+  introduction: what the project is, why it exists, the journey so far, with this week's activity as the
+  hook or the climax, never the entire plot.
+- Commit-level deep-dives are allowed only for topics the blog has already introduced, and even then the
+  post is written standalone.
+- When in doubt, go wider: "here is passkey-vault and why I built my own passkey manager" beats "how I
+  fixed one backlog bug in passkey-vault" until the former exists.
 
 | Situation | Output |
 |---|---|
@@ -282,6 +299,11 @@ instead. Never quote a secret to prove a point.
 
 The honesty section is not optional. It is what keeps a grounded draft from turning a "we planned to" into a
 "we did".
+
+For a repo the blog has never covered, the Why now section must carry the project-introduction context:
+what the project is and its arc so far, not just this week's change. For such a candidate, evidence MAY
+span the project's history rather than only the scan window, as long as every claim stays cited and
+verifiable.
 
 Before emitting anything, scan every dossier body and every candidate field you wrote for the em dash character. If you find one outside a verbatim quote, rewrite that sentence with a comma, colon or period. If a verbatim quote itself contains one, replace it with a comma inside the quote. The no em dash rule is absolute for these files: they are committed to a repo whose hard rules forbid it.
 
