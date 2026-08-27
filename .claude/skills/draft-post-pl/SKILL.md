@@ -94,8 +94,8 @@ hardcode that: always recompute, and read that post as the voice reference befor
 
 Before this draft is considered done:
 
-1. Invoke `creative-writing-skills:llm-writing` and revise the draft until it no longer reads as AI prose.
-   This guard is doubly locked: the project `CLAUDE.md` and the build spec both require it.
+1. Invoke the local `voice-guard` skill (`.claude/skills/voice-guard/SKILL.md`) and revise the draft until
+   it passes. This guard is doubly locked: the project `CLAUDE.md` and the build spec both require it.
 2. Mechanically reject any em dash (Unicode U+2014). Polish and English alike: commas, periods, colons
    only. Grep the file and fix every hit before finishing.
 3. Reject named AI tells, in either language. If you see them, rewrite:
@@ -117,11 +117,10 @@ in `content/posts/`:
 - A `## FAQ` section with 4 to 5 real question and answer pairs is present.
 - A `## Linki` section is present.
 - An honest counter-argument section is present, if the topic has a decision or claim to argue against.
-- Zero em dashes, and the `creative-writing-skills:llm-writing` guard passed.
+- Zero em dashes, and the `voice-guard` skill passed.
 - It reads like the newest post, not generic or rushed.
 
 ## Output
 
 `content/posts/<slug>/pl.mdx`: correct frontmatter with no `coverImage`, in the author's voice, having
-passed the `creative-writing-skills:llm-writing` guard, or explicitly flagged for human attention when it
-could not.
+passed the `voice-guard` skill, or explicitly flagged for human attention when it could not.
