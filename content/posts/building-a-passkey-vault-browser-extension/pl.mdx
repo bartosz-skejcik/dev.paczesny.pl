@@ -1,0 +1,136 @@
+---
+title: "Buduję własny vault na passkeye i wpadłem w pułapkę, o której nikt mnie nie uprzedził"
+description: "Robię wtyczkę do przeglądarki, trzymającą passkeye jak menedżer haseł. WebAuthn wygląda prosto, dopóki nie spróbujesz go przechwycić z rozszerzenia."
+date: 2026-08-27T12:00:00.000Z
+tags: webauthn, passkeys, rozszerzenia, przeglądarka, bezpieczeństwo, javascript, manifest-v3
+---
+
+## Wprowadzenie
+
+Siemanko! Piątek, dwudziesta trzecia, żona już śpi, a ja siedzę z laptopem na kolanach i próbuję odpowiedzieć na jedno pytanie: dlaczego moja wtyczka do przeglądarki mówi stronie, że passkeye nie są dostępne, skoro w konsoli wyraźnie widzę, że je przechwytuję. Tak zaczął się mój projekt na boku: aplikacja webowa plus wtyczka do przeglądarki, która ma robić za osobisty vault na passkeye. Coś jak Bitwarden czy 1Password, tylko chudsze i pod moje potrzeby, bo chciałem w końcu ogarnąć, jak to w ogóle działa pod maską, zamiast tylko klikać "zaloguj się passkeyem" i ufać, że ktoś to dobrze zrobił za mnie.
+
+Dokumentacja WebAuthn wygląda jak dwie funkcje i tyle: `navigator.credentials.create()` i `navigator.credentials.get()`. Poczytałem. Pokiwałem głową. Pomyślałem "no przecież to jest proste". Trzy wieczory później nadal siedziałem w tym samym miejscu, bo żaden tutorial nie powiedział mi wprost jednej rzeczy: rozszerzenie do przeglądarki nie ma żadnego oficjalnego haka do przechwytywania tych wywołań. Trzeba to obejść. A obejście ma swoje konsekwencje bezpieczeństwa, o których lepiej pomyśleć, zanim się je wrzuci do produkcji, a nie po fakcie, jak ja.
+
+Dostaniesz trzy rzeczy z tego wpisu:
+
+1. **jak w ogóle wygląda WebAuthn od środka**, czyli co się dzieje między kliknięciem "zaloguj passkeyem" a zapisaniem klucza,
+2. **jak rozszerzenie przeglądarki może się w to wpiąć**, mimo że nie ma do tego dedykowanego API,
+3. **gdzie ugryzł mnie kompromis między wygodą a bezpieczeństwem**, bo cały sens passkeyów to nieeksportowalny klucz, a ja buduję coś, co z definicji chce ten klucz przenosić między urządzeniami.
+
+To nie jest gotowy produkt i nie będę udawał, że mam już wszystko poukładane. To zapis środka drogi, dokładnie w momencie, w którym rozszerzenie już coś potrafi, ale ja się jeszcze kłócę sam ze sobą, czy to jest dobry pomysł.
+
+## Jak działa WebAuthn, jak już zejdziesz poziom niżej
+
+Zanim ruszysz z rozszerzeniem, warto rozumieć, co się dzieje na poziomie strony. Rejestracja passkeya wygląda mniej więcej tak z perspektywy JavaScriptu na stronie:
+
+```js
+const credential = await navigator.credentials.create({
+  publicKey: {
+    challenge: new Uint8Array(32), // losowe dane z serwera, przeciw replay attackom
+    rp: { name: "moj-serwis.pl", id: "moj-serwis.pl" },
+    user: {
+      id: new TextEncoder().encode(userId),
+      name: "bartek@przyklad.pl",
+      displayName: "Bartek",
+    },
+    pubKeyCredParams: [{ type: "public-key", alg: -7 }], // -7 to ES256
+    authenticatorSelection: { residentKey: "required", userVerification: "preferred" },
+  },
+});
+```
+
+To, co wraca w `credential.response`, to `AuthenticatorAttestationResponse`. W środku masz `attestationObject`, który jest zakodowany w CBOR i zawiera `authData` (m.in. publiczny klucz i identyfikator poświadczenia) oraz `clientDataJSON`, w którym siedzi origin strony i challenge, podpisane tak, żeby serwer mógł zweryfikować, że to naprawdę ta strona pytała.
+
+Kluczowa rzecz, którą łatwo przegapić: `rp.id` musi być domeną, z którą wywołanie się zgadza, i to przeglądarka tego pilnuje, nie serwer. To jest fundament tego, że passkeye są odporne na phishing: klucz prywatny jest matematycznie powiązany z konkretnym originem, więc fałszywa strona `moj-serwis-pl.ru` fizycznie nie dostanie poprawnego podpisu, nawet gdyby użytkownik kliknął wszystko, co mu wyskoczy.
+
+I teraz clou sprawy: to wszystko normalnie obsługuje "authenticator platformowy", czyli Touch ID, Windows Hello, klucz sprzętowy albo menedżer haseł wbudowany w przeglądarkę. Klucz prywatny nigdy stamtąd nie wychodzi. Ja chcę, żeby zamiast tego obsłużyła to moja wtyczka. I tu się zaczyna zabawa.
+
+## Rozszerzenie nie ma API do WebAuthn, więc trzeba je oszukać
+
+Szukałem długo jakiegoś `chrome.webAuthn` albo podobnego API w Manifest V3. Nie ma czegoś takiego. Zero. Rozszerzenia przeglądarki nie mają uprzywilejowanego dostępu do warstwy WebAuthn systemu operacyjnego, kropka. To, co robią realne menedżery haseł (sprawdziłem, jak to opisuje dokumentacja techniczna Bitwardena, bo są dość otwarci na temat architektury), to podmiana `navigator.credentials` na poziomie strony, zanim jakikolwiek skrypt tej strony zdąży się do niego odwołać.
+
+W Manifest V3 do tego służy `world: "MAIN"` w content scripcie, czyli kod wstrzykiwany bezpośrednio w kontekst strony, a nie w izolowany świat rozszerzenia:
+
+```json
+{
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["inject.js"],
+      "world": "MAIN",
+      "run_at": "document_start"
+    }
+  ]
+}
+```
+
+W `inject.js` podmieniam metody na własne, które przez `window.postMessage` gadają z content scriptem w izolowanym świecie, a ten dalej przez `chrome.runtime.sendMessage` z background service workerem, gdzie faktycznie trzyma się logika vaulta:
+
+```js
+const originalCreate = navigator.credentials.create.bind(navigator.credentials);
+
+navigator.credentials.create = async function (options) {
+  if (!options?.publicKey) return originalCreate(options);
+  const response = await requestFromExtension("create", options.publicKey);
+  return response ?? originalCreate(options);
+};
+```
+
+Timing jest tu bezwzględny. Jeśli `run_at` ustawisz na `document_end` zamiast `document_start`, strona zdąży zapisać sobie referencję do oryginalnego `navigator.credentials` w swoim kodzie, zanim je podmienisz, i twoja podmiana nie zadziała, bo strona i tak trzyma stary uchwyt. Zjadłem na tym cały wieczór, zanim skojarzyłem, że kolejność wstrzyknięcia to nie jest szczegół, tylko warunek konieczny.
+
+Druga pułapka, i to jest ta, która trzymała mnie do dwudziestej trzeciej tamtego piątku: musisz też podmienić `PublicKeyCredential.isConditionalMediationAvailable()`, bo sporo stron najpierw sprawdza tę flagę, zanim w ogóle pokaże UI do logowania passkeyem. Zapomnisz o tej jednej metodzie i twój vault nigdy nie dostanie szansy, bo strona uzna, że passkeye nie są dostępne, mimo że twoje przechwytywanie działa bez zarzutu. Kląłem pod nosem przez dobre pół godziny, zanim doszedłem, że problem nie jest w moim kodzie, tylko w metodzie, o której w ogóle zapomniałem.
+
+## Gdzie mnie ugryzł kompromis: klucz, który miał nigdy nie wychodzić
+
+Tu dochodzę do rzeczy, która mnie naprawdę zatrzymała na dłużej. Cały sens WebAuthn opiera się na tym, że klucz prywatny jest niewyeksportowalny i nigdy nie opuszcza urządzenia czy authenticatora sprzętowego. To jest źródło odporności na phishing i kradzież danych.
+
+Ale ja buduję vault, którego całym sensem jest to, żeby ten sam passkey działał na laptopie i na telefonie. Czyli klucz musi się jakoś zsynchronizować. W praktyce oznacza to, że generuję parę kluczy przez WebCrypto, ale zamiast `extractable: false` (co jest zalecane w specyfikacji i co robi prawdziwy hardware authenticator), muszę użyć `extractable: true`, żeby móc klucz zaszyfrować i wypchnąć do własnej bazy synchronizacyjnej:
+
+```js
+const keyPair = await crypto.subtle.generateKey(
+  { name: "ECDSA", namedCurve: "P-256" },
+  true, // extractable: true, bo inaczej synchronizacja jest niemożliwa
+  ["sign", "verify"]
+);
+```
+
+To jest dokładnie ten sam kompromis, który (o ile dobrze rozumiem ich publiczne materiały) robią Bitwarden i 1Password w swoich implementacjach passkeyów: nazywają to "software-backed passkeys", w odróżnieniu od "hardware-backed", i wprost piszą, że to niższy poziom bezpieczeństwa niż klucz zamknięty w Secure Enclave czy w module TPM. Wygoda synchronizacji kosztuje realny spadek gwarancji, jaką daje specyfikacja. To nie jest błąd implementacji, to jest fundamentalny wybór architektoniczny, i każdy, kto reklamuje "passkeye w chmurze" jako coś identycznego z hardware'owym kluczem, trochę kłamie przez pominięcie.
+
+Mój obecny plan to szyfrowanie klucza prywatnego lokalnie przez klucz pochodny z hasła głównego (coś jak PBKDF2 albo Argon2 do stretchingu), zanim cokolwiek trafi do synchronizacji, żeby serwer nigdy nie widział jawnego klucza. Ale to i tak zostaje software'owym rozwiązaniem z całym bagażem, jaki to niesie: jeśli ktoś złamie hasło główne i ma dostęp do zaszyfrowanej bazy, gra się kończy. Hardware key tego problemu nie ma, bo nie da się go "odzyskać" zdalnie w ogóle.
+
+## Kiedy w ogóle ma sens robienie własnego vaulta zamiast wzięcia gotowca
+
+Powiem wprost: dla zdecydowanej większości ludzi odpowiedź brzmi "nie rób tego, weź Bitwardena albo wbudowany menedżer w przeglądarce albo systemie". Te produkty mają zespoły ludzi od bezpieczeństwa, audyty, programy bug bounty i lata hartowania na realnych atakach. Moje trzy wieczory z `postMessage` i CBOR nie dorównują temu poziomowi przetestowania i nie udaję, że dorównują.
+
+Robię to z dwóch powodów, które akurat u mnie mają sens, ale niekoniecznie u kogoś innego. Po pierwsze, chcę zrozumieć mechanikę na tyle głęboko, żeby móc świadomie ocenić, czy inne narzędzia robią to dobrze, zamiast wierzyć na słowo marketingowi. Po drugie, mam konkretny przypadek brzegowy w swoim stacku, gdzie chcę integrację z własnym systemem uwierzytelniania, a gotowe menedżery traktują to jako support niszowy albo w ogóle nieobsługiwany. Jeśli żaden z tych dwóch powodów u Ciebie nie występuje, uczciwie: to nie jest projekt do postawienia na produkcji dla realnych użytkowników, to jest projekt do nauki.
+
+## FAQ
+
+**Czy przeglądarki mają jakieś oficjalne API dla menedżerów haseł do obsługi WebAuthn?**
+Nie ma dedykowanego API klasy `chrome.webAuthn` dla rozszerzeń. Wszystkie znane mi menedżery haseł robią to samo, co opisuję wyżej: podmieniają `navigator.credentials` przez wstrzyknięty skrypt działający w głównym świecie strony.
+
+**Czy to jest zgodne z regulaminem sklepów z rozszerzeniami?**
+Modyfikowanie zachowania strony przez content script jest legalną, powszechną techniką (tak działa też np. wiele blokerów reklam czy tłumaczy stron), więc samo w sobie nie jest problemem. Trzeba za to jasno informować użytkownika, co rozszerzenie robi, i nie przechwytywać niczego po cichu bez jego zgody.
+
+**Czym różni się "software-backed" passkey od "hardware-backed"?**
+Hardware-backed oznacza, że klucz prywatny powstaje i żyje wyłącznie w dedykowanym module (Secure Enclave, TPM, klucz sprzętowy) i fizycznie nie da się go wyeksportować. Software-backed oznacza, że klucz istnieje jako zaszyfrowane dane, które w teorii dałoby się odzyskać, gdyby ktoś złamał szyfrowanie albo hasło główne. To drugie jest wygodniejsze do synchronizacji, ale ma słabszy model zagrożeń.
+
+**Dlaczego `run_at: document_start` jest tak ważny?**
+Bo strona może zapisać sobie referencję do oryginalnego `navigator.credentials` zaraz po załadowaniu, zanim rozszerzenie zdąży cokolwiek podmienić. Jeśli podmiana wejdzie za późno, strona i tak używa starego uchwytu, a twoje przechwytywanie nigdy się nie wywoła.
+
+**Czy planujesz to opublikować albo udostępnić kod?**
+Na razie to projekt na własny użytek i do nauki, więc nie ma jeszcze publicznego repo ani terminu. Jak dojdzie do etapu, który uznam za na tyle solidny, żeby ktoś inny mógł tego bezpiecznie użyć, to na pewno o tym napiszę osobny wpis.
+
+## Podsumowanie
+
+I to tyle na dziś! W skrócie: WebAuthn od strony API wygląda na dwie funkcje, ale pod spodem kryje się cała choreografia z CBOR, originami i modelem zaufania do authenticatora. Rozszerzenie do przeglądarki może się w to wpiąć tylko przez podmianę `navigator.credentials` w głównym świecie strony, ze zdradliwym timingiem wstrzyknięcia. A jeśli chcesz synchronizować klucze między urządzeniami, musisz świadomie zejść z modelu "klucz nigdy nie opuszcza urządzenia" na model "klucz jest zaszyfrowany, ale teoretycznie odzyskiwalny", i nie ma tu magicznego rozwiązania, które da ci jedno i drugie naraz.
+
+A teraz ironia całej sytuacji: budowałem to, bo chciałem się pozbyć zależności od menedżerów haseł innych firm i mieć własną, kontrolowaną przeze mnie rzecz. Po trzech wieczorach docieram do wniosku, że jedyny sposób, żeby mój vault był tak bezpieczny jak Bitwarden, to zasadniczo przepisać połowę decyzji architektonicznych, które Bitwarden już podjął, tylko gorzej, bo sam jeden i po godzinach. Niezależność czasem oznacza po prostu odkrywanie na nowo tych samych kompromisów, które ktoś inny już dawno odkrył i opisał w swojej dokumentacji technicznej xd.
+
+## Linki
+
+- [Specyfikacja WebAuthn (W3C)](https://www.w3.org/TR/webauthn-3/)
+- [MDN: Web Authentication API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Authentication_API)
+- [Manifest V3: content scripts i `world: "MAIN"`](https://developer.chrome.com/docs/extensions/reference/manifest/content-scripts)
+- [Bitwarden: jak przechowywane są passkeye](https://bitwarden.com/help/passkeys/)
+- [Mój wpis o postawieniu Vaultwardena na własnym serwerze](/blog/pl/how-to-setup-vaultwarden-on-linux)
