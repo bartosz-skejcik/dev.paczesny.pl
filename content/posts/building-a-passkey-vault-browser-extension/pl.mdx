@@ -1,13 +1,13 @@
 ---
-title: "Buduję własny vault na passkeye i wpadłem w pułapkę, o której nikt mnie nie uprzedził"
-description: "Robię wtyczkę do przeglądarki, trzymającą passkeye jak menedżer haseł. WebAuthn wygląda prosto, dopóki nie spróbujesz go przechwycić z rozszerzenia."
+title: "Buduję własny vault na passkeye i im głębiej wchodzę, tym więcej kompromisów odkrywam"
+description: "Robię wtyczkę do przeglądarki, trzymającą passkeye jak menedżer haseł. Im dalej wchodzę, tym więcej kompromisów bezpieczeństwa muszę świadomie zaakceptować."
 date: 2026-08-27T12:00:00.000Z
 tags: webauthn, passkeys, rozszerzenia, przeglądarka, bezpieczeństwo, javascript, manifest-v3
 ---
 
 ## Wprowadzenie
 
-Siemanko! Piątek, dwudziesta trzecia, żona już śpi, a ja siedzę z laptopem na kolanach i próbuję odpowiedzieć na jedno pytanie: dlaczego moja wtyczka do przeglądarki mówi stronie, że passkeye nie są dostępne, skoro w konsoli wyraźnie widzę, że je przechwytuję. Tak zaczął się mój projekt na boku: aplikacja webowa plus wtyczka do przeglądarki, która ma robić za osobisty vault na passkeye. Coś jak Bitwarden czy 1Password, tylko chudsze i pod moje potrzeby, bo chciałem w końcu ogarnąć, jak to w ogóle działa pod maską, zamiast tylko klikać "zaloguj się passkeyem" i ufać, że ktoś to dobrze zrobił za mnie.
+Siemanko! Piątek, dwudziesta trzecia, siedzę z laptopem na kolanach i próbuję odpowiedzieć na jedno pytanie: dlaczego moja wtyczka do przeglądarki mówi stronie, że passkeye nie są dostępne, skoro w konsoli wyraźnie widzę, że je przechwytuję. To tylko jeden z wieczorów przy projekcie na boku, który ciągnę już od jakiegoś czasu: aplikacja webowa plus wtyczka do przeglądarki, która ma robić za osobisty vault na passkeye. Coś jak Bitwarden czy 1Password, tylko chudsze i pod moje potrzeby, bo chciałem w końcu ogarnąć, jak to w ogóle działa pod maską, zamiast tylko klikać "zaloguj się passkeyem" i ufać, że ktoś to dobrze zrobił za mnie.
 
 Dokumentacja WebAuthn wygląda jak dwie funkcje i tyle: `navigator.credentials.create()` i `navigator.credentials.get()`. Poczytałem. Pokiwałem głową. Pomyślałem "no przecież to jest proste". Trzy wieczory później nadal siedziałem w tym samym miejscu, bo żaden tutorial nie powiedział mi wprost jednej rzeczy: rozszerzenie do przeglądarki nie ma żadnego oficjalnego haka do przechwytywania tych wywołań. Trzeba to obejść. A obejście ma swoje konsekwencje bezpieczeństwa, o których lepiej pomyśleć, zanim się je wrzuci do produkcji, a nie po fakcie, jak ja.
 
