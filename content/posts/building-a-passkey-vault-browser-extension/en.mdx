@@ -1,6 +1,6 @@
 ---
 title: "I'm Building My Own Passkey Vault, and the Deeper I Go the More Compromises I Find"
-description: "I'm building a browser extension that stores passkeys like a password manager. The deeper I go, the more security compromises I have to knowingly accept."
+description: "I'm building a passkey vault: a web app and a browser extension. The deeper I go, the more security compromises I have to knowingly accept."
 date: 2026-08-27T12:00:00.000Z
 tags: webauthn, passkeys, rozszerzenia, przeglądarka, bezpieczeństwo, javascript, manifest-v3
 ---
@@ -9,24 +9,24 @@ tags: webauthn, passkeys, rozszerzenia, przeglądarka, bezpieczeństwo, javascri
 
 Hey! Friday, eleven p.m., I'm sitting there with a laptop on my knees trying to answer one question: why does my browser extension tell the page passkeys aren't available, when I can clearly see in the console that I'm intercepting them. That's just one of many evenings on a side project I've been dragging along for a while now: a web app plus a browser extension that acts as a personal passkey vault. Something like Bitwarden or 1Password, just leaner and built for my own needs, because I finally wanted to understand how it actually works under the hood instead of just clicking "sign in with a passkey" and trusting that someone else got it right.
 
-The WebAuthn docs make it look like two functions and that's it: `navigator.credentials.create()` and `navigator.credentials.get()`. I read up on it. Nodded along. Thought "come on, this is simple." Three evenings later I was still stuck in the same spot, because no tutorial told me one thing outright: a browser extension has no official hook for intercepting these calls. You have to work around it. And that workaround comes with security consequences you'd better think through before shipping it to production, not after the fact, like I did.
+I started with the web app, figured that was the natural place to begin, and thought the extension would just be a weekend add-on. Three evenings later I was still stuck in the same spot, because no tutorial told me one thing outright: a browser extension has no official hook to reach into what the web app was already doing. You have to work around it. And that workaround comes with security consequences you'd better think through before shipping it to production, not after the fact, like I did.
 
-You'll get three things out of this post:
+Here's what you'll get from this post, as this project actually got built, step by step:
 
-1. **what WebAuthn actually looks like under the hood**, meaning what happens between clicking "sign in with passkey" and the key getting saved,
-2. **how a browser extension can hook into it**, even though there's no dedicated API for it,
+1. **where the web app came from, and why I wanted my extension to take over instead of the system authenticator**,
+2. **how the extension finally started intercepting those calls, even though there's no dedicated API for it**,
 3. **where the convenience-vs-security compromise bit me**, because the whole point of passkeys is a non-exportable key, and I'm building something that by definition wants to move that key between devices.
 
-This isn't a finished product and I won't pretend I've got it all figured out. This is a snapshot from the middle of the road, right at the point where the extension can already do something, but I'm still arguing with myself over whether it's a good idea.
+This isn't a finished product and I won't pretend I've got it all figured out. This is a snapshot from the middle of the road, right at the point where both pieces, the app and the extension, already work together, but I'm still arguing with myself over whether it's a good idea.
 
-## How WebAuthn works once you drop a level
+## The Web App Was Already Asking for Passkeys Before the Extension Could Do Anything
 
-Before you touch the extension, it's worth understanding what happens at the page level. Registering a passkey looks roughly like this from the page's JavaScript perspective:
+I started with the web app's backend, because without it there's nothing to intercept: it's the piece that issues the challenge, holds the `rp.id`, and verifies the signature at login time. Registering a passkey from the page looks roughly like this:
 
 ```js
 const credential = await navigator.credentials.create({
   publicKey: {
-    challenge: new Uint8Array(32), // random data from the server, against replay attacks
+    challenge: new Uint8Array(32), // random server data, against replay attacks
     rp: { name: "my-service.com", id: "my-service.com" },
     user: {
       id: new TextEncoder().encode(userId),
@@ -39,17 +39,15 @@ const credential = await navigator.credentials.create({
 });
 ```
 
-What comes back in `credential.response` is an `AuthenticatorAttestationResponse`. Inside it you've got `attestationObject`, which is CBOR-encoded and contains `authData` (among other things, the public key and the credential ID) and `clientDataJSON`, which carries the page's origin and the challenge, signed so the server can verify it was really this page asking.
+I read the docs, nodded along, thought "come on, this is simple," and honestly the backend was done in one evening: `rp.id` has to match the domain the call is coming from, and the browser enforces that, not the server. That's what makes a fake page like `my-service-com.ru` physically unable to get a valid signature back, even if the user clicks through every warning in the way. Login tests on Touch ID passed, the app worked.
 
-Here's the key thing that's easy to miss: `rp.id` has to be a domain that matches the caller, and the browser enforces that, not the server. That's the foundation of why passkeys resist phishing: the private key is mathematically tied to a specific origin, so a fake site like `my-service-com.ru` physically can't get a valid signature, even if the user clicks through everything that pops up.
+Except all of that was normally handled by the app's "platform authenticator", meaning Touch ID, Windows Hello, or the password manager built into the browser. The private key never left there. I wanted my extension to take that over instead, so the whole vault would live in one place I actually control. That's where the app stopped being a simple task, and the real work started.
 
-And now the crux of it: normally a "platform authenticator" handles all of this, Touch ID, Windows Hello, a hardware key, or the browser's built-in password manager. The private key never leaves it. I want my extension to handle it instead. That's where the fun starts.
+## The Extension Has No WebAuthn API, So You Have to Trick It
 
-## The extension has no WebAuthn API, so you have to trick it
+I searched for a long time for something like `chrome.webAuthn` in Manifest V3. There's nothing like that. Browser extensions have no privileged access to the operating system's WebAuthn layer, period. What real password managers do (I checked how Bitwarden's technical docs describe it, since they're fairly open about their architecture) is swap out `navigator.credentials` at the page level, before any of the page's own scripts can grab a reference to it, which is exactly the point where my app's backend expects a call from a "regular" authenticator.
 
-I spent a long time looking for something like `chrome.webAuthn` or similar in Manifest V3. There's nothing like that. Zero. Browser extensions don't have privileged access to the operating system's WebAuthn layer, period. What real password managers do (I checked how Bitwarden's technical documentation describes it, since they're fairly open about their architecture) is swap out `navigator.credentials` at the page level, before any script on that page gets a chance to reference it.
-
-In Manifest V3, that's done with `world: "MAIN"` in the content script, meaning code injected directly into the page's context rather than into the extension's isolated world:
+In Manifest V3 that's done with `world: "MAIN"` in the content script, meaning code injected directly into the page's own context instead of the extension's isolated world:
 
 ```json
 {
@@ -64,7 +62,7 @@ In Manifest V3, that's done with `world: "MAIN"` in the content script, meaning 
 }
 ```
 
-In `inject.js` I replace the methods with my own, which talk to the content script in the isolated world through `window.postMessage`, which then talks to the background service worker through `chrome.runtime.sendMessage`, where the actual vault logic lives:
+In `inject.js` I swap the methods for my own, which talk to the content script in the isolated world through `window.postMessage`, and that then talks to the background service worker through `chrome.runtime.sendMessage`, where the actual vault logic lives:
 
 ```js
 const originalCreate = navigator.credentials.create.bind(navigator.credentials);
@@ -76,56 +74,53 @@ navigator.credentials.create = async function (options) {
 };
 ```
 
-Timing here is absolute. If you set `run_at` to `document_end` instead of `document_start`, the page will already have saved a reference to the original `navigator.credentials` in its own code before you get to swap it, and your replacement won't do anything, because the page is holding on to the old handle anyway. I burned a whole evening on this before it clicked that injection order isn't a detail, it's a hard requirement.
+Timing here is non-negotiable. If you set `run_at` to `document_end` instead of `document_start`, the page manages to save its own reference to the original `navigator.credentials` before you swap it, and your swap does nothing, because the page keeps using the old handle anyway. I burned an entire evening on that before it clicked that injection order isn't a detail, it's a hard requirement.
 
-The second trap, the one that kept me up until eleven that Friday: you also have to replace `PublicKeyCredential.isConditionalMediationAvailable()`, because a lot of sites check that flag first before they even show the passkey sign-in UI. Forget that one method and your vault never gets a shot, because the page decides passkeys aren't available, even though your interception is working flawlessly. I cursed under my breath for a good half hour before I realized the problem wasn't in my code, it was in a method I'd completely forgotten about.
+Second trap, and this is the one that kept me up until eleven that Friday: you also have to swap `PublicKeyCredential.isConditionalMediationAvailable()`, because a lot of sites check that flag first before they even show any passkey login UI. Forget that one method and your vault never gets a shot, because the page decides passkeys aren't available, even though your interception is working perfectly fine. I muttered curses for a good half hour before realizing the problem wasn't in my code, it was a method I'd completely forgotten about.
 
-## Where the compromise bit me: the key that was never supposed to leave
+## Where the Compromise Bit Me: the Key That Was Never Supposed to Leave
 
-Now I get to the thing that really stopped me for a while. The whole point of WebAuthn rests on the private key being non-exportable and never leaving the device or the hardware authenticator. That's where the phishing and data-theft resistance comes from.
+The extension was already intercepting calls, the app's backend was already accepting them, so I figured I'd cleared the worst of it. That's when it hit me what I'd actually built: the entire point of WebAuthn is that the private key is non-exportable and never leaves the device or hardware authenticator. That's where its resistance to phishing and key theft comes from.
 
-But I'm building a vault whose entire purpose is having the same passkey work on both my laptop and my phone. Which means the key has to sync somehow. In practice that means I generate a key pair through WebCrypto, but instead of `extractable: false` (which the spec recommends, and which a real hardware authenticator does), I have to use `extractable: true`, so I can encrypt the key and push it to my own sync database:
+But I'm building a vault whose whole purpose is having the same passkey work on both a laptop and a phone, meaning the web app and the extension on both devices need to see the same key. So the key has to get synced somehow. In practice that means I generate a key pair through WebCrypto, but instead of `extractable: false` (the recommended spec behavior, and what a real hardware authenticator does), I have to use `extractable: true`, so I can encrypt the key and push it to my own sync store, the same one the app's backend reaches for:
 
 ```js
 const keyPair = await crypto.subtle.generateKey(
   { name: "ECDSA", namedCurve: "P-256" },
-  true, // extractable: true, because otherwise sync is impossible
+  true, // extractable: true, otherwise sync is impossible
   ["sign", "verify"]
 );
 ```
 
-This is exactly the same compromise that (as far as I can tell from their public materials) Bitwarden and 1Password make in their passkey implementations: they call it "software-backed passkeys", as opposed to "hardware-backed", and they say outright that it's a lower security level than a key locked inside a Secure Enclave or a TPM. The convenience of syncing costs a real drop in the guarantees the spec gives you. This isn't an implementation bug, it's a fundamental architectural choice, and anyone who markets "passkeys in the cloud" as identical to a hardware key is lying by omission, a little.
+This is, as far as I can tell from their public materials, exactly the same compromise Bitwarden and 1Password make in their passkey implementations: they call it "software-backed passkeys" as opposed to "hardware-backed", and they say outright that it's a lower security tier than a key locked inside a Secure Enclave or a TPM. Sync convenience costs you a real drop in the guarantees the spec promises. This isn't an implementation bug, it's a fundamental architectural choice, and anyone advertising "passkeys in the cloud" as identical to a hardware key is lying a little by omission.
 
-My current plan is to encrypt the private key locally with a key derived from a master password (something like PBKDF2 or Argon2 for stretching) before anything hits sync, so the server never sees the key in plaintext. But it's still a software solution with all the baggage that carries: if someone cracks the master password and gets access to the encrypted database, it's game over. A hardware key doesn't have this problem, because there's no way to "recover" it remotely at all.
+My current plan is to encrypt the private key locally with a key derived from a master password (something like PBKDF2 or Argon2 for the stretching) before anything hits the sync layer, so the server never sees the key in the clear. But that's still a software solution with all the baggage that comes with it: if someone breaks the master password and gets access to the encrypted store, the game is over. A hardware key doesn't have this problem, because there's nothing to "recover" remotely at all.
 
-## When does it actually make sense to build your own vault instead of using an off-the-shelf one
+## Should I Even Keep Doing This Myself Instead of Just Using Something That Already Exists
 
-Let me be blunt: for the vast majority of people the answer is "don't do this, use Bitwarden or the manager built into your browser or OS." Those products have security teams, audits, bug bounty programs, and years of hardening against real attacks. My three evenings with `postMessage` and CBOR don't come close to that level of testing, and I'm not pretending they do.
+After that realization I sat with a question I'd been avoiding: why am I even doing this whole app-plus-extension thing when Bitwarden already solved it, and better. I'll say it straight: for most people the answer is "don't do this, use Bitwarden or the manager built into your browser or OS." Those products have security teams, audits, bug bounty programs, and years of hardening against real attacks. My app backend plus extension with `postMessage` doesn't come close to that level of testing, and I'm not pretending it does.
 
-I'm doing this for two reasons that happen to make sense for me, but not necessarily for anyone else. First, I want to understand the mechanics deeply enough to be able to judge for myself whether other tools are doing it right, instead of taking marketing's word for it. Second, I have a specific edge case in my own stack where I want integration with my own auth system, and off-the-shelf managers treat that as niche support or don't support it at all. If neither of those two reasons applies to you, honestly: this isn't a project to put in production for real users, it's a project to learn from.
+For me this project makes sense for two reasons. First, I'm already building the web app around my own auth system anyway, so the passkey extension isn't a separate thing, it's just another piece of the same stack, and I want to understand the mechanics deeply enough to judge for myself whether other tools are doing this right, instead of taking marketing's word for it. Second, ready-made managers treat integration with a nonstandard backend like mine as niche support or not supported at all, and that's exactly the edge case I need. If neither of those two reasons applies to you, honestly: this isn't a project to put in front of real users in production, it's a learning project, exactly the kind I'm running right now.
 
 ## FAQ
 
 **Do browsers have any official API for password managers to handle WebAuthn?**
-There's no dedicated API like `chrome.webAuthn` for extensions. Every password manager I know of does the same thing described above: it swaps `navigator.credentials` through an injected script running in the page's main world.
-
-**Is this compliant with extension store policies?**
-Modifying page behavior through a content script is a legal, common technique (that's also how a lot of ad blockers and page translators work), so it isn't a problem by itself. You do have to clearly disclose what the extension does and not intercept anything silently without the user's consent.
+There's no dedicated `chrome.webAuthn`-class API for extensions. Every password manager I know of does the same thing described above: swap out `navigator.credentials` through an injected script running in the page's main world.
 
 **What's the difference between a "software-backed" and a "hardware-backed" passkey?**
-Hardware-backed means the private key is created and lives exclusively inside a dedicated module (Secure Enclave, TPM, hardware key) and physically cannot be exported. Software-backed means the key exists as encrypted data that could theoretically be recovered if someone broke the encryption or the master password. The latter is more convenient for syncing but has a weaker threat model.
+Hardware-backed means the private key is created and lives exclusively inside a dedicated module (Secure Enclave, TPM, a hardware key) and physically can't be exported. Software-backed means the key exists as encrypted data that could in theory be recovered if someone breaks the encryption or the master password. The second one is more convenient for syncing, but has a weaker threat model.
 
-**Why is `run_at: document_start` so important?**
-Because the page can save a reference to the original `navigator.credentials` right after loading, before the extension gets a chance to swap anything. If the swap happens too late, the page keeps using the old handle, and your interception never fires.
+**Why does `run_at: document_start` matter so much?**
+Because the page can save a reference to the original `navigator.credentials` right after loading, before the extension gets a chance to swap anything. If the swap lands too late, the page keeps using the old handle, and your interception never fires.
 
-**Are you planning to publish this or share the code?**
-Right now it's a personal, learning project, so there's no public repo or timeline yet. Once it reaches a stage I'd consider solid enough for someone else to safely use, I'll definitely write a separate post about it.
+**Are you planning to open source this or release the code?**
+Right now it's a personal, learning project, so there's no public repo or timeline yet. Once it reaches a point I'd consider solid enough for someone else to safely use, I'll definitely write a separate post about it.
 
 ## Summary
 
-And that's it for today! In short: WebAuthn's API surface looks like two functions, but underneath it there's a whole choreography of CBOR, origins, and trust in the authenticator. A browser extension can only hook into it by swapping `navigator.credentials` in the page's main world, with treacherous injection timing. And if you want to sync keys across devices, you have to consciously step down from the "the key never leaves the device" model to the "the key is encrypted, but theoretically recoverable" model, and there's no magic solution that gives you both at once.
+And that's it for today! In short: I have a web app that exposes a normal WebAuthn flow, and an extension that hooks into it by swapping out `navigator.credentials` in the page's main world, with unforgiving injection timing. And if you want those two pieces to sync keys across devices, you have to consciously step down from the "key never leaves the device" model to the "key is encrypted, but theoretically recoverable" model, and there's no magic solution that gives you both at once.
 
-And now the irony of the whole situation: I built this because I wanted to get rid of my dependency on other companies' password managers and have my own thing, under my own control. Three evenings in, I'm arriving at the conclusion that the only way for my vault to be as secure as Bitwarden is to basically rewrite half the architectural decisions Bitwarden already made, just worse, because it's just me, alone, after hours. Independence sometimes just means rediscovering the same compromises someone else already discovered and already wrote up in their technical documentation, lol.
+And now the irony of the whole situation: I built this because I wanted to get rid of my dependency on third-party password managers and have something of my own, the app and the extension together. Three evenings in, I've landed on the conclusion that the only way to make my vault as secure as Bitwarden is to basically re-make half the architectural decisions Bitwarden already made, just worse, because it's just me, after hours. Independence sometimes just means rediscovering the same compromises someone else already found and wrote up in their technical docs lol.
 
 ## Links
 
@@ -133,4 +128,4 @@ And now the irony of the whole situation: I built this because I wanted to get r
 - [MDN: Web Authentication API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Authentication_API)
 - [Manifest V3: content scripts and `world: "MAIN"`](https://developer.chrome.com/docs/extensions/reference/manifest/content-scripts)
 - [Bitwarden: how passkeys are stored](https://bitwarden.com/help/passkeys/)
-- [My post about setting up Vaultwarden on my own server](/blog/en/how-to-setup-vaultwarden-on-linux)
+- [My post on self-hosting Vaultwarden](/blog/en/how-to-setup-vaultwarden-on-linux)
