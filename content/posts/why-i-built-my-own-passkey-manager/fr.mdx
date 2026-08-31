@@ -1,0 +1,118 @@
+---
+title: "J'ai construit mon propre gestionnaire de passkeys et je comprends maintenant pourquoi personne ne fait ça à la légère"
+description: "L'histoire de passkey-vault : ce qui fait mal dans WebAuthn et les décisions que j'ai dû prendre en founder, pas seulement en développeur."
+date: 2026-08-31T12:00:00.000Z
+tags: passkeys, webauthn, security, fido2, indie-hacking, mvp, decyzje, founder
+---
+
+## Introduction
+
+Salut ! Tout a commencé par l'agacement habituel. Je me connecte quelque part avec un passkey, le navigateur demande quel gestionnaire de mots de passe doit s'en occuper, j'en choisis un, j'attends, quelque chose plante, je réessaie depuis mon téléphone, je scanne un QR code, rien. Encore une fois. Putain. Après la troisième session comme ça dans la semaine, je me suis dit : ce n'est pas une technologie qui a le droit de marcher "presque toujours". Elle doit marcher tout le temps, parce que c'est la connexion. Alors au lieu de râler encore une fois contre le produit de quelqu'un d'autre, j'ai ouvert un dossier vide et j'ai commencé à écrire le mien.
+
+C'est comme ça qu'est né passkey-vault. Cet article n'est ni un changelog ni un tutoriel pas à pas. C'est ce que personne ne te dit avant que tu t'assoies toi-même devant WebAuthn : que la démo sur la doc du fournisseur et une vraie implémentation sont deux mondes différents, et que la plupart des décisions difficiles de ce projet n'étaient pas techniques du tout, c'étaient des décisions de founder.
+
+Tu vas avoir trois choses :
+
+1. **ce qui fait vraiment mal dans WebAuthn** dès que tu arrêtes de copier l'exemple de la doc et que tu commences à construire quelque chose qui doit survivre au contact de vrais utilisateurs,
+2. **les décisions que j'ai dû prendre en founder, pas en développeur** : quoi laisser de côté au lancement, à qui faire confiance, quoi construire soi-même et quoi acheter tout fait,
+3. **quand construire son propre gestionnaire de passkeys est une mauvaise idée**, parce qu'honnêtement, la plupart du temps ça l'est.
+
+L'appli iOS qui en est sortie, c'est un sujet pour un article à part. Ici je reste sur le moteur lui-même et le chemin pour y arriver.
+
+## Ce qu'est vraiment passkey-vault
+
+En résumé : un gestionnaire de passkeys, c'est-à-dire une implémentation de relying party avec du stockage côté serveur, qui gère l'inscription et la connexion par passkeys selon WebAuthn et FIDO2, plus une couche de synchronisation pour que le même utilisateur puisse se connecter depuis plusieurs appareils sans rescanner un QR code à chaque fois. Ça a l'air d'être une seule phrase. En pratique, c'est une vingtaine de petites décisions, dont chacune a des conséquences en sécurité si tu en rates ne serait-ce qu'une.
+
+Avant qu'on me demande : non, ce n'est pas "encore un Bitwarden". C'était un projet que j'ai commencé pour comprendre le protocole assez bien pour faire davantage confiance à ma propre implémentation qu'à la boîte noire de quelqu'un d'autre, et qui en chemin a commencé à ressembler à quelque chose qui pourrait être un produit à part entière. Plus de détails dans la section sur les décisions de founder.
+
+## Premier problème : la démo de la doc ment par omission
+
+Chaque tutoriel WebAuthn ressemble à peu près à ça :
+
+```javascript
+const credential = await navigator.credentials.create({
+  publicKey: {
+    challenge: new Uint8Array(32),
+    rp: { name: "passkey-vault", id: "passkey-vault.example" },
+    user: { id: userId, name: email, displayName: email },
+    pubKeyCredParams: [{ type: "public-key", alg: -7 }],
+  },
+});
+```
+
+Joli, court, ça marche sur localhost dans la démo. Le problème commence au moment où `rp.id` doit correspondre exactement au domaine enregistrable depuis lequel le site est servi, pas n'importe quel sous-domaine au choix. Tu as `app.passkey-vault.com` et `api.passkey-vault.com` et tu veux qu'un credential marche sur les deux ? Tu dois délibérément régler `rp.id` sur le suffixe commun, pas copier ce qui marchait en local par hasard. Tu changes le domaine de production après coup ? Tous les credentials enregistrés cessent de correspondre, parce qu'ils sont liés à l'origine de façon permanente. Ce n'est pas un bug à corriger, c'est une propriété du protocole dont la démo ne parle jamais, parce que la démo ne change jamais de domaine.
+
+Le deuxième truc qui ne fait mal qu'en pratique : tester en local nécessite soit `https://localhost`, soit un authenticator virtuel via les DevTools de Chrome, parce que le navigateur refuse WebAuthn en HTTP classique en dehors de l'exception localhost. Ma première tentative de tests d'intégration mockait tout `navigator.credentials`. Il s'est vite avéré que le mock rate la moitié des vraies erreurs, parce qu'un vrai authenticator a ses propres bizarreries : certaines clés matérielles ne supportent pas les discoverable credentials, certaines implémentations plateforme mettent en cache un état entre les tentatives, si bien que deux tests consécutifs dans le même run de CI voient des choses différentes. J'ai fini par passer à un authenticator virtuel via le Chrome DevTools Protocol, et c'est seulement là que les tests ont commencé à attraper quelque chose de réel.
+
+## Deuxième problème : ce que tu stockes vraiment en base
+
+C'est le moment où les gens se trompent le plus souvent, moi y compris au début. La clé privée ne quitte JAMAIS l'authenticator de l'utilisateur, donc le serveur ne la voit jamais et ne la stocke jamais. Ce qui atterrit vraiment dans ta base : le `credentialId`, la clé publique, le compteur de signatures (`signCount`), les flags `backup eligible` et `backup state`, et éventuellement des métadonnées d'attestation. Ça a l'air inoffensif jusqu'à ce que tu te demandes ce qui, là-dedans, est sensible.
+
+La réponse : `credentialId` n'est pas un secret en soi, mais c'est un identifiant qui devrait être traité comme une donnée personnelle, parce qu'il lie un utilisateur précis à un appareil précis. Le compteur de signatures est ta seule ligne de défense contre un authenticator matériel cloné : si le compteur, à la connexion suivante, est inférieur ou égal au précédent, c'est un signal que quelqu'un a copié les données de la clé et que la connexion devrait échouer. Le problème, c'est que les passkeys synchronisés dans le cloud (iCloud Keychain, Google Password Manager) rapportent en pratique souvent un `signCount` à zéro à chaque connexion, parce que le compteur n'a plus de sens dès que le même credential vit sur plusieurs appareils en même temps. Donc la logique "le compteur doit augmenter" se casse exactement pour le cas censé être le plus pratique pour l'utilisateur. J'ai dû séparer deux modes de vérification : strict pour les clés matérielles avec un vrai compteur, souple pour les credentials marqués backup eligible, où un compteur à zéro est normal, pas une alerte.
+
+## Troisième problème : la connexion sans nom d'utilisateur, qu'il a fallu repenser deux fois
+
+Les discoverable credentials, c'est-à-dire les passkeys que le navigateur peut proposer tout seul sans qu'on tape d'identifiant, sont l'argument de vente numéro un des passkeys. Et à juste titre, l'UX est meilleure. Mais bien l'implémenter demande que le serveur puisse générer un challenge de connexion SANS connaître l'identité de l'utilisateur, parce que par définition tu ne la connais pas encore. Ma première version de l'endpoint de connexion portait une hypothèse silencieuse : connaître l'utilisateur d'abord, générer les options ensuite. Ça marchait pour une connexion avec identifiant, ça cassait immédiatement pour un bouton "se connecter par passkey" sans champ email.
+
+J'ai dû reconstruire ça en un flux à deux étapes : un endpoint qui génère des options sans aucun contexte utilisateur, plus un endpoint de vérification qui, seulement après avoir reçu la réponse de l'authenticator, retrouve l'utilisateur via le `credentialId` renvoyé dans cette réponse. Simple à décrire en une phrase, mais c'est exactement le genre de changement où tu dois réécrire la validation côté serveur, parce que l'hypothèse silencieuse était avant que la session porte l'identité. Ici, l'identité arrive à la fin, pas au début.
+
+## Là où le téléphone entre en jeu : la synchro entre appareils
+
+Le plus gros problème réel chez moi n'était pas cryptographique, mais distributionnel : comment s'assurer qu'un passkey enregistré sur un laptop est réellement utilisable sur un téléphone sans se réenregistrer à chaque fois. La réponse plateforme, c'est le hybrid transport, c'est-à-dire se connecter depuis un téléphone vers un navigateur sur un autre appareil via un QR code avec le Bluetooth comme preuve de proximité (caBLE), ou une synchro complète via un fournisseur système, iCloud Keychain côté Apple, Google Password Manager côté Android.
+
+C'est exactement là que commence le sujet de l'appli iOS : credential provider extension, intégration avec l'Autofill système, tout ce morceau d'UX sur l'appareil. C'est une histoire à part entière, dense, donc je la développe dans le prochain article. Retiens juste une chose ici : la décision de supporter le hybrid transport plutôt que d'exiger un enregistrement séparé sur chaque appareil était une décision produit, pas technique, et je ne l'ai prise qu'après que mon propre MVP m'a énervé en me forçant à me réenregistrer sur chaque appareil.
+
+## Décisions que j'ai prises en founder, pas en développeur
+
+Voici la partie que personne n'écrit dans la doc WebAuthn, parce que la doc ne sait pas que tu construis un produit, pas un exercice de cryptographie.
+
+**Quoi construire soi-même et quoi confier à une lib toute faite.** J'ai laissé la cryptographie de signature et la vérification à une bibliothèque, parce qu'écrire sa propre implémentation de CBOR et COSE à partir de zéro est exactement le genre de travail où une erreur coûte plus cher que le temps économisé. En revanche, la logique de stockage, le modèle de données, la politique du compteur de signatures et tout le flux d'inscription et de connexion, je les ai écrits moi-même, parce que c'est là que se trouve la valeur différenciante du produit, pas un endroit à externaliser.
+
+**Quand arrêter de courir après l'attestation.** WebAuthn supporte l'attestation, une preuve cryptographique qu'un credential donné provient d'un modèle de clé matérielle précis et certifié. Ça a l'air d'un truc qu'il faut évidemment vérifier. Le problème : vérifier l'attestation demande de maintenir et de mettre à jour des métadonnées de fabricants (le FIDO Metadata Service), ce qui est un boulot en soi, alors que la plupart des utilisateurs réels se connectent avec un passkey plateforme, pas avec une clé matérielle certifiée, donc l'attestation revient de toute façon en `none`. J'ai abandonné la vérification stricte de l'attestation au lancement et je l'ai notée comme une dette délibérée, pas un oubli. C'est la différence entre un MVP et de la négligence : l'un est documenté et justifié, l'autre te surprend simplement plus tard.
+
+**Pourquoi construire ça soi-même alors que Bitwarden et 1Password l'ont déjà.** Parce que je voulais un produit où je comprends chaque ligne responsable de la sécurité de connexion de mes futurs utilisateurs, plutôt que de m'intégrer au SDK de quelqu'un d'autre et de prier pour que son modèle de confiance corresponde au mien. C'est une décision facile à confondre avec le syndrome "not invented here". Honnêtement, une partie de cette décision, c'est exactement ce syndrome. Mais une partie, c'est un vrai calcul : si les passkeys doivent être le fondement du produit, je préfère comprendre ce fondement de l'intérieur.
+
+## Quand construire son propre gestionnaire de passkeys N'a PAS de sens
+
+Honnête dans l'autre sens aussi, parce que cet article se lit facilement comme une incitation à la même folie pour tout le monde. Ne construis pas ton propre gestionnaire de passkeys si :
+
+- **les passkeys ne sont pour toi qu'une méthode de connexion parmi d'autres**, pas le fondement du produit. Dans ce cas, s'intégrer à un fournisseur tout fait (Clerk, Auth0, WorkOS, peu importe) te coûte une journée, alors que ta propre implémentation te coûte des mois et t'expose à des failles de sécurité qu'un fournisseur tout fait a déjà corrigées depuis longtemps.
+- **tu n'as pas le budget temps pour suivre un standard qui évolue.** WebAuthn et FIDO2 changent, de nouvelles extensions comme PRF ne font que mûrir dans le support des navigateurs, et quelqu'un doit suivre ça.
+- **personne dans ton équipe n'aime lire des specs cryptographiques pour le plaisir.** Sérieusement. Ce n'est pas un projet que tu construis une fois et que tu oublies, c'est un projet qui a besoin de quelqu'un pour l'entretenir.
+
+Si aucun de ces trois points ne te concerne, c'est-à-dire que les passkeys sont le cœur de ce que tu construis, que tu as le temps pour l'entretien, et que quelqu'un dans l'équipe aime vraiment ça, alors construire le tien commence à avoir du sens. Chez moi, les trois conditions étaient réunies. Ça ne veut pas dire qu'elles le seront chez toi.
+
+## Ce qui en est ressorti
+
+Passkey-vault fonctionne, il gère l'inscription, la connexion sans nom d'utilisateur, et une synchro de base via hybrid transport. Il ne gère pas encore la vérification complète de l'attestation, et c'est délibérément repoussé, pas oublié. La plus grande leçon de tout ce processus ne concerne pas la cryptographie, mais le nombre de décisions qui ont l'air techniques et qui sont en réalité des décisions produit déguisées : quoi laisser de côté, à qui faire confiance, pour qui tu construis ça au juste.
+
+## FAQ
+
+**En quoi un passkey diffère-t-il d'un mot de passe classique du point de vue de ce que garde le serveur ?**
+Le serveur ne voit et ne stocke jamais la clé privée, elle reste dans l'authenticator de l'utilisateur. Côté serveur n'atterrissent que : l'identifiant du credential, la clé publique, le compteur de signatures et les flags de backup. C'est un modèle de menace fondamentalement différent d'une base de hashes de mots de passe, parce que même une fuite complète de ta base ne donne à un attaquant rien avec quoi se connecter.
+
+**Est-ce sûr de construire son propre backend WebAuthn si on n'est pas expert en cryptographie ?**
+Laisse la cryptographie proprement dite, la vérification de signature et le parsing CBOR à une bibliothèque éprouvée. Ce que tu construis toi-même, c'est la logique métier autour : stockage, politique du compteur, flux de connexion. On peut aussi y faire des erreurs de sécurité, mais elles sont bien plus faciles à raisonner et à tester qu'une implémentation maison des primitives cryptographiques.
+
+**Pourquoi le compteur de signatures est-il parfois à zéro à chaque connexion ?**
+Parce qu'un passkey synchronisé dans le cloud entre appareils n'a par nature pas un compteur unique et strictement croissant, puisque le même credential est utilisé depuis plusieurs endroits en même temps. C'est normal pour les credentials marqués backup eligible et backup state. La règle stricte "le compteur doit augmenter" n'a de sens que pour des clés matérielles sans synchro.
+
+**Et l'appli iOS, le credential provider et l'intégration Autofill ?**
+C'est un sujet à part, plus gros, qui mérite son propre article, parce que l'intégration avec l'Autofill système sur iOS a un ensemble de problèmes complètement différent du backend WebAuthn. Ça arrive dans le prochain article.
+
+**Est-ce que ça a du sens comme produit, ou c'est juste un projet d'apprentissage ?**
+C'est parti comme un projet pour comprendre le protocole. En chemin, ça a commencé à ressembler à quelque chose qui pourrait être un produit à part entière, surtout parce que la frustration de départ est réelle et concerne plus de monde que moi seul. Est-ce que ça deviendra vraiment un produit, on verra. Pour l'instant, c'est un moteur solide que je comprends de l'intérieur.
+
+## Résumé
+
+Et voilà. L'ironie de toute cette histoire, c'est que j'ai commencé ce projet parce que j'étais agacé par les gestionnaires de mots de passe des autres qui perdaient le fil à la connexion par passkey. Quelques mois plus tard, j'ai mon propre gestionnaire, dans lequel je peux aussi me perdre, sauf que maintenant je sais exactement pourquoi, parce que je l'ai écrit moi-même. Ce n'est pas moins frustrant. C'est en revanche beaucoup plus instructif, et paraît-il, c'est le bon genre d'échec.
+
+Plus sur l'appli iOS, le credential provider et la façon dont l'Autofill sur iPhone peut te surprendre de dix façons différentes, la prochaine fois. Prends soin de toi !
+
+## Liens
+
+- [WebAuthn, spécification W3C](https://www.w3.org/TR/webauthn-3/)
+- [FIDO2 Client to Authenticator Protocol (CTAP)](https://fidoalliance.org/specs/fido-v2.2-rd-20230321/fido-client-to-authenticator-protocol-v2.2-rd-20230321.html)
+- [Onglet WebAuthn des DevTools Chrome, authenticator virtuel pour les tests](https://developer.chrome.com/docs/devtools/webauthn)
+- [Comment un LLM a traduit mon blog et cassé la moitié des liens](/blog/fr/llm-translated-my-blog-and-broke-the-links)
+- [Je voulais réécrire mon blog sur un framework à la mode et pourquoi j'ai renoncé](/blog/fr/why-i-didnt-rewrite-my-blog-to-a-new-framework)
