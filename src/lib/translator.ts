@@ -6,7 +6,7 @@ import { CANONICAL_LANG, SUPPORTED_LANGS, type SupportedLang } from "@/lib/i18n"
 import { getPostFilePath, parseFrontmatter } from "@/lib/blog"
 import type { Metadata } from "@/lib/blog"
 
-const TRANSLATION_MODEL = "llama-3.3-70b-versatile"
+const TRANSLATION_MODEL = "openai/gpt-oss-120b"
 const TRANSLATION_OUTPUT_EXTENSION = ".mdx"
 
 const groq = createOpenAI({
