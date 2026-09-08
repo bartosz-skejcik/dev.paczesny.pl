@@ -1,0 +1,102 @@
+---
+title: I built a study app for a single user, secured as if for a thousand users
+description: A study app for one person, built in 36 hours. Yet it passed a numbered security review that caught a real data leak.
+date: 2026-09-08T12:00:00.000Z
+tags: appwrite, security, auth, side-project, ai, groq, indie-hacking, decyzje
+---
+
+## Introduction
+
+Wednesday evening, I’m coding another module of the study app for literally one regular user. In a second terminal I fire up my own, numbered security review, because that’s my habit for every sizable module. I ask myself why I need it when only one person logs in, not a thousand. A moment later the same review spits out a real data leak between accounts on a shared browser. Fuck. Now I know why.
+
+This post is the story of how, in under 36 hours, an app that was supposed to be a one‑off export for a single exam grew into a full‑blown platform with accounts, a database, and an AI assistant, and how the numbered security review of that app caught three production‑grade bugs, even though “production” here means one person.
+
+You’ll get three things:
+
+1. **What happened in those 36 hours**, when a static export turned into an app with accounts via Appwrite, an admin panel, and AI‑powered question answering,
+2. **What the numbered security review actually caught (I1, I2, I3)**, with concrete commit hashes, not vague “fixed login a bit” notes,
+3. **When that level of paranoia makes sense for a single‑user app, and when it’s just a waste of time**, because this post could easily be read as a manifesto urging everyone to do the same.
+
+## Where the app came from
+
+It started with something the repo simply calls “Session”: a one‑off, static export of university material for a single exam. It was supposed to live a week, maybe two. In the window I’m describing here I rebuilt it from scratch into something that should last longer. `docs/PROJEKT.md` says it plainly in one sentence I left for myself so I wouldn’t forget why I’m doing this:
+
+> A personal study tool for the whole degree, not just one retake.
+
+The app breaks lecture material into a tree of subjects and modules, and each module renders as a note, flashcards, quiz, matching pairs, and checklist, with light gamification: points, streaks, seventeen badges. Sounds like a decent app. It is a decent app. The difference from the original “Session” isn’t that I added more features, but that I stopped treating it as a one‑off.
+
+## 36 hours that turned an export into an app with accounts
+
+The first commit in the `sesja` repository lands at `2026-09-05T11:58Z`. Less than 36 hours later, at `2026-09-06T23:46Z`, the project already has user accounts via Appwrite OAuth, per‑user tables in the database, chat history, an admin panel, and a Groq‑based AI assistant for asking material‑related questions. That’s over 150 commits in a single weekend.
+
+Honestly: those timestamps are commit timestamps in one repo, not a counter of my hours at the keyboard. A good chunk of those commits are co‑authored by the “Claude Fable 5.1” session, i.e., agent sessions that worked on the code in parallel or while I was away. I don’t know, and I’m not claiming, to what extent those 36 hours were me at the laptop versus an agent doing its thing in the background. I only know what the commit history shows, and that’s already plenty of material.
+
+One detail of that pace that actually made me smile, because it shows I wasn’t flying blind: `README.md` notes that fact‑row IDs in the database are deterministic.
+
+> Fact-row ids are deterministic (hash32(...natural keys)), so every write from lib/state/write.ts is an upsert-or-delete-by-id and a retried event can never double an effect.
+
+In other words, even if something repeats, say, a retry after a dropped connection, the app won’t duplicate your points for the same flashcard twice. I designed that consciously from day one, not as a later‑stage afterthought. The rest of this post is about what I **didn’t** design that way from the start.
+
+## Numbered security review of the single‑user app
+
+A quick disclaimer before anyone assumes I paid a firm for a pentest of the flashcard app: this wasn’t a third‑party audit or any automated scanner. It was my own, numbered review that I organized myself during the same weekend of development, with labels I1, I2, I3 baked directly into the commits. Just discipline, not a certificate.
+
+**I1: a shared browser could swap data between accounts.** The event queue for a logged‑out user could be “replayed” on the next person who logs in on the same device. That’s exactly the “two people, one laptop” scenario, the one that a single‑user mental model most easily overlooks because it assumes device = account.
+
+> A shared browser could replay one logged-out user's queued state events into whoever logs in next
+
+([40c9c1fc](https://github.com/bartosz-skejcik/sesja/commit/40c9c1fc))
+
+**I2: a transient failure looked like an invalid session.** The `userOf()` function caught every error and returned `null`. Result: a brief network hiccup or an Appwrite restart was indistinguishable from an expired session, so the app cleared cookies and logged out *all* active users at once, even though nothing was actually wrong with their sessions.
+
+> userOf() previously caught every error and answered null, which made a network blip or an Appwrite restart look identical to an invalid session: every active user got logged out and cookie‑cleared.
+
+([8efc769c](https://github.com/bartosz-skejcik/sesja/commit/8efc769c))
+
+**I3: the fix for I1 introduced its own hole.** After fixing I1, `box()` threw an error when `currentUserId` was empty. But `dispatch()` still applied optimistic state and queued the event unconditionally, so the thrown error didn’t stop anything downstream ([d34d4cdb](https://github.com/bartosz-skejcik/sesja/commit/d34d4cdb)). I patched the hole and, in the process, learned that “throwing an error” and “stopping the operation” are two different things if nobody checks what happens to that error later.
+
+## Why a single‑user app got treated like it had a thousand users
+
+Because risk doesn’t scale with the number of accounts; it scales with what the app holds and where it lives. The app has accounts, per‑user data, and realistically runs on a device that’s often shared within a family. That’s enough reason to treat a cross‑account leak as a real problem, not a theoretical footnote in a security article.
+
+I don’t know the exact number of accounts that exist today, other than there’s one regular user and the possibility that a family member might launch the app on the same hardware. This isn’t SaaS‑scale, and I’m not pretending it is. But I1 shows precisely why “number of accounts” is a bad risk metric: two people on one device are enough for a data leak to become real, not hypothetical.
+
+## When that paranoia is a waste of time
+
+Conversely, it’s easy to read this as “always do a numbered security review even for a two‑person app”. That’s not always sensible. Before you copy this process to your own project, check whether you actually have the same problem. Skip the numbered review if:
+
+- the app has no accounts and stores nothing per‑user, so there’s nothing to “leak” between users,
+- the app runs locally on a single device that is never shared,
+- the data in the app is public or irrelevant, so even a real leak costs nobody anything.
+
+The app ticks all three boxes: it has accounts via Appwrite, lives on a device that can be shared, and stores private data for a specific person: notes, quiz progress, AI chat history. If it were a login‑less offline flashcard generator with no state persistence, the whole numbered review would be form over substance. Here it isn’t.
+
+## What this means
+
+The app now has three confirmed and fixed bugs from that review. I’m not claiming they’re the only ones out there, because the review only checks what I happen to think of, not everything that exists. The irony is that the app has a single regular user, but it wasn’t that user who reported the three bugs. My own numbered review did, three times in a row, before I decided I could stop looking. That probably says more about me than about the app itself.
+
+## FAQ
+
+**Is this app publicly available, in production?**  
+This post doesn’t say, because that’s not part of the story. The focus is on the security process and what it uncovered, not where the app lives right now.
+
+**How many people actually use the app?**  
+I don’t know precisely. Realistically one regular user, plus the chance that a family member might run it on the same device. Definitely not a thousand‑account service, despite the title.
+
+**Who performed the security review, an external firm?**  
+No. It was my own, numbered review (I1, I2, I3), done the same weekend as the rest of the build. Not a formal audit, not a pentest, not an automated scanner. Discipline, not a certificate.
+
+**After these three fixes is the app fully secure?**  
+I don’t claim that. I caught three concrete, confirmed bugs. There could be others I haven’t seen yet, because a numbered review checks what I think of, not everything.
+
+**Why does a flashcard app need a Groq AI assistant?**  
+To ask material‑related questions directly from the module, instead of hopping between the app and a separate chat. One of the things that grew in those 36 hours alongside accounts and the admin panel.
+
+## Links
+
+- [I built my own passkey manager and now I understand why nobody does it on a whim](/blog/en/why-i-built-my-own-passkey-manager)
+- [How LLaMA messed up my links in translations](/blog/en/llm-translated-my-blog-and-broke-the-links)
+- [Sesja repository on GitHub](https://github.com/bartosz-skejcik/sesja)
+- [Commit I1: fix cross‑account replay on a shared browser](https://github.com/bartosz-skejcik/sesja/commit/40c9c1fc)
+- [Commit I2: fix transient errors being treated as invalid sessions](https://github.com/bartosz-skejcik/sesja/commit/8efc769c)
+- [Commit I3: fix the lingering hole after I1](https://github.com/bartosz-skejcik/sesja/commit/d34d4cdb)
