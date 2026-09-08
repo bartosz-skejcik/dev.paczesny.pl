@@ -1,0 +1,105 @@
+---
+title: Ich habe Zuzis Panel gebaut: eine Lern‑App, gesichert wie für tausend Nutzer
+description: Panel Zuzi ist eine Lern-App für eine Person, in 36 Stunden gebaut. Sie bestand trotzdem einen nummerierten Sicherheitscheck mit echtem Datenleck.
+date: 2026-09-08T12:00:00.000Z
+tags: appwrite, security, auth, side-project, ai, groq, indie-hacking, decyzje
+---
+
+## Einführung
+
+Mittwochsabend schreibe ich gerade ein weiteres Modul für Zuzis Panel, eine Lern‑App für buchstäblich **eine** regelmäßige Nutzerin. Im zweiten Terminal starte ich meinen eigenen, nummerierten Sicherheitstest, weil ich das bei jedem größeren Modul so mache. Ich frage mich selbst, warum ich das brauche, wenn sich hier nur **eine** Person einloggt, nicht tausend. Einen Moment später spuckt derselbe Test einen echten Datenleck zwischen Konten im geteilten Browser aus. Scheiße. Und jetzt weiß ich, warum.
+
+Dieser Beitrag erzählt die Geschichte, wie in weniger als 36 Stunden eine App, die nur als einmaliger Export für eine Prüfung gedacht war, zu einer kompletten Plattform mit Konten, Datenbank und KI‑Assistenten heranwuchs – und wie der nummerierte Sicherheitstest drei produktionsreife Fehler aufdeckte, obwohl „Produktion“ hier nur **eine** Person bedeutet.
+
+Du bekommst drei Dinge:
+
+1. **Was in diesen 36 Stunden passiert ist**, als der statische Export zu Zuzis Panel wurde – eine App mit Konten über Appwrite, einem Admin‑Panel und einer KI für Fragen zum Lernstoff,
+2. **Was der nummerierte Sicherheitstest tatsächlich gefunden hat (I1, I2, I3)**, inklusive konkreter Commits, nicht nur „ich habe das Login ein bisschen verbessert“,
+3. **Wann ein solcher Paranoia‑Level bei einer Ein‑Personen‑App Sinn macht und wann er einfach nur Zeitverschwendung ist**, weil dieser Beitrag leicht als Aufruf verstanden werden kann, das überall zu tun.
+
+## Woher kommt Zuzis Panel
+
+Alles begann mit etwas, das im Repo schlicht „Session“ heißt: ein einmaliger, statischer Export von Vorlesungsunterlagen für **eine** konkrete Prüfung. Er sollte eine Woche, vielleicht zwei, leben. In dem Fenster, das ich in diesem Beitrag beschreibe, habe ich das Ganze von Grund auf neu aufgebaut zu etwas, das länger bestehen soll. `docs/PROJEKT.md` sagt es ganz offen in einem Satz, den ich mir dort hinterlassen habe, damit ich nicht vergesse, warum ich das tue:
+
+> Persönliches Lernwerkzeug für Zuzia, für das gesamte Studium, nicht nur für eine Korrektur.
+
+Panel Zuzi zerlegt Vorlesungsinhalte in einen Baum aus Fächern und Modulen; jedes Modul wird als Notiz, Karteikarte, Quiz, Zuordnungs‑Aufgabe und Checkliste gerendert, mit leichter Gamification: Punkte, Streaks, siebzehn Badges. Klingt nach einer ordentlichen App. Und das ist sie auch. Der Unterschied zu „Session“ liegt nicht darin, dass ich mehr Features hinzugefügt habe, sondern darin, dass ich aufgehört habe, das Ganze als Einmal‑Sache zu sehen.
+
+## 36 Stunden, die den Export in eine App mit Konten verwandelten
+
+Der erste Commit im Repository `sesja` ist vom 2026‑09‑05T11:58Z. Weniger als 36 Stunden später, am 2026‑09‑06T23:46Z, hat das Projekt bereits Benutzerkonten über Appwrite‑OAuth, per‑User‑Tabellen in der Datenbank, Chat‑Verlauf, ein Admin‑Panel und einen KI‑Assistenten (auf Groq‑Basis) für Fragen zum Lernstoff. Das sind über 150 Commits an einem Wochenende.
+
+Ehrlich: Diese Zeitstempel sind Commit‑Timestamps in einem Repository, nicht ein Zähler meiner Tipp‑Stunden. Ein großer Teil der Commits ist Co‑Authorship der Session „Claude Fable 5.1“, also agentenbasierter Sessions, die parallel am Code gearbeitet haben – teilweise während meiner Abwesenheit. Ich weiß nicht und behaupte nicht, wie viel von den 36 Stunden ich tatsächlich am Laptop saß und wie viel der Agent im Hintergrund erledigt hat. Ich weiß nur, was im Commit‑Verlauf steht, und das reicht für diesen Beitrag.
+
+Ein Detail aus diesem Tempo, das mich besonders gefreut hat, weil es zeigt, dass ich nicht blind drauflos programmiert habe: `README.md` erklärt, dass die IDs von Fact‑Rows deterministisch sind.
+
+> Fact‑row ids are deterministic (hash32(...natural keys)), so every write from lib/state/write.ts is an upsert-or-delete-by-id and a retried event can never double an effect.
+
+Mit anderen Worten: Selbst wenn etwas wegen eines Retries nach einer unterbrochenen Verbindung doppelt ausgeführt wird, dupliziert die App **nicht** deine Punkte für dieselbe Karteikarte. Das habe ich bewusst von Anfang an so konzipiert, nicht erst im Nachhinein beim Review. Der Rest dieses Beitrags handelt davon, was ich **nicht** von Anfang an bewusst gestaltet habe.
+
+## Nummerierter Sicherheitstest der App mit einem Nutzer
+
+Hier ein Hinweis, bevor jemand denkt, ich hätte ein externes Pentest‑Unternehmen bezahlt: Es war kein Audit einer Drittpartei und kein automatisches Scanning‑Tool. Es war mein eigener, nummerierter Sicherheitstest, den ich mir im gleichen Wochenende der Entwicklung selbst organisiert habe, mit den Labels I1, I2, I3 direkt in den Commits. Nur Disziplin, kein Zertifikat.
+
+**I1: Gemeinsamer Browser konnte Daten zwischen Konten austauschen.**  
+Die Ereignis‑Queue des ausgeloggten Users konnte auf das Konto der nächsten Person „abgespielt“ werden, die sich auf demselben Gerät anmeldet. Genau das Szenario „zwei Personen, ein Laptop“, das das Single‑User‑Mental‑Model leicht übersieht, weil es davon ausgeht, dass Gerät = Konto.
+
+> A shared browser could replay one logged‑out user's queued state events into whoever logs in next
+
+([40c9c1fc](https://github.com/bartosz-skejcik/sesja/commit/40c9c1fc))
+
+**I2: Vorübergehender Ausfall wurde als ungültige Session behandelt.**  
+Die Funktion `userOf()` fing jeden Fehler ab und gab `null` zurück. Ergebnis: Ein kurzer Netzwerk‑Blip oder ein Appwrite‑Restart sah exakt wie eine ungültige Session aus, sodass die App alle Cookies löschte und **alle** aktiven Nutzer gleichzeitig ausloggte, obwohl nichts mit ihrer Session stimmt.
+
+> userOf() previously caught every error and answered null, which made a network blip or an Appwrite restart look identical to an invalid session: every active user got logged out and cookie‑cleared.
+
+([8efc769c](https://github.com/bartosz-skejcik/sesja/commit/8efc769c))
+
+**I3: Der Fix für I1 hatte selbst eine Lücke.**  
+Nach dem I1‑Fix warf `box()` einen Fehler, wenn `currentUserId` leer war. `dispatch()` setzte jedoch trotzdem den optimistischen Zustand und queue‑te das Ereignis, sodass der Fehler nichts mehr stoppte ([d34d4cdb](https://github.com/bartosz-skejcik/sesja/commit/d34d4cdb)). Ich habe die Lücke geschlossen und dabei gelernt, dass „einen Fehler werfen“ und „eine Operation stoppen“ zwei verschiedene Dinge sind – solange niemand den Fehler weiter verarbeitet.
+
+## Warum die App für eine Person wie für tausend behandelt wurde
+
+Das Risiko skaliert nicht mit der Konten‑Anzahl, sondern mit dem, was die App speichert und wo sie läuft. Panel Zuzi hat Konten, per‑User‑Daten und lebt realistisch auf einem Gerät, das in Familien häufig geteilt wird. Das reicht, um einen Cross‑Account‑Leak als echten, nicht nur theoretischen, Sicherheits‑Fall zu werten.
+
+Ich weiß nicht exakt, wie viele Konten heute existieren, nur dass es **eine** regelmäßige Nutzerin gibt und die Möglichkeit, dass ein Familienmitglied die App auf demselben Gerät startet. Das skaliert nicht wie SaaS, und ich tue nicht so, als wäre es anders. I1 zeigt jedoch klar, warum die Konten‑Zahl eine schlechte Risikokennzahl ist: Zwei Personen auf einem Gerät reichen, um einen echten Datenleck zu erzeugen.
+
+## Wann solche Paranoia bei einer Ein‑Personen‑App Zeitverschwendung ist
+
+Umgekehrt: Es ist leicht, das als „immer einen nummerierten Sicherheitstest machen, selbst für eine Zwei‑Personen‑App“ zu interpretieren. Das hat nicht immer Sinn. Bevor du diesen Prozess in dein Projekt übernimmst, prüfe, ob du das gleiche Problem überhaupt hast. Lass den nummerierten Test weg, wenn:
+
+- Die App keine Konten hat und nichts per‑User speichert – also nichts „auslaufen“ kann,
+- Die App ausschließlich lokal auf einem Gerät läuft, das nie geteilt wird,
+- Die Daten ohnehin öffentlich oder unwichtig sind, sodass ein echter Leak niemandem schadet.
+
+Panel Zuzi trifft alle drei Punkte gleichzeitig: Konten via Appwrite, läuft auf einem potenziell geteilten Gerät und speichert private Daten (Notizen, Quiz‑Fortschritt, Chat‑Verlauf mit KI). Wäre es eine rein offline‑Karteikarten‑App ohne Login, wäre der komplette nummerierte Review ein Fall von Form über Inhalt. Hier ist das nicht der Fall.
+
+## Was daraus folgt
+
+Panel Zuzi hat jetzt drei bestätigte und behobene Fehler aus diesem Review. Ich behaupte nicht, dass das alle sind, weil der Review nur das prüft, woran ich gerade denke – nicht alles, was existiert. Die Ironie ist, dass die App nur **einen** regulären Nutzer hat, aber die drei Fehler wurden nicht von Zuzia gemeldet, sondern von meinem eigenen nummerierten Review – dreimal hintereinander, bevor ich mir erlaubte, eine Pause zu machen. Das sagt wahrscheinlich mehr über mich aus als über die App selbst.
+
+## FAQ
+
+**Ist Panel Zuzi öffentlich verfügbar, in Produktion?**  
+Der Beitrag sagt nichts darüber, weil das nicht Teil der Geschichte ist. Es geht um den Sicherheits‑Prozess und was er gefunden hat, nicht darum, wo die App gerade läuft.
+
+**Wie viele Personen nutzen Panel Zuzi tatsächlich?**  
+Ich weiß es nicht genau. Realistisch **eine** regelmäßige Nutzerin, plus die Möglichkeit, dass ein Familienmitglied die App auf demselben Gerät startet. Definitiv keine Tausende‑Nutzer‑App, trotz Titel.
+
+**Wer hat den Sicherheitstest durchgeführt, ein externes Unternehmen?**  
+Nein. Es war mein eigener, nummerierter Review (I1, I2, I3), erledigt im gleichen Wochenende wie der Rest der Entwicklung. Kein formaler Audit, kein Pentest, kein automatischer Scanner. Disziplin, kein Zertifikat.
+
+**Ist die App nach den drei Fixes jetzt komplett sicher?**  
+Ich behaupte das nicht. Ich habe drei konkrete, bestätigte Fehler gefunden. Es können weitere existieren, die ich noch nicht entdeckt habe, weil der nummerierte Review nur das prüft, woran ich gerade denke, nicht die Gesamtheit.
+
+**Warum hat die Flash‑Karten‑App einen KI‑Assistenten von Groq?**  
+Um Fragen zum Lernstoff direkt aus dem Modul zu stellen, ohne zwischen App und separatem Chat wechseln zu müssen. Das ist eines der Dinge, die in den 36 Stunden neben Konten und Admin‑Panel entstanden sind.
+
+## Links
+
+- [Ich habe meinen eigenen Passkey‑Manager gebaut und verstehe jetzt, warum niemand das auf die Schnelle macht](/blog/de/why-i-built-my-own-passkey-manager)
+- [Wie Llama meine Links in Übersetzungen durcheinandergebracht hat](/blog/de/llm-translated-my-blog-and-broke-the-links)
+- [Sesja‑Repository auf GitHub](https://github.com/bartosz-skejcik/sesja)
+- [Commit I1: Fix cross‑account replay in shared browser](https://github.com/bartosz-skejcik/sesja/commit/40c9c1fc)
+- [Commit I2: Fix transient errors treated as invalid session](https://github.com/bartosz-skejcik/sesja/commit/8efc769c)
+- [Commit I3: Fix hole‑in‑I1](https://github.com/bartosz-skejcik/sesja/commit/d34d4cdb)

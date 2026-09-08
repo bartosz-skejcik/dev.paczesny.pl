@@ -1,0 +1,105 @@
+---
+title: J'ai construit le Panel de Zuzia : une appli d'apprentissage, sécurisée comme pour mille utilisateurs
+description: Le Panel de Zuzia est une appli pour une personne, construite en 36 heures. Elle a quand même passé un audit de sécurité qui a révélé une vraie fuite.
+date: 2026-09-08T12:00:00.000Z
+tags: appwrite, security, auth, side-project, ai, groq, indie-hacking, decyzje
+---
+
+## Introduction
+
+Mercredi soir, je code un nouveau module pour le Panel de Zuzia, une appli d'apprentissage pour littéralement une seule utilisatrice régulière. Dans un deuxième terminal, je lance mon propre audit de sécurité numéroté, comme j’ai l’habitude de le faire à chaque gros module. Je me demande pourquoi, vu qu’une seule personne se connecte ici, pas mille. Un instant plus tard, le même audit révèle une fuite de données réelle entre les comptes sur le même navigateur. **Putain**. Et maintenant je sais pourquoi.
+
+Cet article raconte comment, en moins de 36 heures, une appli qui devait être un export unique pour un examen est devenue une plateforme complète avec comptes, base de données et assistant IA, et comment l’audit de sécurité numéroté de cette appli a détecté trois bugs de niveau production, même si la production ici signifie une seule personne.
+
+Vous obtiendrez trois choses :
+
+1. **Ce qui s’est passé pendant ces 36 heures**, quand un export statique s’est transformé en Panel de Zuzia, une appli avec comptes via Appwrite, un panneau admin et une IA pour poser des questions sur le cours,
+2. **Ce que l’audit de sécurité numéroté a réellement capturé (I1, I2, I3)**, avec les commits précis, pas avec un vague « j’ai corrigé le login »,
+3. **Quand ce niveau de paranoïa a du sens pour une appli d’une seule personne, et quand c’est juste une perte de temps**, car cet article pourrait facilement être lu comme une incitation à faire la même chose partout.
+
+## D'où vient le Panel de Zuzia
+
+Tout a commencé avec ce que le dépôt appelle simplement « Session » : un export statique et ponctuel de matériaux universitaires pour un examen précis. Il devait durer une semaine, peut‑être deux. Dans la fenêtre que je décris dans cet article, j’ai reconstruit cela à partir de zéro en quelque chose qui doit durer plus longtemps. Le fichier `docs/PROJEKT.md` le dit clairement en une phrase que je me suis laissée là pour ne pas oublier pourquoi je fais ça :
+
+> Outil personnel d’apprentissage pour Zuzia, pour toute la durée des études, pas seulement pour une révision.
+
+Le Panel de Zuzia découpe les cours en un arbre de matières et de modules, chaque module étant rendu comme note, flashcard, quiz, appariement de paires et checklist, avec une légère gamification : points, streaks, dix‑sept badges. Ça ressemble à une appli assez conséquente. Et ça l’est. La différence avec la « Session » n’est pas que j’ai ajouté plus de fonctionnalités, mais que je ne la considère plus comme un projet ponctuel.
+
+## 36 heures qui ont transformé l'export en une appli avec comptes
+
+Le premier commit du dépôt `sesja` date du **2026‑09‑05T11:58Z**. Un peu moins de 36 heures plus tard, le **2026‑09‑06T23:46Z**, le projet possède déjà des comptes utilisateurs via Appwrite OAuth, tables per‑user dans la base, historique de chat, panneau admin et assistant IA basé sur Groq pour poser des questions sur le cours. Plus de 150 commits en un week‑end.
+
+Honnêtement : ces timestamps sont les horodatages des commits dans un seul dépôt, pas le compteur de mes heures devant le clavier. Une bonne partie de ces commits est co‑authored par la session « Claude Fable 5.1 », c’est‑à‑dire des sessions d’agents qui ont travaillé sur le code en parallèle ou pendant mon absence. Je ne sais pas, et je ne prétends pas, combien de ces 36 heures j’ai passé réellement devant mon laptop, et combien l’agent a fait en arrière‑plan. Je sais seulement ce qui apparaît dans l’historique des commits, et c’est déjà assez de matière.
+
+Un détail de cette cadence qui m’a particulièrement réjoui, parce qu’il montre que je ne volais pas les yeux fermés : le fichier `README.md` explique comment les identifiants de lignes de faits dans la base sont déterministes.
+
+> Les identifiants de lignes de faits sont déterministes (hash32(...clés naturelles)), donc chaque écriture depuis `lib/state/write.ts` est un upsert‑or‑delete‑by‑id et un événement réessayé ne peut jamais doubler un effet.
+
+En d’autres termes, même si une opération se répète, par exemple à cause d’un retry après une connexion interrompue, l’appli ne dupliquera pas les points pour la même flashcard deux fois. C’est un choix conscient dès le départ, pas le résultat d’un audit ultérieur. Le reste de cet article porte sur ce que je **n’ai PAS** conçu consciemment dès le début.
+
+## Audit de sécurité numéroté de l'appli avec un seul utilisateur
+
+Je précise ici, avant que quelqu’un ne pense que j’ai payé une société pour un pentest de mon appli de flashcards : il ne s’agissait pas d’un audit externe ni d’un outil de scan automatisé. C’était mon propre audit, numéroté, que j’ai organisé pendant le même week‑end de développement, avec les étiquettes I1, I2, I3 directement dans les commits. Juste de la discipline, pas un certificat.
+
+**I1 : le navigateur partagé pouvait transférer des données entre les comptes.**  
+La file d’attente d’événements d’état d’un utilisateur déconnecté pouvait être « rejouée » sur le compte de la personne suivante qui se connecte sur le même appareil. C’est exactement le scénario « deux personnes, un laptop », le cas que le modèle mental mono‑utilisateur rate le plus souvent, car il suppose que dispositif et compte sont la même chose.
+
+> Un navigateur partagé pourrait rejouer les événements d’état mis en file d’attente d’un utilisateur déconnecté sur quiconque se connecte ensuite.
+
+([40c9c1fc](https://github.com/bartosz-skejcik/sesja/commit/40c9c1fc))
+
+**I2 : une panne transitoire était traitée comme une session invalide.**  
+La fonction `userOf()` attrapait chaque erreur et renvoyait `null`. Conséquence : un petit bug réseau ou un redémarrage d’Appwrite était interprété comme une session invalide, donc l’appli nettoyait les cookies et déconnectait tous les utilisateurs actifs en même temps, même si rien n’était réellement arrivé à leurs sessions.
+
+> `userOf()` attrapait auparavant chaque erreur et renvoyait `null`, ce qui faisait qu’un petit problème réseau ou un redémarrage d’Appwrite ressemblait à une session invalide : chaque utilisateur actif était déconnecté et les cookies étaient effacés.
+
+([8efc769c](https://github.com/bartosz-skejcik/sesja/commit/8efc769c))
+
+**I3 : la correction de I1 introduisait elle‑même une faille.**  
+Après la correction de I1, la fonction `box()` levait une erreur quand `currentUserId` était vide. Mais `dispatch()` appliquait quand même l’état optimiste et mettait l’événement en file d’attente sans condition, donc l’erreur levée n’arrêtait rien ([d34d4cdb](https://github.com/bartosz-skejcik/sesja/commit/d34d4cdb)). J’ai colmaté le trou et, en même temps, j’ai compris que « lever une erreur » et « arrêter l’opération » sont deux choses différentes si personne ne regarde ce qui arrive à l’erreur ensuite.
+
+## Pourquoi une appli pour une seule personne a été traitée comme pour mille
+
+Le risque ne se scale pas avec le nombre de comptes, mais avec ce que l’appli stocke et où elle vit. Le Panel de Zuzia possède des comptes, des données per‑user, et vit réalistiquement sur un appareil qui, dans une famille, est souvent partagé. C’est une raison suffisante pour traiter une fuite cross‑account comme un vrai problème, et non comme une curiosité théorique tirée d’un article de sécurité.
+
+Je ne sais pas exactement combien de comptes existent aujourd’hui, à part le fait qu’il y a une utilisatrice régulière et la possibilité qu’un membre de la famille lance l’appli sur le même appareil. Ce n’est pas du SaaS, et je ne fais pas semblant que ça le soit. Mais I1 montre précisément pourquoi le nombre de comptes est une mauvaise métrique de risque : deux personnes sur le même appareil suffisent à rendre une fuite de données réelle, pas hypothétique.
+
+## Quand cette paranoïa pour une appli d’une seule personne devient une perte de temps
+
+À l’inverse, il est facile de lire cet article comme « faites toujours un audit de sécurité numéroté, même pour une appli à deux personnes ». Ce n’est pas toujours pertinent. Avant de copier ce processus dans votre projet, vérifiez que vous avez réellement le même problème. Oubliez l’audit numéroté si :
+
+- l’appli n’a pas de comptes et ne stocke rien de per‑user, donc rien ne peut « fuir » entre des utilisateurs,
+- l’appli tourne localement sur un seul appareil qui n’est jamais partagé,
+- les données sont publiques ou sans importance, donc même une fuite réelle ne coûte rien à personne.
+
+Le Panel de Zuzia coche les trois cases à la fois : il a des comptes via Appwrite, il vit sur un appareil partagé, et il stocke des données privées (notes, progrès aux quiz, historique de chat avec l’IA). Si c’était une appli sans login, un générateur de flashcards offline sans persistance, tout cet audit serait du formalisme excessif. Ce n’est pas le cas ici.
+
+## Quelles conclusions en tirer
+
+Le Panel de Zuzia compte maintenant trois bugs confirmés et corrigés grâce à cet audit. Je ne prétends pas que c’est tout ce qui existe, car l’audit ne vérifie que ce que je décide d’examiner, pas l’intégralité du système. L’ironie de la situation, c’est qu’une appli avec un seul utilisateur régulier a été signalée par **mon propre audit** trois fois de suite avant que je ne décide de faire une pause. Ça en dit plus sur moi que sur l’appli elle‑même.
+
+## FAQ
+
+**Le Panel de Zuzia est‑il disponible publiquement, en production ?**  
+Cet article n’en parle pas, car ce n’est pas le sujet. Il s’agit du processus de sécurité et de ce qu’il a détecté, pas de l’endroit où l’appli vit aujourd’hui.
+
+**Combien de personnes utilisent réellement le Panel de Zuzia ?**  
+Je ne sais pas exactement. Réellement une utilisatrice régulière, plus la possibilité qu’un membre de la famille lance l’appli sur le même appareil. Ce n’est clairement pas une appli à mille comptes, malgré le titre.
+
+**Qui a réalisé cet audit de sécurité, une société externe ?**  
+Non. C’était mon propre audit numéroté (I1, I2, I3), réalisé le même week‑end que le reste du développement. Pas d’audit formel, pas de pentest, pas de scanner automatique. Discipline, pas certificat.
+
+**Après ces trois correctifs l’appli est‑elle totalement sécurisée ?**  
+Je ne l’affirme pas. J’ai trouvé trois bugs concrets et confirmés. Il peut y en avoir d’autres que je n’ai pas encore vus, car l’audit ne couvre que ce que je décide d’examiner, pas la totalité.
+
+**Pourquoi une appli de flashcards a‑t‑elle besoin d’un assistant IA de Groq ?**  
+Pour poser des questions sur le cours directement depuis le module, au lieu de basculer entre l’appli et un chat séparé. C’est l’une des choses qui a émergé pendant ces 36 heures, en même temps que les comptes et le panneau admin.
+
+## Liens
+
+- [J’ai construit mon propre gestionnaire de passkeys et je comprends maintenant pourquoi personne ne le fait à la va‑vite](/blog/fr/why-i-built-my-own-passkey-manager)
+- [Comment LLaMA a mélangé mes liens dans les traductions](/blog/fr/llm-translated-my-blog-and-broke-the-links)
+- [Dépôt sesja sur GitHub](https://github.com/bartosz-skejcik/sesja)
+- [Commit I1 : fix cross‑account replay sur navigateur partagé](https://github.com/bartosz-skejcik/sesja/commit/40c9c1fc)
+- [Commit I2 : fix des erreurs transitoires traitées comme session invalide](https://github.com/bartosz-skejcik/sesja/commit/8efc769c)
+- [Commit I3 : fix du trou restant après I1](https://github.com/bartosz-skejcik/sesja/commit/d34d4cdb)
