@@ -1,0 +1,102 @@
+---
+title: "Zbudowałem appkę do nauki dla jednej osoby, zabezpieczoną jak dla tysiąca użytkowników"
+description: "To appka do nauki dla jednej osoby, zbudowana w 36 godzin. Mimo to przeszła numerowany przegląd bezpieczeństwa, który wyłapał realny wyciek danych."
+date: 2026-09-08T12:00:00.000Z
+tags: appwrite, security, auth, side-project, ai, groq, indie-hacking, decyzje
+---
+
+## Wprowadzenie
+
+Środa wieczorem, koduję kolejny moduł appki do nauki dla dosłownie jednej regularnej użytkowniczki. W drugim terminalu odpalam sobie własny, numerowany przegląd bezpieczeństwa, bo tak mam w zwyczaju przy każdym większym module. Pytam sam siebie po co mi to, skoro loguje się tu jedna osoba, nie tysiąc. Chwilę później ten sam przegląd wypluwa realny wyciek danych między kontami na wspólnej przeglądarce. Kurwa. No i już wiem po co.
+
+Ten wpis to historia tego, jak w niecałe 36 godzin appka, która miała być jednorazowym eksportem na jeden egzamin, urosła do pełnej platformy z kontami, bazą i asystentem AI, i jak numerowany przegląd bezpieczeństwa tej appki złapał trzy błędy klasy produkcyjnej, mimo że produkcja tu oznacza jedną osobę.
+
+Dostaniesz trzy rzeczy:
+
+1. **co się stało w te 36 godzin**, kiedy statyczny eksport zamienił się w appkę z kontami przez Appwrite, panelem admina i AI do pytań o materiał,
+2. **co realnie wyłapał numerowany przegląd bezpieczeństwa (I1, I2, I3)**, z konkretnymi commitami, nie z opisem w stylu "poprawiłem trochę logowanie",
+3. **kiedy taki poziom paranoi przy appce dla jednej osoby ma sens, a kiedy to zwykła strata czasu**, bo ten wpis łatwo przeczytać jako namawianie każdego do tego samego.
+
+## Skąd się wzięła ta appka
+
+Zaczęło się od czegoś, co w repo nazywa się po prostu "Sesja": jednorazowy, statyczny eksport materiałów z uczelni na jeden konkretny egzamin. Miał żyć tydzień, może dwa. W oknie, które opisuję w tym wpisie, przebudowałem to od zera w coś, co ma żyć dłużej. `docs/PROJEKT.md` mówi to wprost, jednym zdaniem, które sam sobie tam zostawiłem, żeby nie zapomnieć po co to robię:
+
+> Osobiste narzędzie do nauki na całe studia, nie na jedną poprawkę.
+
+Appka rozbija materiały z wykładów na drzewo przedmiotów i modułów, a każdy moduł renderuje jako notatkę, fiszki, quiz, dopasowywanie par i checklistę, z lekką grywalizacją: punkty, streaki, siedemnaście odznak. Brzmi jak spora appka. Jest spora appka. Różnica w stosunku do "Sesji" nie jest w tym, że dodałem więcej ficzerów, tylko w tym, że przestałem traktować to jako jednorazówkę.
+
+## 36 godzin, które zmieniły eksport w appkę z kontami
+
+Pierwszy commit w repozytorium `sesja` pada 2026-09-05T11:58Z. Niecałe 36 godzin później, 2026-09-06T23:46Z, projekt ma już konta użytkowników przez Appwrite OAuth, per-userowe tabele w bazie, historię czatu, panel admina i asystenta AI opartego o Groq do zadawania pytań o materiał. To ponad 150 commitów w jeden weekend.
+
+Uczciwie: te znaczniki czasu to timestampy commitów w jednym repozytorium, nie licznik moich godzin przy klawiaturze. Spora część tych commitów jest współautorstwa sesji "Claude Fable 5.1", czyli agentowych sesji, które pracowały nad kodem równolegle albo pode mnie nieobecność. Nie wiem i nie twierdzę, ile z tych 36 godzin to ja siedzący przy laptopie, a ile to agent robiący swoje w tle. Wiem tylko, co jest w historii commitów, i to jest już wystarczająco dużo materiału.
+
+Jeden szczegół z tego tempa, który akurat mnie ucieszył, bo pokazuje że nie leciałem na ślepo: `README.md` opisuje, jak identyfikatory wierszy faktów w bazie są deterministyczne.
+
+> Fact-row ids are deterministic (hash32(...natural keys)), so every write from lib/state/write.ts is an upsert-or-delete-by-id and a retried event can never double an effect.
+
+Innymi słowy, nawet jak coś się powtórzy, na przykład przez retry po zerwanym połączeniu, appka nie zduplikuje Ci punktów za tę samą fiszkę dwa razy. To akurat zaprojektowałem świadomie od początku, nie w ramach późniejszego przeglądu. Reszta tego wpisu jest o tym, czego świadomie NIE zaprojektowałem od razu.
+
+## Numerowany przegląd bezpieczeństwa appki z jednym użytkownikiem
+
+Tu robię zastrzeżenie, zanim ktoś pomyśli, że zapłaciłem firmie za pentest appki do fiszek: to nie był audyt strony trzeciej ani żadne narzędzie do automatycznego skanowania. To był mój własny, numerowany przegląd, który sam sobie zorganizowałem w trakcie tego samego weekendu budowy, z etykietami I1, I2, I3 wprost w commitach. Ot, dyscyplina, nie certyfikat.
+
+**I1: wspólna przeglądarka mogła podmienić dane między kontami.** Kolejka zdarzeń stanu wylogowanego użytkownika mogła zostać "odtworzona" na konto kolejnej osoby, która zaloguje się na tym samym urządzeniu. To dokładnie scenariusz "dwie osoby, jeden laptop", czyli ten sam przypadek, który single-user mental model najłatwiej przegapia, bo zakłada, że urządzenie i konto to to samo.
+
+> A shared browser could replay one logged-out user's queued state events into whoever logs in next
+
+([40c9c1fc](https://github.com/bartosz-skejcik/sesja/commit/40c9c1fc))
+
+**I2: przejściowa awaria wyglądała jak nieważna sesja.** Funkcja `userOf()` łapała każdy błąd i zwracała `null`. Efekt: przejściowy problem sieciowy albo restart Appwrite wyglądał identycznie jak wylogowana sesja, więc appka czyściła ciasteczka i wylogowywała wszystkich aktywnych użytkowników naraz, mimo że nic złego z ich sesją się nie stało.
+
+> userOf() previously caught every error and answered null, which made a network blip or an Appwrite restart look identical to an invalid session: every active user got logged out and cookie-cleared.
+
+([8efc769c](https://github.com/bartosz-skejcik/sesja/commit/8efc769c))
+
+**I3: poprawka na I1 sama miała dziurę.** To jest ten moment, który lubię najbardziej, bo pokazuje, że przegląd numerowany naprawdę coś sprawdza, zamiast być listą do odhaczenia. `box()` po poprawce I1 rzucał błąd, kiedy `currentUserId` było puste. Tylko że `dispatch()` i tak aplikował stan optymistyczny i kolejkował zdarzenie bezwarunkowo, więc rzucony błąd nie zatrzymywał niczego po drodze ([d34d4cdb](https://github.com/bartosz-skejcik/sesja/commit/d34d4cdb)). Naprawiłem dziurę i przy okazji dowiedziałem się, że "rzuciłem błąd" i "zatrzymałem operację" to dwie różne rzeczy, jeśli nikt nie sprawdza, co się dzieje z tym błędem dalej.
+
+## Czemu appka dla jednej osoby dostała traktowanie jak dla tysiąca
+
+Bo ryzyko nie skaluje się z liczbą kont, tylko z tym, co appka trzyma i gdzie żyje. Appka ma konta, ma per-userowe dane, i realistycznie żyje na urządzeniu, które w rodzinie bywa współdzielone. To wystarczający powód, żeby traktować cross-account leak jak prawdziwy problem, a nie jak teoretyczną ciekawostkę z artykułu o bezpieczeństwie.
+
+Nie wiem dokładnie, ile kont dzisiaj realnie istnieje, poza tym że jest jedna regularna użytkowniczka i możliwość, że ktoś z rodziny odpali appkę na tym samym sprzęcie. To nie skaluje się jak SaaS i nie udaję, że tak jest. Ale I1 pokazuje dokładnie, dlaczego liczba kont to zła miara ryzyka: wystarczą dwie osoby na jednym urządzeniu, żeby wyciek danych stał się realny, nie hipotetyczny.
+
+## Kiedy taka paranoja przy appce dla jednej osoby to strata czasu
+
+Uczciwie w drugą stronę, bo łatwo to przeczytać jako "zawsze rób numerowany przegląd bezpieczeństwa nawet dla appki na dwie osoby". Nie zawsze ma to sens. Zanim zaczniesz kopiować ten proces do własnego projektu, sprawdź, czy w ogóle masz ten sam problem. Odpuść numerowany przegląd, jeśli:
+
+- appka nie ma kont i nie trzyma nic per-userowego, więc nie ma czego "wyciekać" między użytkownikami,
+- appka działa lokalnie, na jednym urządzeniu, które nigdy nie jest współdzielone,
+- dane w appce i tak są publiczne albo nieważne, więc nawet realny wyciek nic nikomu nie kosztuje.
+
+Appka łamie wszystkie trzy punkty naraz: ma konta przez Appwrite, żyje na urządzeniu, które bywa współdzielone, i trzyma dane, które są prywatne dla konkretnej osoby, notatki, postępy w quizach, historię czatu z AI. Gdyby to była appka bez logowania, generator fiszek offline bez zapisu stanu, ten cały numerowany przegląd byłby przerostem formy nad treścią. Tutaj nie jest.
+
+## Co z tego wynika
+
+Appka ma teraz trzy potwierdzone i naprawione błędy z tego przeglądu. Nie twierdzę, że to wszystkie, jakie tam są, bo przegląd sprawdza to, co sam wpadnę na pomysł sprawdzić, nie wszystko co istnieje. Ironia całej sytuacji jest taka, że appka ma jednego regularnego użytkownika, ale to nie ta użytkowniczka zgłosiła mi te trzy błędy. Zgłosił je mój własny numerowany przegląd, trzy razy z rzędu, zanim uznałem, że mogę na chwilę przestać szukać. To chyba mówi więcej o mnie niż o samej appce.
+
+## FAQ
+
+**Czy ta appka jest dostępna publicznie, w produkcji?**
+Ten wpis o tym nie mówi, bo to nie jest część tej historii. Chodzi tu o proces bezpieczeństwa i o to, co ten proces wyłapał, nie o to, gdzie appka aktualnie żyje.
+
+**Ile osób faktycznie korzysta z tej appki?**
+Nie wiem dokładnie. Realnie jedna regularna użytkowniczka, plus możliwość, że ktoś z rodziny odpali appkę na tym samym urządzeniu. To zdecydowanie nie jest appka na tysiące kont, mimo tytułu wpisu.
+
+**Kto robił ten przegląd bezpieczeństwa, jakaś firma zewnętrzna?**
+Nie. To był mój własny, numerowany przegląd (I1, I2, I3), zrobiony w tym samym weekendzie co reszta budowy. Nie formalny audyt, nie pentest, nie automatyczny skaner. Dyscyplina, nie certyfikat.
+
+**Czy po tych trzech poprawkach appka jest już w pełni bezpieczna?**
+Nie twierdzę tego. Wyłapałem trzy konkretne, potwierdzone błędy. Mogą być inne, których jeszcze nie widziałem, bo numerowany przegląd sprawdza to, na co wpadnę, nie gwarantuje kompletności.
+
+**Po co appce do fiszek asystent AI od Groq?**
+Do zadawania pytań o materiał wprost z modułu, zamiast przełączania się między appką a osobnym czatem. To jedna z rzeczy, które urosły w te 36 godzin obok kont i panelu admina.
+
+## Linki
+
+- [Zbudowałem własny menedżer passkeyów i teraz rozumiem, czemu nikt tego nie robi na kolanie](/blog/pl/why-i-built-my-own-passkey-manager)
+- [Jak llama pomieszała mi linki w tłumaczeniach](/blog/pl/llm-translated-my-blog-and-broke-the-links)
+- [Repozytorium sesja na GitHubie](https://github.com/bartosz-skejcik/sesja)
+- [Commit I1: fix cross-account replay na wspólnej przeglądarce](https://github.com/bartosz-skejcik/sesja/commit/40c9c1fc)
+- [Commit I2: fix przejściowych błędów traktowanych jak nieważna sesja](https://github.com/bartosz-skejcik/sesja/commit/8efc769c)
+- [Commit I3: fix niedziurawiony do końca w I1](https://github.com/bartosz-skejcik/sesja/commit/d34d4cdb)

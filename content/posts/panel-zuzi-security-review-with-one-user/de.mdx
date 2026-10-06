@@ -1,0 +1,105 @@
+---
+title: Ich habe eine Lern‑App für eine Person gebaut, gesichert wie für tausend Nutzer
+description: Eine Lern‑App für eine Person, gebaut in 36 Stunden. Trotzdem hat sie einen nummerierten Sicherheitstest durchlaufen, der einen echten Datenleck aufdeckte.
+date: 2026-09-08T12:00:00.000Z
+tags: appwrite, security, auth, side-project, ai, groq, indie-hacking, decyzje
+---
+
+## Einleitung
+
+Mittwochabend, ich code ein weiteres Modul der Lern‑App für buchstäblich eine reguläre Nutzerin. Im zweiten Terminal starte ich meinen eigenen, nummerierten Sicherheitstest, weil ich das bei jedem größeren Modul so mache. Ich frage mich, warum ich das brauche, wenn sich hier nur eine Person anmeldet, nicht tausend. Kurz darauf spuckt derselbe Test einen echten Datenleck zwischen Konten im geteilten Browser aus. Scheiße. Jetzt weiß ich, warum.
+
+Dieser Beitrag ist die Geschichte, wie in weniger als 36 Stunden eine App, die als einmaliger Export für eine Prüfung gedacht war, zu einer kompletten Plattform mit Konten, Datenbank und KI‑Assistent gewachsen ist, und wie der nummerierte Sicherheitstest drei produktionsreife Fehler gefunden hat, obwohl Produktion hier nur eine Person bedeutet.
+
+Du bekommst drei Dinge:
+
+1. **was in diesen 36 Stunden passiert ist**, als der statische Export zu einer App mit Konten über Appwrite, Admin‑Panel und KI‑Fragen‑Modul wurde,
+2. **was der nummerierte Sicherheitstest (I1, I2, I3) tatsächlich gefunden hat**, mit konkreten Commits, nicht mit vagen Beschreibungen wie „ich habe das Login ein bisschen verbessert“,
+3. **wann solche Paranoia bei einer Ein‑Person‑App Sinn macht und wann es reine Zeitverschwendung ist**, weil dieser Beitrag leicht als Aufruf verstanden werden kann, das alles zu tun.
+
+## Woher kommt diese App
+
+Es begann mit etwas, das im Repo einfach „Session“ heißt: ein einmaliger, statischer Export von Uni‑Materialien für eine konkrete Prüfung. Es sollte eine Woche, vielleicht zwei, leben. In dem Fenster, das ich in diesem Beitrag beschreibe, habe ich das von Grund auf neu aufgebaut zu etwas, das länger leben soll. `docs/PROJEKT.md` sagt es klar in einem Satz, den ich mir dort hinterlassen habe, um nicht zu vergessen, warum ich das mache:
+
+> Persönliches Lernwerkzeug für das gesamte Studium, nicht nur für eine Korrektur.
+
+Die App zerlegt Vorlesungs‑Materialien in einen Baum von Fächern und Modulen, und jedes Modul rendert als Notiz, Karteikarte, Quiz, Zuordnungs‑Aufgabe und Checkliste, mit leichter Gamifizierung: Punkte, Streaks, siebzehn Abzeichen. Klingt nach einer ordentlichen App. Ist es auch. Der Unterschied zur „Session“ liegt nicht darin, dass ich mehr Features hinzugefügt habe, sondern dass ich aufgehört habe, es als Einmal‑Ding zu sehen.
+
+## 36 Stunden, die den Export in eine App mit Konten verwandelten
+
+Der erste Commit im Repository `sesja` ist am 2026‑09‑05T11:58Z. Weniger als 36 Stunden später, am 2026‑09‑06T23:46Z, hat das Projekt bereits Nutzerkonten über Appwrite OAuth, per‑User‑Tabellen in der Datenbank, Chat‑Verlauf, Admin‑Panel und einen KI‑Assistenten auf Basis von Groq für Fragen zum Material. Das sind über 150 Commits an einem Wochenende.
+
+Um ehrlich zu sein: Diese Zeitstempel sind Commit‑Timestamps in einem Repository, nicht ein Zähler meiner Tipp‑Stunden. Ein großer Teil dieser Commits ist Co‑Authorship der Session „Claude Fable 5.1“, also agentenbasierte Sessions, die parallel am Code gearbeitet haben oder während meiner Abwesenheit. Ich weiß nicht und behaupte nicht, wie viel von diesen 36 Stunden ich am Laptop gesessen habe und wie viel ein Agent im Hintergrund erledigt hat. Ich weiß nur, was in der Commit‑Historie steht, und das reicht für diesen Beitrag.
+
+Ein Detail dieses Tempos, das mich gerade gefreut hat, weil es zeigt, dass ich nicht blind drauflos gearbeitet habe: `README.md` beschreibt, dass die IDs von Fakten‑Zeilen in der Datenbank deterministisch sind.
+
+> Fact-row ids are deterministic (hash32(...natural keys)), so every write from lib/state/write.ts is an upsert-or-delete-by-id and a retried event can never double an effect.
+
+Mit anderen Worten, selbst wenn etwas wiederholt wird, zum Beispiel durch einen Retry nach einer abgebrochenen Verbindung, dupliziert die App deine Punkte für dieselbe Karteikarte nicht zweimal. Das habe ich bewusst von Anfang an so konzipiert, nicht im Nachhinein für einen Review. Der Rest dieses Beitrags handelt davon, was ich bewusst **NICHT** von Anfang an entworfen habe.
+
+## Nummerierter Sicherheitstest der App mit einem Nutzer
+
+Hier ein Hinweis, bevor jemand denkt, ich hätte ein Unternehmen für einen Pentest der Karteikarten‑App bezahlt: Es war kein Audit einer Drittpartei und kein automatisches Scanning‑Tool. Es war mein eigener, nummerierter Review, den ich im selben Wochenende der Entwicklung organisiert habe, mit den Labels I1, I2, I3 direkt in den Commits. Nur Disziplin, kein Zertifikat.
+
+**I1: Der geteilte Browser konnte Daten zwischen Konten austauschen.**  
+Die Ereignis‑Queue eines ausgeloggten Nutzers konnte auf dem Konto der nächsten Person, die sich auf demselben Gerät anmeldet, „wiedergegeben“ werden. Das ist exakt das Szenario „zwei Personen, ein Laptop“, also der Fall, den das Single‑User‑Mental‑Model am leichtesten übersieht, weil es annimmt, Gerät = Konto.
+
+> A shared browser could replay one logged-out user's queued state events into whoever logs in next  
+
+([40c9c1fc](https://github.com/bartosz-skejcik/sesja/commit/40c9c1fc))
+
+**I2: Ein vorübergehender Ausfall sah aus wie eine ungültige Session.**  
+Die Funktion `userOf()` fing jeden Fehler ab und gab `null` zurück. Ergebnis: Ein kurzer Netzwerk‑Blip oder ein Appwrite‑Restart sah identisch aus wie eine ungültige Session, also wurden alle aktiven Nutzer gleichzeitig ausgeloggt und die Cookies gelöscht, obwohl nichts mit ihrer Session nicht in Ordnung war.
+
+> userOf() previously caught every error and answered null, which made a network blip or an Appwrite restart look identical to an invalid session: every active user got logged out and cookie‑cleared.  
+
+([8efc769c](https://github.com/bartosz-skejcik/sesja/commit/8efc769c))
+
+**I3: Der Fix für I1 hatte selbst ein Loch.**  
+Nach dem Fix für I1 warf `box()` einen Fehler, wenn `currentUserId` leer war. Nur dass `dispatch()` trotzdem den optimistischen Zustand angewendet und das Ereignis bedingungslos in die Queue gestellt hat, sodass der geworfene Fehler nichts mehr stoppte ([d34d4cdb](https://github.com/bartosz-skejcik/sesja/commit/d34d4cdb)). Ich habe das Loch geflickt und dabei gelernt, dass „einen Fehler werfen“ und „eine Operation stoppen“ zwei verschiedene Dinge sind, wenn niemand den Fehler weiter verarbeitet.
+
+## Warum die App für eine Person wie für tausend behandelt wird
+
+Das Risiko skaliert nicht mit der Anzahl der Konten, sondern mit dem, was die App speichert und wo sie läuft. Die App hat Konten, per‑User‑Daten und lebt realistisch auf einem Gerät, das in Familien häufig geteilt wird. Das reicht, um einen Cross‑Account‑Leak als echten, nicht nur theoretischen, Sicherheits‑Fall zu behandeln.
+
+Ich weiß nicht genau, wie viele Konten heute wirklich existieren, außer dass es eine reguläre Nutzerin gibt und die Möglichkeit, dass ein Familienmitglied die App auf demselben Gerät startet. Das skaliert nicht wie SaaS und ich tue nicht so, als wäre es anders. Aber I1 zeigt exakt, warum die Konten‑Zahl eine schlechte Risikokennzahl ist: Zwei Personen auf einem Gerät reichen, damit ein Datenleck real wird, nicht nur hypothetisch.
+
+## Wann solche Paranoia bei einer Ein‑Person‑App Zeitverschwendung ist
+
+Umgekehrt, weil man das leicht als „immer einen nummerierten Sicherheitstest machen, selbst für eine Zwei‑Person‑App“ lesen kann. Das hat nicht immer Sinn. Bevor du diesen Prozess in dein Projekt überträgst, prüfe, ob du das gleiche Problem überhaupt hast. Lass den nummerierten Review weg, wenn:
+
+- die App keine Konten hat und nichts per‑User speichert, also nichts „auslaufen“ kann zwischen Nutzern,
+- die App lokal auf einem einzigen Gerät läuft, das nie geteilt wird,
+- die Daten in der App ohnehin öffentlich oder unwichtig sind, sodass ein echter Leak niemanden kostet.
+
+Die App trifft alle drei Punkte gleichzeitig: Sie hat Konten über Appwrite, läuft auf einem potenziell geteilten Gerät und speichert private Daten – Notizen, Quiz‑Fortschritt, Chat‑Verlauf mit der KI. Wäre es eine rein offline‑Karteikarten‑App ohne Login, wäre der komplette nummerierte Review Overkill. Hier ist er es nicht.
+
+## Was daraus folgt
+
+Die App hat jetzt drei bestätigte und behobene Fehler aus diesem Review. Ich behaupte nicht, dass das alle sind, weil der Review nur das prüft, woran ich gerade denke, nicht alles, was existieren könnte. Die Ironie der Situation ist, dass die App nur einen regulären Nutzer hat, aber genau diese Person hat die drei Fehler gemeldet – nämlich mein eigener nummerierter Review, dreimal hintereinander, bevor ich aufgehört habe zu suchen. Das sagt wahrscheinlich mehr über mich aus als über die App selbst.
+
+## FAQ
+
+**Ist diese App öffentlich verfügbar, in Produktion?**  
+Der Beitrag sagt nichts darüber, weil das nicht Teil der Geschichte ist. Es geht um den Sicherheits‑Prozess und was er gefunden hat, nicht darum, wo die App gerade lebt.
+
+**Wie viele Personen nutzen die App tatsächlich?**  
+Ich weiß es nicht genau. Realistisch eine reguläre Nutzerin, plus die Möglichkeit, dass ein Familienmitglied die App auf demselben Gerät startet. Das ist definitiv keine Tausende‑Nutzer‑App, trotz Titel.
+
+**Wer hat den Sicherheitstest gemacht, ein externes Unternehmen?**  
+Nein. Es war mein eigener, nummerierter Review (I1, I2, I3), gemacht im selben Wochenende wie der Rest der Entwicklung. Kein formelles Audit, kein Pentest, kein automatischer Scanner. Disziplin, kein Zertifikat.
+
+**Ist die App nach diesen drei Fixes jetzt vollständig sicher?**  
+Ich behaupte das nicht. Ich habe drei konkrete, bestätigte Fehler gefunden. Es können weitere existieren, die ich noch nicht gesehen habe, weil der nummerierte Review nur das prüft, woran ich gerade denke, nicht die Vollständigkeit garantiert.
+
+**Wozu braucht die Karteikarten‑App einen KI‑Assistenten von Groq?**  
+Um Fragen zum Material direkt aus dem Modul zu stellen, statt zwischen App und einem separaten Chat zu wechseln. Das ist eines der Dinge, die in den 36 Stunden neben Konten und Admin‑Panel entstanden sind.
+
+## Links
+
+- [Ich habe meinen eigenen Passkey‑Manager gebaut und verstehe jetzt, warum das niemand auf die Schnelle macht](/blog/de/why-i-built-my-own-passkey-manager)
+- [Wie Llama meine Links in Übersetzungen durcheinandergebracht hat](/blog/de/llm-translated-my-blog-and-broke-the-links)
+- [Sesja‑Repository auf GitHub](https://github.com/bartosz-skejcik/sesja)
+- [Commit I1: Fix Cross‑Account Replay im geteilten Browser](https://github.com/bartosz-skejcik/sesja/commit/40c9c1fc)
+- [Commit I2: Fix vorübergehender Fehler, die wie ungültige Session behandelt wurden](https://github.com/bartosz-skejcik/sesja/commit/8efc769c)
+- [Commit I3: Fix, der I1 nicht vollständig schloss](https://github.com/bartosz-skejcik/sesja/commit/d34d4cdb)
