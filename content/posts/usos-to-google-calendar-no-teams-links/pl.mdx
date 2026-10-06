@@ -1,0 +1,163 @@
+---
+title: "Plan zajęć z USOS-a w Google Calendar, a linków do Teamsa i tak w USOS nie ma"
+description: "Napisałem w jeden dzień workera, który wrzuca plan z USOS-a do kalendarza Google. Potem okazało się, że linki do zajęć online są gdzie indziej."
+date: 2026-10-05T12:00:00.000Z
+tags: usos, google-calendar, bun, typescript, oauth, platon, coolify, self-hosting, automatyzacja
+---
+
+## Wprowadzenie
+
+Siemanko! Zajęcia online za dziesięć minut. Otwieram kalendarz w telefonie, widzę nazwę przedmiotu i godzinę. Fajnie. Gdzie link do Teamsa? Nie ma. Otwieram USOS, klikam w zajęcia, szukam. Nie ma. Otwieram Platona i klikam po menu, aż coś znajdę. Kurwa.
+
+Plan zajęć w USOS-ie to jest moje źródło prawdy, tylko że żyje w przeglądarce, a ja żyję w Google Calendar. Więc 2 października usiadłem i napisałem workera, który co godzinę przepisuje jedno do drugiego. Ten wpis nie jest tutorialem. To jest historia o tym, jak z nudnego "przepisz plan do kalendarza" zrobił się dzień walki z trzema rzeczami, których nikt mi nie obiecał.
+
+Dostaniesz trzy rzeczy:
+
+1. **jak to działa w środku**: stateless worker w Bunie, który nie dotyka ręcznie wpisanych wydarzeń i nie kasuje Ci planu, kiedy USOS ma gorszy dzień,
+2. **na co się naciąłem**: pole, które USOS odrzucił, i timer, który po cichu zamienia się w pętlę,
+3. **skąd wziąć linki do Teamsa**, skoro USOS ich nie ma, i dlaczego to rozwiązanie jest brzydkie i powinno takie zostać.
+
+Repo jest prywatne (linki do commitów na dole zobaczę tylko ja) i ma trzy dni, więc nie będzie tu żadnych wniosków o niezawodności w dłuższym czasie. Będzie za to to, co faktycznie się stało.
+
+## Co to właściwie jest
+
+Bezstanowy worker w Bun i TypeScripcie. Co godzinę pobiera z USOS-a plan na 120 dni do przodu i porównuje go z tym, co siedzi w jednym kalendarzu Google. Każde wydarzenie, które sam tworzę, dostaje znacznik w `extendedProperties.private` (`usosSync=1`, do tego klucz zajęć i hash zawartości). Planner patrzy tylko na wydarzenia z tym znacznikiem. Wszystko, co sobie wpiszę ręcznie, dla workera nie istnieje. Dzięki temu nie trzymam żadnej lokalnej bazy: stan jest w samym kalendarzu.
+
+Planner to czysta funkcja. Dostaje listę tego, co ma istnieć, i listę tego, co jest, a oddaje cztery liczby: do utworzenia, do zaktualizowania, do usunięcia i bez zmian. Fragment `src/planner.ts`:
+
+```ts
+export interface SyncPlan {
+  create: DesiredEvent[];
+  update: Array<{ eventId: string; desired: DesiredEvent }>;
+  remove: Array<{ eventId: string; usosKey: string }>;
+  unchanged: number;
+}
+```
+
+Tempo, w jakim to poszło, to osobna sprawa, bo trochę mnie samego zaskoczyło. Z historii gita z tego jednego dnia, 18 commitów (godziny z commitów, więc to czas zapisu, nie czas pracy):
+
+| Godzina | Co |
+|---|---|
+| 09:58 | spec projektu |
+| 10:14 | plan implementacji |
+| 10:23 | scaffold projektu w Bunie |
+| 10:24 do 10:28 | podpisywanie OAuth 1.0a, klient USOS, mapowanie, planner, okna dat |
+| 10:29 | cykl synchronizacji z backoffem i dry-runem |
+| 12:40 | skrypty do jednorazowej autoryzacji |
+| 12:42 | fix na pole, które USOS odrzucił |
+| 13:03 | utwardzanie |
+| 13:27 | nadpisania linków i skrypt do Platona |
+
+Żeby nie było, że robiłem to sam w trzy godziny: commity niosą trailer ze współautorem Claude. Spec i plan powstały przed kodem, i dlatego tempo jest takie, a nie dlatego, że jestem szybki.
+
+## Problem pierwszy: USOS odrzuca pole, które sam opisuje
+
+USOS API daje się odpytać o to, jakie pola chcesz dostać. W kliencie mam jeden długi string z nazwami pól rozdzielonymi pionową kreską. Znalazłem w dokumentacji `slot_number`, dodałem, odpaliłem. USOS Vistuli odrzucił całe zapytanie, bo takiego klucza pola u nich nie ma. Cały `tt/user`, nie tylko to jedno pole. Commit `dda3829`:
+
+```diff
+-  'room_id|unit_id|cgwm_id|frequency|sm_id|slot_number';
++  'room_id|unit_id|cgwm_id|frequency|sm_id';
+```
+
+Poprawka to jedna linijka. Najciekawsze jest to, co z nią zrobiłem: dopisałem test, który pilnuje, żeby `slot_number` nigdy tam nie wrócił.
+
+```ts
+it('does not request slot_number, which Vistula USOS rejects as a field key', () => {
+  expect(ACTIVITY_FIELDS.split('|')).not.toContain('slot_number');
+});
+```
+
+Wiem, wygląda to jak test na ścianę. Ale za pół roku ktoś (czyli ja) przeczyta dokumentację USOS-a, zobaczy ładne pole i "doda brakujące". Dokumentacja jest ogólna, instancja uczelni nie musi wspierać wszystkiego. To, co działa w jednym USOS-ie, nie musi działać w drugim, a błąd odpowiedzi nie podpowiada, które pole zawiniło.
+
+## Problem drugi: lepiej nie kasować wszystkiego, kiedy USOS się zawiesi
+
+Największy lęk przy takim workerze jest jeden. Nie "czy dodaje wydarzenia", tylko "czy kiedyś obudzę się w kalendarzu bez zajęć, bo API na godzinę oddało puste coś". Spec ma na to zasadę, cytuję dokładnie: *"Any window failing after retries aborts the cycle before any Google write (all or nothing, so an API hiccup can never look like 'all classes cancelled')."*
+
+Czyli pobieram wszystkie okna dat, a jak którekolwiek padnie po ponowieniach, cykl kończy się zanim cokolwiek zapiszę do Google. Zero częściowych zapisów.
+
+To nie wystarczyło. W commicie `b7eb5fd` doszedł drugi bezpiecznik, na wypadek kiedy USOS odpowie poprawnie, ale pusto:
+
+```ts
+if (activities.length === 0 && plan.remove.length > 0) {
+  logger.warn('USOS zwrócił pusty plan, a kalendarz ma wydarzenia: kasowanie wstrzymane do następnego cyklu', {
+    existing: plan.remove.length,
+  });
+  result.errors++;
+  plan.remove = [];
+}
+```
+
+Komentarz w kodzie mówi, że pusty plan przy kalendarzu pełnym zsynchronizowanych wydarzeń to dużo bardziej prawdopodobnie czkawka USOS-a niż 120 dni bez zajęć. Zgadzam się. Ciekawe, że żaden z tych dwóch bezpieczników nie wynika z zasady "przemyślałem architekturę". Oba wynikają z "co by mnie najbardziej wkurzyło, jakby się stało".
+
+Ten sam commit naprawił jeszcze dwie drobnostki, które mają jedną wspólną cechę: nie wywaliłyby się w żadnym teście, wywaliłyby się dopiero na produkcji:
+
+- aktualizacje wydarzeń szły przez PATCH, który nie czyści pól wyrzuconych z opisu, więc przeszedłem na PUT (`updateEvent`),
+- zmienna interwału miała górny limit `Number.MAX_SAFE_INTEGER`, a komentarz przy poprawce mówi wprost: *"Bun/Node truncate timer delays above 2^31-1 ms to 1 ms, which would be a tight loop."* Czyli literówka w zmiennej środowiskowej i worker, zamiast spać godzinę, mieli CPU w pętli i młócił API.
+
+Do tego doszedł własny `interruptibleSleep` (`src/sleep.ts`), który czyści timer, a nie tylko go ignoruje. Powód jest nudny: SIGTERM w trakcie godzinnej pauzy ma kończyć workera od razu, a nie czekać, aż Docker straci cierpliwość i wyśle SIGKILL.
+
+## Problem trzeci: linków do Teamsa w USOS-ie po prostu nie ma
+
+I tu wracamy do poniedziałku rano. Worker działał, wydarzenia lądowały w kalendarzu, tytuły w formacie `TYP ZAJĘĆ | Przedmiot`, sala, prowadzący. I zero linków do zajęć online, bo USOS Vistuli ich nie przechowuje. Opis w README, który napisałem wprost: *USOS Vistuli nie ma linków do zajęć online. Są na Platonie (eduPortal Asseco), w elementach typu "konferencja" na ścieżkach per przedmiot, typ zajęć i grupa.*
+
+Platon to osobny system. Nie ma publicznego API. Logowanie leci przez formularz albo CAS, więc zrobiłem to, co robi człowiek zdesperowany o 13:00: skrypt `scripts/platon-links.ts` używa sesji z już zalogowanej przeglądarki. Komentarz na górze pliku mówi to uczciwie: *"Platon has no public API and logs in through a form or CAS, so this script reuses a browser session"*. Nie opiszę tu krok po kroku, skąd tę sesję brać i nie traktuj tego jako rozwiązania do skopiowania. To jest narzędzie dla jednej osoby, napisane pod jeden portal, które może się rozsypać przy każdej zmianie po stronie uczelni. Nie jest to żadna wspierana integracja i nigdy nie miało być.
+
+Co skrypt robi: wylistowuje ścieżki szkoleniowe (jedna na przedmiot, typ zajęć i grupę), otwiera te z bieżącego semestru, rozwija elementy "konferencja" i zapisuje link z zakresem dat ważności. Parsery wyciągające to z HTML-a mają własne testy na zapisanych fixture'ach (`src/platon/parse.test.ts`), bo to jest ta część, która najpewniej się kiedyś zepsuje, więc chcę przynajmniej wiedzieć, w którym miejscu.
+
+Wynik ląduje w `links.json`. Klucz ma trzy poziomy dokładności, od najbardziej szczegółowego:
+
+```text
+<course_id>/<classtype_id>/<group_number>   np. CII5SP001CI/W/1
+<course_id>/<classtype_id>
+<course_id>
+```
+
+Wartość to URL albo obiekt z opcjonalnym `from` i `to` (zakres dat włącznie), albo lista takich obiektów. Mapper dla każdych zajęć szuka najbardziej szczegółowego klucza, którego zakres obejmuje datę zajęć, i używa go tylko wtedy, kiedy USOS sam linku nie ma. Wpisy z Platona mają pole `source: "platon:..."` i są nadpisywane przy każdym uruchomieniu skryptu, a wpisy ręczne (bez `source`) zostają nietknięte. Treści `links.json` oczywiście tu nie wklejam, bo to są linki do spotkań, nie moja prywatna sprawa.
+
+Plik jest wypiekany w obraz Dockera, więc po zmianie jest commit, push i Deploy w Coolify. Worker stoi na Coolify na VPS-ie Oracle, bez domeny, bo nie ma czego wystawiać. Tak, to znaczy, że żeby poprawić link, muszę zrobić deploy. Wiem. Poczekam, aż mnie to wkurzy dostatecznie, żeby to zmienić.
+
+## Kiedy to wszystko NIE ma sensu
+
+Uczciwie, bo łatwo to przeczytać jako "zobaczcie, jaki jestem sprytny":
+
+- **Jeśli masz zajęcia raz w tygodniu i jeden przedmiot online**, to wystarczy kartka na lodówce. Worker, spec, plan, Dockerfile i hosting to armata na muchę.
+- **Jeśli Twoja uczelnia ma inny USOS lub inny system**, to część rzeczy, na które ja się naciąłem (pole `slot_number`), u Ciebie może zadziałać, a inne mogą się rozsypać zupełnie gdzie indziej.
+- **Skrypt do Platona to dług od pierwszego dnia.** Parsuje HTML cudzego portalu na cookie z przeglądarki. Gdyby ktoś tu miał rację mówiąc "nie rób tego", to dokładnie w tym miejscu. Zrobiłem to świadomie, bo alternatywą było ręczne szukanie linków co poniedziałek.
+- **Nie mam żadnych danych o tym, jak to się zachowa za miesiąc.** Repo ma trzy dni. Nie zmierzyłem, jak dokładny jest sync w czasie, i nie będę udawał, że zmierzyłem.
+
+## Co z tego wyszło
+
+Plan z USOS-a ląduje w kalendarzu Google co godzinę. Pierwszy link do Teamsa wpadł do `links.json` tego samego dnia, więc przynajmniej jedne zajęcia mają już klikalny link w telefonie. Reszta to kwestia puszczenia skryptu na świeżej sesji i deployu.
+
+Cała lekcja jest taka, że "przepisz plan do kalendarza" poszło gładko, a "znajdź link do zajęć" zajęło mi dwie ostatnie godziny z commitów i wymaga czegoś, co należy do trzeciego systemu, który nawet nie ma API.
+
+## FAQ
+
+**Dlaczego nie użyłem po prostu eksportu planu z USOS-a?**
+Bo celem był nie sam plan, tylko plan z linkami, tytułami w moim formacie i wydarzeniami, które odświeżają się same, bez ręcznego importu. Nie sprawdzałem szczegółowo, co uczelniany USOS udostępnia w tym zakresie, więc nie będę twierdzić, że czegoś nie ma.
+
+**Czy worker może mi skasować ręcznie dodane wydarzenia?**
+Nie powinien. Każde wydarzenie, które tworzy, ma znacznik `usosSync=1` w `extendedProperties.private`, a planner bierze pod uwagę tylko takie. Reszta kalendarza dla niego nie istnieje. Ręczne przesunięcie zsynchronizowanego wydarzenia w Google nie wraca do stanu z USOS-a, dopóki USOS nie zmieni tych zajęć.
+
+**Co się stanie, jak USOS zwróci pusty plan?**
+Kasowanie jest wstrzymane do następnego cyklu, a cykl jest oznaczony jako błędny w logach. Pusty plan przy kalendarzu pełnym zsynchronizowanych wydarzeń traktuję jako awarię USOS-a, nie jako 120 dni wolnego.
+
+**Czy skrypt do Platona jest jakimś gotowym rozwiązaniem dla innych studentów?**
+Nie. To skrypt dla jednej osoby, który korzysta z sesji zalogowanej przeglądarki, bo portal nie ma API. Może przestać działać po każdej zmianie po stronie uczelni i nie podaję tu instrukcji, jak go uruchomić.
+
+**Czemu Bun, a nie Node?**
+Bo chciałem testy i TypeScripta bez konfiguracji. Żadnego mądrzejszego uzasadnienia nie mam. Zauważ za to, że limit 2^31-1 ms dla timerów dotyczy obu środowisk.
+
+## Podsumowanie
+
+I to by było na tyle. Ironia jest taka, że zbudowałem system, który ma mi oszczędzić klikania po uczelnianych portalach, a zakończyło się na tym, że napisałem skrypt, który klika po uczelnianym portalu za mnie, z cudzą sesją, bez żadnej gwarancji, że jutro dalej działa. Plan zajęć mam teraz w kalendarzu, w dwóch kliknięciach od przypomnienia. Link do Teamsa mam w pliku JSON, który wymaga deployu. Postęp, jak najbardziej. Trzymaj się mordo!
+
+## Linki
+
+- [Commit 1c1f3e5: nadpisania linków i skrypt do Platona](https://github.com/bartosz-skejcik/usos-sync/commit/1c1f3e5b0fa739c5e02d25ebaaf4ba7a936cefe9)
+- [Commit dda3829: usunięcie slot_number z pól tt/user](https://github.com/bartosz-skejcik/usos-sync/commit/dda3829643c8f7ae9bf75faa6ef2c9c0120c107d)
+- [Commit b7eb5fd: utwardzanie workera](https://github.com/bartosz-skejcik/usos-sync/commit/b7eb5fd6be3e537175fbb6278049f5b344c90b3b)
+- [USOS API, dokumentacja](https://apps.usos.edu.pl/developers/api/)
+- [Google Calendar API, extendedProperties](https://developers.google.com/calendar/api/v3/reference/events)
+- [Zbudowałem własny menedżer passkeyów i teraz rozumiem, czemu nikt tego nie robi na kolanie](/blog/pl/why-i-built-my-own-passkey-manager)
+- [Chciałem przepisać bloga na hype'owy framework i dlaczego się wypisałem](/blog/pl/why-i-didnt-rewrite-my-blog-to-a-new-framework)
