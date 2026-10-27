@@ -1,0 +1,145 @@
+---
+title: Metro fermé à Bemowo, et l'application dit "prends le" : comment je lis les messages de stations fermées sans LLM
+description: J'ai appris à mon appli privée Dojazd à lire les messages de stations de métro fermées avec des règles, sans LLM. Juste après le déploiement, la production m'a montré deux problèmes.
+date: 2026-10-27T12:00:00.000Z
+tags: dojazd, bun, sqlite, gtfs, parser, metro, warszawa, tls, ios, side-project
+---
+
+## Introduction
+
+Salut ! Imagine que tu sors de chez toi parce que l’appli te dit que tu as 4 minutes de marge pour le métro. Tu arrives à la station. Bande. Carte. Station fermée depuis une semaine, et l’appli continue, persuadée, à compter ton correspondance via le quai où personne ne doit monter. Putain.
+
+Voilà le trou dans mon projet nommé Dojazd, avant le 22 octobre où j’ai ajouté une chose : le parseur des messages de stations de métro fermées. Ce billet parle de ce parseur et de deux problèmes qui ont explosé en prod juste après son déploiement.
+
+Parce que d’abord il faut présenter l’appli, le blog ne l’a jamais vue. Dojazd est une application **privée** iOS pour les Varsoviens, qui répond à une seule question : « À quelle heure partir et est‑ce que j’arriverai à temps ? ». La prévision à chaque heure est la médiane des retards par segment des 28 derniers jours, écrasée par la position GPS quand le véhicule est visible. Le backend, c’est du Bun : API en Hono, collecteur GTFS et GTFS‑RT sur SQLite, routage via MOTIS. Côté iOS il y a Live Activity et des widgets. La source de vérité, c’est le contrat `openapi.yaml`, et les décisions sont consignées dans le journal numéroté `DECISIONS`, qui cette semaine a atteint le point 15.65.
+
+Tu vas obtenir trois choses :
+
+1. **la règle « incertain = pas de fermeture »** et pourquoi le parseur à base de règles a gagné sur LLM chez moi,
+2. **la requête qui a duré des minutes en prod**, alors qu’elle semblait innocente sur le papier,
+3. **le serveur de métro qui n’envoie pas le certificat intermédiaire**, ce qui faisait échouer chaque poll avec une erreur TLS.
+
+Le repo est privé, donc les liens vers les commits en bas ne seront vus que par moi. Personne d’autre n’utilise cette appli, donc il n’y aura pas d’histoires de personnes affectées par la fermeture d’une station. On se contentera de ce qui s’est réellement passé dans le code.
+
+## Ce que je parse réellement
+
+Les messages de travaux sur le métro sont de simples articles. Écrits en langage humain, par des humains, du style : « les stations Bemowo et Ulrychów seront fermées, les trains ne s’arrêteront pas ». Certains parlent de stations, d’autres d’un tronçon, d’autres de toute la ligne, et dans le même texte on trouve parfois une phrase sur les bus de substitution qui circulent « sur Bemowo ».
+
+À cela s’ajoutent les incidents WTP. D’après le rapport de recherche que j’ai collé dans `DECISIONS` (je ne l’ai pas vérifié en dehors de ce que je vois dans le code, donc prends‑le avec prudence) : metro.waw.pl publie les travaux planifiés, pas les pannes en temps réel, et la source la plus pratique est l’API REST de WordPress plutôt que le scraping HTML. Je ne vais pas dire ici si je peux le lire légalement. Je n’ai pas vérifié en tant qu’avocat et je n’ai pas l’intention de faire semblant d’avoir vérifié.
+
+Le commit `8e02f75` le décrit ainsi :
+
+```text
+Rules-only parser for M1/M2 closures in metro.waw.pl articles and WTP incidents:
+closed stations, blocked stretches and time windows; anything uncertain gives
+no closure.
+```
+
+Et cette dernière phrase résume toute la philosophie.
+
+## La règle qui tient tout le tout : incertain = pas de fermeture
+
+Dans l’en‑tête du fichier `backend/collector/src/rt/metroClosures.ts` j’ai le commentaire :
+
+```text
+Rules only, no LLM. [...] Fail-safe: anything the rules are not sure about
+(no line, no station, no closure phrase, no time window) gives no closure;
+the alert itself is still shown.
+```
+
+En clair, le parseur doit identifier **quatre** choses en même temps : la ligne, la station, la phrase de fermeture et la fenêtre temporelle. S’il manque l’une d’elles, il n’y a pas de fermeture. Le message continue d’être affiché à l’utilisateur, donc je ne balaie rien sous le tapis, je ne transforme tout simplement pas le texte incertain en décision de routage ferme.
+
+Pourquoi cette approche et pas l’inverse ? Parce que le coût des erreurs est asymétrique. Si le parseur ne reconnaît pas une vraie fermeture, l’appli se comporte comme avant le 22 octobre : mal, mais d’une façon que je connais. Si elle considère fermée une station qui fonctionne, je coupe le métro fonctionnel du trajet et je force quelqu’un à prendre le bus sans raison. Je préfère la première erreur.
+
+Et pourquoi sans LLM ? Mes raisons, pas une étude :
+
+- le parseur doit tourner dans le collecteur, en boucle, sans API externe et sans facturation à chaque article,
+- les règles peuvent être testées sur des fixtures et donner le même résultat à chaque fois,
+- si ça se trompe, j’ouvre le fichier et je vois quelle phrase l’a induit en erreur, pas « le modèle a décidé ainsi ».
+
+Les phrases reconnues sont des motifs dans le commentaire du code :
+
+```text
+// Sentence patterns (bus and tram sentences are skipped, "ponownie",
+// "całej linii" sentences too):
+//   (a) stations "nieczynne", "zamknięte", "wyłączone z użytkowania/ruchu",
+//       "pociągi nie zatrzymują się" -> those stations closed (no boarding,
+//       no alighting), riding through allowed;
+```
+
+Deux détails à remarquer. Les phrases sur les bus et les tramways sont ignorées ,  c’est exactement le piège du « sur Bemowo ». Le plan `docs/plans/2026-10-22-metro-closures.md` et le `DECISIONS` 15.65 indiquent que les tests veillent à ce que ce type de phrase ne ferme pas une station (j’écris d’après le plan, pas d’un test lu manuellement, donc crois‑moi seulement ce qui vaut la peine). Et les phrases contenant « ponownie » ou « całej linii » sont aussi jetées, car le motif est trop ambigu pour être fiable.
+
+Dans mon modèle, une station fermée signifie : tu ne montes pas et tu ne descends pas, mais le train peut la traverser. C’est un petit détail qui se confond facilement avec « le métro ne roule pas ».
+
+## Fixture avec de vrais articles
+
+Le test ne repose pas sur des phrases inventées. La fixture est constituée de vrais articles de métro de 2017 à 2026, dont les 20 plus récents du 22 octobre. L’un d’eux parle de Bemowo et Ulrychów fermés du 17 au 25 octobre (ces dates proviennent du message du commit, je ne les ai pas vérifiées ailleurs).
+
+Et là il faut que je dise la phrase qui montre que je n’ai pas l’air d’avoir fait une validation massive. **Je n’ai aucune métrique de précision pour ce parseur.** Je n’ai pas mesuré combien d’articles de l’archive le parseur lit correctement et combien il ignore. Je n’ai pas non plus de capture d’écran ou de log de prod montrant que l’appli a réellement réagi à la fermeture de Bemowo. La fixture passe les tests. C’est tout ce que je sais.
+
+## Premier déploiement et deux choses qui ont planté
+
+J’ai déployé. La prod m’a offert deux cadeaux.
+
+### La requête qui a duré des minutes
+
+Le parseur a besoin de la liste des stations de métro depuis le GTFS pour faire correspondre les noms des articles aux identifiants. J’ai fait ça avec un `JOIN` sur `gtfs_trips`. Sur les données de test, ça roulait. Sur le SQLite contenant toute la ville de Varsovie, ça prenait des minutes. Commit `648d614` :
+
+```text
+perf(collector): metro stations by primary-key lookups
+(a join over gtfs_trips took minutes on prod)
+Measured on the Warsaw SQLite: 211 ms, 39 stations, once per GTFS version.
+```
+
+Après être passé à des recherches par clé primaire : 211 ms, 39 stations, une fois par version GTFS. Les minutes se sont transformées en un quart de seconde. Je ne reproduis pas la requête ici, car le commit ne contient que la description, et je ne veux pas inventer du SQL que je n’ai pas sous les yeux.
+
+Leçon : un `JOIN` sur la table des trips semble anodin tant que la table ne fait pas la taille d’une métropole entière.
+
+### Le serveur qui n’envoie pas le certificat intermédiaire
+
+Le deuxième problème est apparu peu après. Après le `648d614`, le collecteur a commencé, à chaque poll, à renvoyer `alerts_fetch_failed` avec le message `unable to verify the first certificate`. Chaque poll, sans exception.
+
+Cause : le serveur metro.waw.pl ne fournit pas son certificat intermédiaire. Les navigateurs le récupèrent souvent tout seuls (en téléchargeant le certificat manquant), mais le collecteur ne le fait pas. Le commit `5d0f098` ajoute la confiance envers le CA intermédiaire (Certum OV TLS G2 R39 CA) **pour ce seul hôte**, avec la note que les certificats expirés ou étrangers restent rejetés.
+
+Je n’ai pas désactivé la vérification TLS. C’est la limite que je ne franchis pas juste pour que « ça fonctionne ». J’ai ajouté un certificat précis comme fiable pour un serveur précis.
+
+## Quand cette approche N’a PAS de sens
+
+Honnêtement, parce que c’est facile de le lire comme un hymne aux règles :
+
+- **Si la source change la forme de ses messages**, les règles ne correspondront plus et le parseur commencera à renvoyer « pas de fermeture » en silence. C’est le défaut du fail‑safe : le silence ressemble à l’absence de fermeture. Dans ces trois commits, je ne vois aucun alerte du type « ça fait une semaine que je ne reconnais rien ».
+- **Si les articles sont rédigés très librement**, un LLM aurait probablement couvert plus de cas que mes motifs. J’accepte ce compromis en échange d’une meilleure prévisibilité du parseur.
+- **Le code a été écrit avec Claude** : les commits portent le trailer `Co-Authored-By`, et le plan était rédigé pour des agents. Les règles sont les miennes dans le sens où je les ai approuvées et comprises, même si je n’ai pas tapé chaque ligne à la main.
+- **L’appli est privée**, donc je n’ai aucun utilisateur qui confirmerait que cela change quelque chose.
+
+## Ce que ça a donné
+
+Dojazd sait maintenant qu’une station de métro peut être fermée, et il lit cela grâce à des règles simples qui, en cas de doute, ne font rien. Le premier déploiement a planté sur la requête et sur le certificat, deux choses qu’aucun test de fixture n’aurait pu détecter, car aucun ne disposait d’une vraie base ni d’un vrai serveur en amont.
+
+L’ironie, c’est que tout mon effort était de faire en sorte que le parseur n’invente pas de fermetures, et la production a été bloquée parce que je n’ai pas pu me connecter au serveur et compter 39 stations en un temps raisonnable. La règle « incertain = pas de fermeture » est géniale. Dommage que je ne sache pas l’appliquer à mes propres hypothèses d’infrastructure.
+
+## FAQ
+
+**Pourquoi sans LLM, alors que les articles ne sont que du texte ?**  
+Parce que je voulais un parseur déterministe, testable, qui tourne dans la boucle du collecteur, sans API externe. J’accepte un champ d’application plus restreint. Je n’ai pas comparé cela à un LLM sur les mêmes articles, donc je ne dirai pas que les règles sont meilleures, seulement qu’elles sont prévisibles.
+
+**Quelle est la précision du parseur ?**  
+Je ne sais pas. Je ne l’ai pas mesurée. J’ai une fixture avec de vrais articles de 2017 à 2026 et des tests qui passent, mais ce n’est pas la même chose qu’un taux de réussite chiffré.
+
+**L’appli a‑t‑elle réellement réagi à la fermeture de Bemowo ?**  
+Je n’ai aucune preuve. Cette semaine je n’ai pas récupéré de log ou de capture de prod pour cet événement, donc je ne prétendrai pas qu’elle a fonctionné en temps réel.
+
+**Pourquoi ne pas simplement désactiver la vérification TLS ?**  
+Parce que ce serait désactiver la sécurité pour tout le trafic à cause d’une erreur d’un seul serveur. J’ai ajouté la confiance à un certificat intermédiaire précis, les autres certificats expirés ou étrangers restent rejetés.
+
+**Dojazd est‑il disponible pour d’autres ?**  
+Non, c’est une appli iOS privée. J’en parle parce que ses décisions de conception sont plus intéressantes que l’appli elle‑même.
+
+## Liens
+
+- [Commit 8e02f75 : stations de métro fermées à partir du contenu des messages](https://github.com/bartosz-skejcik/dojazd/commit/8e02f75b9c132977fe464a294ccd8edc93311ed7)
+- [Commit 648d614 : stations de métro via recherches par clé primaire](https://github.com/bartosz-skejcik/dojazd/commit/648d614313c7450da7f86ddfcb30699320752ec0)
+- [Commit 5d0f098 : confiance au CA intermédiaire pour metro.waw.pl](https://github.com/bartosz-skejcik/dojazd/commit/5d0f098ac8c1c6bc29956ce0731f8f07d1373d67)
+- [Spécification GTFS](https://gtfs.org/)
+- [Plan de cours USOS sur Google Calendar, et pas de liens Teams dans USOS](/blog/fr/usos-to-google-calendar-no-teams-links)
+- [J’ai construit mon propre gestionnaire de passkeys et je comprends maintenant pourquoi personne ne le fait à la va‑vite](/blog/fr/why-i-built-my-own-passkey-manager)
