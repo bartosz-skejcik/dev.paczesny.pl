@@ -1,0 +1,145 @@
+---
+title: "Metro zamknięte na Bemowie, a aplikacja mówi \"jedź\": jak bez LLM czytam komunikaty o zamkniętych stacjach"
+description: "Nauczyłem prywatną apkę Dojazd czytać komunikaty o zamkniętych stacjach metra regułami, bez LLM. Zaraz po deployu produkcja pokazała mi dwa problemy."
+date: 2026-10-27T12:00:00.000Z
+tags: dojazd, bun, sqlite, gtfs, parser, metro, warszawa, tls, ios, side-project
+---
+
+## Wprowadzenie
+
+Siemanko! Wyobraź sobie, że wychodzisz z domu, bo apka mówi, że masz 4 minuty zapasu na metro. Dochodzisz na stację. Taśma. Kartka. Stacja zamknięta od tygodnia, a apka dalej z przekonaniem liczy Ci przesiadkę przez peron, na którym nikt nie stanie. Kurwa.
+
+Tak wyglądała dziura w moim projekcie o nazwie Dojazd, zanim 22 października dodałem do niego jedną rzecz: parser komunikatów o zamkniętych stacjach metra. Ten wpis jest o tym parserze i o dwóch rzeczach, które wywaliły się na produkcji zaraz po jego wdrożeniu.
+
+Bo najpierw muszę przedstawić samą apkę, blog jej jeszcze nie widział. Dojazd to **prywatna** aplikacja na iOS dla warszawiaków, która odpowiada na jedno pytanie: "o której wyjść i czy zdążę". Prognoza każdej godziny to mediana opóźnień per segment z ostatnich 28 dni, nadpisywana pozycją GPS, kiedy pojazd jest widoczny. Backend to Bun: API w Hono, kolektor GTFS i GTFS-RT na SQLite, routing przez MOTIS. Po stronie iOS są Live Activity i widżety. Źródłem prawdy jest kontrakt `openapi.yaml`, a decyzje wpisuję do numerowanego dziennika `DECISIONS`, który w tym tygodniu doszedł do punktu 15.65.
+
+Dostaniesz trzy rzeczy:
+
+1. **zasadę "niepewne = brak zamknięcia"** i dlaczego parser na regułach wygrał u mnie z LLM,
+2. **zapytanie, które na produkcji trwało minuty**, a na papierze wyglądało niewinnie,
+3. **serwer metra, który nie wysyła certyfikatu pośredniego**, więc każdy poll kończył się błędem TLS.
+
+Repo jest prywatne, więc linki do commitów na dole zobaczę tylko ja. Nikt poza mną z tej apki nie korzysta, więc nie będzie tu żadnych historii o ludziach, których zamknięcie stacji dotknęło. Będzie za to to, co dokładnie się stało w kodzie.
+
+## Co właściwie parsuję
+
+Komunikaty o pracach na metrze to zwykłe artykuły. Pisane po ludzku, przez ludzi, w stylu "stacje Bemowo i Ulrychów będą nieczynne, pociągi nie zatrzymują się". Jedne piszą o stacjach, inne o odcinku, inne o całej linii, a w tym samym tekście obok bywa zdanie o autobusach zastępczych, które jeżdżą "na Bemowie".
+
+Do tego dochodzą incydenty WTP. Z raportu researchu, który wkleiłem do `DECISIONS` (sam go nie weryfikowałem poza tym, co widzę w kodzie, więc traktuj to ostrożnie): metro.waw.pl publikuje prace planowane, nie awarie na żywo, a najwygodniejszym źródłem jest REST API WordPressa zamiast scrapowania HTML. Nie będę tu pisał, czy mogę to legalnie czytać. Tego nie sprawdzałem jako prawnik i nie zamierzam udawać, że sprawdzałem.
+
+Commit `8e02f75` opisuje to tak:
+
+```text
+Rules-only parser for M1/M2 closures in metro.waw.pl articles and WTP incidents:
+closed stations, blocked stretches and time windows; anything uncertain gives
+no closure.
+```
+
+I to ostatnie zdanie to cała filozofia.
+
+## Zasada, która trzyma całość: niepewne to brak zamknięcia
+
+W nagłówku pliku `backend/collector/src/rt/metroClosures.ts` mam komentarz:
+
+```text
+Rules only, no LLM. [...] Fail-safe: anything the rules are not sure about
+(no line, no station, no closure phrase, no time window) gives no closure;
+the alert itself is still shown.
+```
+
+Czyli parser musi znaleźć naraz cztery rzeczy: linię, stację, frazę zamknięcia i okno czasowe. Jak brakuje którejkolwiek, zamknięcia nie ma. Sam komunikat dalej się użytkownikowi pokazuje, więc nie zamiatam niczego pod dywan, po prostu nie przerabiam niepewnego tekstu na twardą decyzję routingu.
+
+Dlaczego tak, a nie na odwrót? Bo koszty błędów są nierówne. Jeśli parser nie rozpozna prawdziwego zamknięcia, apka zachowuje się tak jak przed 22 października, czyli źle, ale znanym mi sposobem. Jeśli uzna za zamkniętą stację, która działa, wytnę z trasy działające metro i każę komuś jechać autobusem bez powodu. Wolę pierwszy błąd.
+
+I dlaczego bez LLM? Moje powody, nie żadne badanie:
+
+- parser ma działać w kolektorze, w pętli, bez zewnętrznego API i bez rachunku za każdy artykuł,
+- reguły mogę przetestować na fixture i dostać to samo za każdym razem,
+- jak się pomyli, otwieram plik i widzę, które zdanie ją zmyliło, a nie "model tak uznał".
+
+Zdania, które rozpoznaje, to wzorce w komentarzu w kodzie:
+
+```text
+// Sentence patterns (bus and tram sentences are skipped, "ponownie",
+// "całej linii" sentences too):
+//   (a) stations "nieczynne", "zamknięte", "wyłączone z użytkowania/ruchu",
+//       "pociągi nie zatrzymują się" -> those stations closed (no boarding,
+//       no alighting), riding through allowed;
+```
+
+Zwróć uwagę na dwa szczegóły. Zdania o autobusach i tramwajach są pomijane, i to jest dokładnie ta pułapka z "na Bemowie". Z planu `docs/plans/2026-10-22-metro-closures.md` i `DECISIONS` 15.65 wynika, że testy pilnują, żeby takie zdanie nie zamykało stacji (piszę z planu, nie z własnoręcznie przeczytanego testu, więc wierz mi tylko tyle, ile warto). A zdania z "ponownie" i "całej linii" też lecą do kosza, bo tam wzorzec jest zbyt niejednoznaczny, żeby mu ufać.
+
+Stacja zamknięta w moim modelu oznacza: nie wsiądziesz i nie wysiądziesz, ale pociąg może przez nią przejechać. To drobiazg, który łatwo pomylić z "metro nie jedzie".
+
+## Fixture z prawdziwych artykułów
+
+Test nie bazuje na wymyślonych zdaniach. Fixture to prawdziwe artykuły metra z lat 2017 do 2026, w tym najnowsze 20 z 22 października. Jeden z nich to Bemowo i Ulrychów zamknięte od 17 do 25 października (te daty znam z komunikatu commita, nie sprawdzałem ich w osobnym dokumencie).
+
+I tu musi paść zdanie, które muszę napisać, żebyś nie miał wrażenia, że przeprowadziłem jakąś wielką walidację. **Nie mam żadnej liczby skuteczności tego parsera.** Nie zmierzyłem, ile artykułów z archiwum parser czyta dobrze, a ile ignoruje. Nie mam też zrzutu ekranu ani logu z produkcji, który pokazywałby, że apka faktycznie zareagowała na zamknięcie Bemowa. Fixture przechodzi w testach. To wszystko, co wiem.
+
+## Pierwszy deploy i dwie rzeczy, które się wywaliły
+
+Wdrożyłem. Produkcja zrobiła mi dwa prezenty.
+
+### Zapytanie, które trwało minuty
+
+Parser potrzebuje listy stacji metra z GTFS, żeby dopasować nazwy z artykułów do identyfikatorów. Zrobiłem to join-em po `gtfs_trips`. Na danych testowych śmigało. Na SQLite z całą Warszawą trwało minuty. Commit `648d614`:
+
+```text
+perf(collector): metro stations by primary-key lookups
+(a join over gtfs_trips took minutes on prod)
+Measured on the Warsaw SQLite: 211 ms, 39 stations, once per GTFS version.
+```
+
+Po przerobieniu na wyszukiwania po kluczu głównym: 211 ms, 39 stacji, raz na wersję GTFS. Minuty zamieniły się w ćwierć sekundy. Nie rozpisuję tu zapytania, bo w commicie jest tylko opis, a nie chcę zmyślać SQL-a, którego nie mam przed oczami.
+
+Lekcja jest nudna, ale prawdziwa: join po tabeli z tripami wygląda niewinnie, dopóki ta tabela nie ma rozmiaru całego miasta.
+
+### Serwer, który nie wysyła certyfikatu pośredniego
+
+Druga sprawa wyszła chwilę później. Po `648d614` kolektor zaczął przy każdym pollu zgłaszać `alerts_fetch_failed` z komunikatem `unable to verify the first certificate`. Każdy poll, bez wyjątku.
+
+Powód: serwer metro.waw.pl nie wysyła swojego certyfikatu pośredniego. Przeglądarki często sobie z tym radzą same (dociągają brakujący certyfikat), a kolektor nie. Commit `5d0f098` wprowadza zaufanie do pośredniego CA (Certum OV TLS G2 R39 CA) dla tego jednego hosta, z notatką, że przeterminowane lub obce certyfikaty są dalej odrzucane.
+
+Nie wyłączyłem weryfikacji TLS. To jest ta granica, której nie przekraczam, żeby "tylko działało". Dołożyłem jeden konkretny certyfikat jako zaufany dla jednego konkretnego serwera.
+
+## Kiedy to podejście NIE ma sensu
+
+Uczciwie, bo łatwo to przeczytać jako laurkę dla reguł:
+
+- **Jeśli źródło zmieni formułę komunikatów**, reguły przestaną pasować i parser po cichu zacznie dawać "brak zamknięcia". To jest ta wada fail-safe: cisza wygląda tak samo jak brak zamknięć. W tych trzech commitach nie widzę alarmu, który mówiłby "od tygodnia nic nie rozpoznałem".
+- **Jeśli artykuły są pisane bardzo swobodnie**, LLM prawdopodobnie ogarnąłby więcej przypadków niż moje wzorce. Płacę za to wiedzą o tym, co dokładnie potrafi parser, kosztem jego zasięgu.
+- **Kod pisałem z Claude**: commity niosą trailer Co-Authored-By, a plan do tego był pisany dla agentów. Reguły są moje w tym sensie, że je zatwierdziłem i rozumiem, ale nie napisałem każdej linijki ręcznie.
+- **Apka jest prywatna**, więc nie mam żadnych użytkowników, którzy potwierdziliby, że to coś zmienia.
+
+## Co z tego wyszło
+
+Dojazd wie teraz, że stacja metra może być zamknięta, i czyta to z komunikatów prostymi regułami, które w razie wątpliwości nic nie robią. Pierwszy deploy wywalił się na zapytaniu i na certyfikacie, czyli na dwóch rzeczach, których żaden test z fixture nie mógł wykryć, bo żaden nie miał prawdziwej bazy ani prawdziwego serwera po drugiej stronie.
+
+Ironia jest taka, że cały mój wysiłek poszedł w to, żeby parser nie wymyślał zamknięć, a produkcję położyło to, że nie umiałem połączyć się z serwerem i policzyć 39 stacji w rozsądnym czasie. Zasada "niepewne = brak zamknięcia" jest świetna. Szkoda, że nie umiem jej zastosować do własnych założeń o infrastrukturze.
+
+## FAQ
+
+**Dlaczego bez LLM, skoro artykuły to zwykły tekst?**
+Bo chciałem deterministycznego, testowalnego parsera w pętli kolektora, bez zewnętrznego API. Płacę za to mniejszym zasięgiem. Nie porównywałem tego z LLM na tych samych artykułach, więc nie powiem, że reguły są lepsze, tylko że są przewidywalne.
+
+**Jaka jest skuteczność parsera?**
+Nie wiem. Nie mierzyłem jej. Mam fixture z prawdziwych artykułów z lat 2017 do 2026 i testy, które przechodzą, ale to nie to samo co liczba.
+
+**Czy apka naprawdę zareagowała na zamknięcie Bemowa?**
+Nie mam na to dowodu. W tym tygodniu nie zebrałem logu ani zrzutu z produkcji z tego zdarzenia, więc nie będę twierdzić, że zadziałało na żywo.
+
+**Czemu nie wyłączyłeś po prostu weryfikacji TLS?**
+Bo to byłoby wyłączenie zabezpieczenia dla całego ruchu z powodu błędu jednego serwera. Dołożyłem zaufanie do jednego pośredniego certyfikatu, a inne przeterminowane i obce certyfikaty dalej są odrzucane.
+
+**Czy Dojazd jest dostępny dla innych?**
+Nie, to prywatna aplikacja na iOS. Piszę o niej, bo jej decyzje projektowe są ciekawsze niż sama apka.
+
+## Linki
+
+- [Commit 8e02f75: zamknięte stacje metra z treści komunikatów](https://github.com/bartosz-skejcik/dojazd/commit/8e02f75b9c132977fe464a294ccd8edc93311ed7)
+- [Commit 648d614: stacje metra przez wyszukiwania po kluczu głównym](https://github.com/bartosz-skejcik/dojazd/commit/648d614313c7450da7f86ddfcb30699320752ec0)
+- [Commit 5d0f098: zaufanie do pośredniego CA dla metro.waw.pl](https://github.com/bartosz-skejcik/dojazd/commit/5d0f098ac8c1c6bc29956ce0731f8f07d1373d67)
+- [Specyfikacja GTFS](https://gtfs.org/)
+- [Plan zajęć z USOS-a w Google Calendar, a linków do Teamsa i tak w USOS nie ma](/blog/pl/usos-to-google-calendar-no-teams-links)
+- [Zbudowałem własny menedżer passkeyów i teraz rozumiem, czemu nikt tego nie robi na kolanie](/blog/pl/why-i-built-my-own-passkey-manager)
