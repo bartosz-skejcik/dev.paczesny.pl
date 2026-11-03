@@ -1,0 +1,118 @@
+---
+title: "Zrobiłem aplikację, która mówi, kiedy wyjść z domu, żeby zdążyć na pociąg (i skąd wie, że to FLIRT)"
+description: "Dojazd to iPhone'owa appka dla Warszawy i Trójmiasta. Skład pociągu KM wyciągam z PDF-ów przewoźnika i podpisuję uczciwie: planowo."
+date: 2026-11-03T12:00:00.000Z
+tags: dojazd, swiftui, bun, gtfs, gtfs-rt, sqlite, motis, kolej, pdf, ai, ios
+---
+
+## Wprowadzenie
+
+Siemanko! Jest jedno pytanie, które zadaję sobie przy drzwiach z butem w ręku: kiedy wyjść i czy zdążę. Rozkład mówi, że pociąg jest o pełnej godzinie. Rozkład nie mówi, że ostatnie trzy razy ten pociąg miał kilka minut opóźnienia na tym odcinku, a tramwaj do stacji jedzie dokładnie wtedy, kiedy ma ochotę. Kurwa, naprawdę musi się do tego nadawać cała aplikacja?
+
+Okazuje się, że musi, więc 8 października zrobiłem pierwszy commit w repo o nazwie Dojazd. To jest aplikacja na iPhone'a dla Warszawy (od 28 października także dla Trójmiasta), która odpowiada na to jedno pytanie. Do tej pory na blogu nie było o niej ani słowa, więc ten wpis jest szerokim wprowadzeniem, a na końcu dostajesz konkretny kawałek, z którego jestem najbardziej zadowolony.
+
+Dostaniesz trzy rzeczy:
+
+1. **jak Dojazd w ogóle liczy, kiedy wyjść**: mediana opóźnień z 28 dni, a gdy widać pojazd na żywo, pozycja GPS,
+2. **skąd appka wie, że Twój pociąg Kolei Mazowieckich to FLIRT**, skoro nie ma na to żadnego otwartego źródła,
+3. **dlaczego przy tym FLIRT-cie zawsze stoi słowo "planowo"** i dlaczego to jest najważniejsze słowo w całej tej funkcji.
+
+Repo jest prywatne. Linki do commitów na dole zobaczę tylko ja, a Ty dostajesz same hasze i cytaty. Do tego około 600 commitów w niecały miesiąc, czyli jakieś 40 dziennie, a commity mają trailery `Claude-Session`. Nie napisałem tego sam w jedną noc. Pisałem to z Claude, i tak ma być napisane.
+
+## Co to właściwie jest
+
+Dwie części. Backend na Bunie: API w Hono, kolektor, który ciągnie GTFS i GTFS-RT i zapisuje do SQLite, oraz routing przez MOTIS. Do tego klient w SwiftUI, z widgetami i Live Activities, bo odpowiedź na "kiedy wyjść" ma być na ekranie blokady, a nie po trzech tapnięciach.
+
+Samo liczenie jest proste do opowiedzenia. Prognoza opiera się na 28-dniowej medianie opóźnień na odcinkach. Nie na średniej, bo jeden dzień, w którym wszystko stoi, nie ma prawa psuć obrazu całego miesiąca. Kiedy pojazd jest widoczny na żywo, ta mediana jest nadpisywana jego pozycją GPS. Czyli: statystyka, dopóki nie widzę pociągu, a potem rzeczywistość.
+
+Mała anegdota o tym, że "dane z feedów" to nie jest czysta sprawa. Plik `wkd.pb` od WKD nie ma ani `start_date`, ani `stop_sequence`. Z commitu `a824c21f`:
+
+> wkd.pb has no start_date or stop_sequence, so stops match by id in route order and the service day is the candidate whose timetable is closest to the live times.
+
+Czyli przystanki dopasowuję po id, po kolei wzdłuż trasy, a dzień kursowania zgaduję jako ten kandydat, którego rozkład jest najbliżej czasów na żywo. Działa. Nie jestem z tego dumny, jestem z tego pragmatyczny.
+
+## Haczyk tygodnia: skąd wiedzieć, jakim taborem pojedzie pociąg
+
+Wszystko powyższe to temat na osobne wpisy. Ten, który mnie naprawdę wciągnął, zaczął się od głupiego pytania: czy mój pociąg to nowy FLIRT, czy coś starszego, bo to zmienia, czy w ogóle chcę stać na peronie. Szukałem otwartego źródła z taborem pociągów Kolei Mazowieckich. Nie ma. GTFS tego nie mówi, GTFS-RT tym bardziej.
+
+Jest za to coś brzydszego. KM publikuje tygodniowe PDF-y "Zestawienie pociągów KM". 31 października doszła do kolektora cała warstwa, która z tego korzysta. Z commitu `c15f0e54`:
+
+```text
+Collector downloads the "Zestawienie pociągów KM" PDFs (links found on the KM
+timetable pages), parses them with pdftotext, matches them to KM trips by
+plk_train_number (new gtfs_trips.train_number) and service date, and writes
+planned_rolling_stock.
+```
+
+Po ludzku, krok po kroku:
+
+1. kolektor znajduje linki do PDF-ów na stronach z rozkładami KM,
+2. pobiera je i przepuszcza przez `pdftotext`,
+3. wyciąga numer pociągu i skład,
+4. łączy to z kursami GTFS po numerze pociągu (nowa kolumna `gtfs_trips.train_number`) i dacie kursu,
+5. zapisuje wynik do tabeli `planned_rolling_stock`.
+
+Rozmiar zmiany w tym commicie: `backend/collector/src/rollingStock/job.ts` +462, `backend/collector/src/rollingStock/kmPlan.ts` +279 i `openapi.yaml` +40. Mapowanie serii taboru nie siedzi w kodzie, tylko jest danymi w `shared/rolling-stock/km.json`, żeby poprawić nazwę serii bez ruszania parsera.
+
+Jest jeszcze drugi commit, `7e757e45`, po stronie iOS: `PlannedRollingStock` na `Leg` i `Departure`, teksty w `RollingStockDisplay` po polsku i angielsku. W aplikacji wychodzi to jako **"planowo FLIRT · nowy"**.
+
+## Dlaczego zawsze "planowo"
+
+To jest sedno. Tabela nazywa się `planned_rolling_stock`, nie `rolling_stock`. W opisie commitu na iOS stoi zdanie, które powtarzam sobie jak mantrę:
+
+> Always the plan, never "jedzie FLIRT".
+
+A w dzienniku decyzji (`docs/DECISIONS.md`, numer 15.74) jest jedno zdanie: *Plan przewoźnika, nie faktyczny skład.*
+
+Dlaczego tak paranoicznie? Bo PDF to jest plan. Przewoźnik może wypuścić inny skład, bo coś się zepsuło, bo zabrakło składu, bo tak. Aplikacja nie ma żadnego sposobu, żeby to wiedzieć. Gdybym napisał "jedzie FLIRT", a przyjechałby stary wagon, to nie byłaby drobna nieścisłość, tylko appka kłamiąca człowiekowi o rzeczy, na której podstawie podejmuje decyzję. "Planowo" kosztuje mnie jedno słowo w UI i zdejmuje ze mnie całe kłamstwo.
+
+Druga uczciwość dotyczy pokrycia. Nie każdy PDF się parsuje. Dlatego jest alert na pokrycie PDF-ów: wiem, ile pociągów dostało skład, a ile nie, i nie udaję, że to musi wyjść sto procent. Czego nie umiem sparsować, tego nie wymyślam.
+
+## Kiedy ten cały pomysł NIE ma sensu
+
+- **Jeśli jeździsz jednym pociągiem i znasz go na pamięć**, to cała ta funkcja jest dla Ciebie ciekawostką. Wyjdziesz o tej samej godzinie, co zawsze.
+- **Parsowanie PDF-ów przewoźnika to dług od pierwszego dnia.** Format może się zmienić w każdym tygodniu i nikt mnie o tym nie uprzedzi. Alert na pokrycie istnieje właśnie dlatego, że spodziewam się, że kiedyś zacznie świecić.
+- **Nie mam żadnych liczb o skuteczności prognoz.** Nie mierzyłem, jak często mediana trafia, i nie mam żadnych danych, które by to potwierdzały. Repo ma kilka tygodni, więc wszystko, co tu napisałem, mówi o tym, jak to jest zbudowane, nie o tym, jak dobrze działa.
+- **Ponad 600 commitów w miesiąc nie znaczy 600 przemyślanych decyzji.** Część to poprawki poprawek, a tempo jest takie głównie dlatego, że pracuję z AI.
+
+## Bonus: backup, który prawie rozminął się sam ze sobą
+
+Jedna historia z drugiej strony projektu, bo jest zbyt dobra, żeby ją pominąć. Po zmianie czasu okazało się, że agregacja dla Warszawy, odpalana o 03:30 czasu warszawskiego, czyli 02:30 UTC, trwa około 48 minut. Backup z 03:00 UTC sprawdzał jej wynik, kiedy ona jeszcze zapisywała snapshot przez `VACUUM INTO`. Z commitu `f096c297`:
+
+> the Warsaw aggregation (03:30 Europe/Warsaw = 02:30 UTC, ~48 min) was still writing its VACUUM INTO snapshot when the 03:00 UTC run checked it
+
+Dwa zadania, dwie strefy czasowe, jedno przesunięcie zegarka. Klasyk.
+
+## Co z tego wyszło
+
+Dojazd odpowiada na pytanie "kiedy wyjść" na iPhonie, w Warszawie i Trójmieście. Przy pociągach KM dokleja do tego "planowo" i nazwę składu, wyciągniętą z PDF-ów, które przewoźnik wrzuca raz w tygodniu. Nie wiem, czy to ktoś jeszcze doceni. Ja doceniam.
+
+Ironia jest taka, że cała ta aplikacja jest po to, żeby nie spóźniać się na pociągi, a najwięcej czasu zjadło mi pilnowanie, żeby nie obiecać więcej, niż wiem. Pół projektu to dane, a drugie pół to jedno słowo "planowo".
+
+## FAQ
+
+**Czy Dojazd jest w App Store?**
+Nie piszę tu nic o publikacji, bo nie mam o niej czego powiedzieć. Na razie to repo i aplikacja, którą rozwijam.
+
+**Skąd appka wie, jakim składem pojedzie pociąg KM?**
+Z tygodniowych PDF-ów "Zestawienie pociągów KM". Kolektor parsuje je `pdftotext` i łączy z kursami GTFS po numerze pociągu i dacie kursu. To jest plan przewoźnika, nie faktyczny skład, i dlatego w aplikacji zawsze stoi "planowo".
+
+**Czy każdy pociąg dostaje skład?**
+Nie. Nie każdy PDF się parsuje, dlatego jest alert na pokrycie. Czego nie da się dopasować, tego nie zgaduję.
+
+**Jak liczysz, kiedy wyjść?**
+Z 28-dniowej mediany opóźnień na odcinkach. Kiedy pojazd jest widoczny na żywo, nadpisuję tę prognozę jego pozycją GPS.
+
+**Napisałeś to sam?**
+Nie. Commity mają trailery `Claude-Session`, więc to praca w dużej mierze wspierana AI. Decyzje, takie jak "plan, nie faktyczny skład", są moje.
+
+## Linki
+
+- [Commit c15f0e54: plan składów KM z PDF-ów](https://github.com/bartosz-skejcik/dojazd/commit/c15f0e54) (repo prywatne)
+- [Commit 7e757e45: skład planowy na tablicach i w podróżach w iOS](https://github.com/bartosz-skejcik/dojazd/commit/7e757e45) (repo prywatne)
+- [Commit a824c21f: opóźnienia WKD z wkd.pb](https://github.com/bartosz-skejcik/dojazd/commit/a824c21f) (repo prywatne)
+- [Commit f096c297: backup po zmianie czasu](https://github.com/bartosz-skejcik/dojazd/commit/f096c297) (repo prywatne)
+- [MOTIS, silnik routingu](https://github.com/motis-project/motis)
+- [Specyfikacja GTFS Realtime](https://gtfs.org/documentation/realtime/reference/)
+- [Plan zajęć z USOS-a w Google Calendar, a linków do Teamsa i tak w USOS nie ma](/blog/pl/usos-to-google-calendar-no-teams-links)
+- [Zbudowałem własny menedżer passkeyów i teraz rozumiem, czemu nikt tego nie robi na kolanie](/blog/pl/why-i-built-my-own-passkey-manager)
