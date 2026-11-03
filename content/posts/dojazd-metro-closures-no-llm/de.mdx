@@ -1,0 +1,145 @@
+---
+title: Metro geschlossen in Bemowo, und die App sagt „fahr“: Wie ich ohne LLM Meldungen über geschlossene Stationen lese
+description: Ich habe die private App Dojazd dazu gebracht, Meldungen über geschlossene U‑Bahn‑Stationen per Regeln zu lesen, ohne LLM. Direkt nach dem Deploy zeigte die Produktion mir zwei Probleme.
+date: 2026-10-27T12:00:00.000Z
+tags: dojazd, bun, sqlite, gtfs, parser, metro, warszawa, tls, ios, side-project
+---
+
+## Einleitung
+
+Hey Leute! Stell dir vor, du verlässt das Haus, weil die App dir sagt, du hast noch vier Minuten Puffer für die U‑Bahn. Du kommst zur Station. Band. Karte. Die Station ist seit einer Woche geschlossen, und die App berechnet dir immer noch überzeugt die Umsteigezeit über ein Gleis, auf dem niemand steht. Scheiße.
+
+So sah das Loch in meinem Projekt namens Dojazd aus, bevor ich am 22. Oktober eine Sache hinzugefügt habe: einen Parser für Meldungen über geschlossene U‑Bahn‑Stationen. Dieser Beitrag handelt genau von diesem Parser und von zwei Dingen, die in der Produktion gleich nach dem Roll‑out schiefgelaufen sind.
+
+Aber zuerst muss ich die App selbst vorstellen – der Blog hat sie noch nie gesehen. Dojazd ist eine **private** iOS‑App für Warschauer, die eine einzige Frage beantwortet: „Wann soll ich losgehen und schaffe ich es?“ Die Prognose pro Stunde ist die Median‑Verspätung pro Segment der letzten 28 Tage, überschrieben durch GPS‑Daten, sobald das Fahrzeug sichtbar ist. Das Backend läuft auf Bun: API in Hono, GTFS‑ und GTFS‑RT‑Collector auf SQLite, Routing über MOTIS. Auf iOS gibt es Live‑Activity und Widgets. Die Quelle der Wahrheit ist der Vertrag `openapi.yaml`, und Entscheidungen schreibe ich in das nummerierte Log `DECISIONS`, das diese Woche Punkt 15.65 erreicht hat.
+
+Du bekommst drei Dinge:
+
+1. **die Regel „unsicher = keine Schließung“** und warum ein regelbasierter Parser bei mir LLM überlegen war,
+2. **die Abfrage, die in der Produktion Minuten dauerte**, aber auf dem Papier harmlos wirkte,
+3. **den Metro‑Server, der kein Zwischenzertifikat sendet**, sodass jeder Poll mit einem TLS‑Fehler endete.
+
+Das Repo ist privat, also sehe ich die Links zu den Commits unten nur selbst. Niemand außer mir nutzt die App, also gibt es hier keine Geschichten von Menschen, die von geschlossenen Stationen betroffen waren. Stattdessen gibt es genau das, was im Code passiert ist.
+
+## Was ich eigentlich parse
+
+Meldungen zu Bauarbeiten in der U‑Bahn sind einfache Artikel. Menschlich geschrieben, im Stil von „Stationen Bemowo und Ulrychów bleiben geschlossen, Züge halten nicht.“ Manche sprechen einzelne Stationen an, andere ganze Streckenabschnitte oder die gesamte Linie, und im selben Text kann ein Satz über Ersatzbusse stehen, die „auf Bemowo“ fahren.
+
+Hinzu kommen WTP‑Incidents. Aus dem Research‑Report, den ich in `DECISIONS` eingefügt habe (ich habe ihn nicht selbst verifiziert, also bitte vorsichtig sein): metro.waw.pl veröffentlicht geplante Arbeiten, keine Live‑Störungen, und die bequemste Quelle ist das WordPress‑REST‑API statt HTML‑Scraping. Ich werde hier nicht diskutieren, ob das legal ist. Ich habe das nicht als Anwalt geprüft und tue auch nicht so, als hätte ich das.
+
+Commit `8e02f75` beschreibt das so:
+
+```text
+Rules-only parser for M1/M2 closures in metro.waw.pl articles and WTP incidents:
+closed stations, blocked stretches and time windows; anything uncertain gives
+no closure.
+```
+
+Und genau dieser letzte Satz ist die gesamte Philosophie.
+
+## Die Regel, die alles zusammenhält: Unsicher = keine Schließung
+
+Im Header der Datei `backend/collector/src/rt/metroClosures.ts` steht folgender Kommentar:
+
+```text
+Rules only, no LLM. [...] Fail-safe: anything the rules are not sure about
+(no line, no station, no closure phrase, no time window) gives no closure;
+the alert itself is still shown.
+```
+
+Der Parser muss also gleichzeitig vier Dinge finden: Linie, Station, Schließungsphrase und Zeitfenster. Fehlt eines davon, gibt es keine Schließung. Die Meldung wird dem Nutzer trotzdem angezeigt, also schiebe ich nichts unter den Teppich, ich verarbeite einfach keinen unsicheren Text zu einer harten Routing‑Entscheidung.
+
+Warum das und nicht umgekehrt? Weil Fehlkosten asymmetrisch sind. Wenn der Parser ein echtes Schließen nicht erkennt, verhält sich die App wie vor dem 22. Oktober – also falsch, aber auf eine mir bekannte Art. Wenn er eine funktionierende Station fälschlich als geschlossen markiert, schneide ich das funktionierende Metro‑Netz aus und zwinge jemanden, grundlos den Bus zu nehmen. Ich bevorzuge den ersten Fehler.
+
+Und warum ohne LLM? Meine Gründe, keine Studie:
+
+- Der Parser muss im Collector laufen, in einer Schleife, ohne externes API und ohne Kosten pro Artikel,
+- Regeln lassen sich auf Fixtures testen und liefern jedes Mal das gleiche Ergebnis,
+- Wenn etwas schiefgeht, öffne ich die Datei und sehe sofort, welcher Satz verwirrt hat – nicht „das Modell hat so entschieden“.
+
+Die Sätze, die erkannt werden, sind Muster im Kommentar im Code:
+
+```text
+// Sentence patterns (bus and tram sentences are skipped, "ponownie",
+// "całej linii" sentences too):
+//   (a) stations "nieczynne", "zamknięte", "wyłączone z użytkowania/ruchu",
+//       "pociągi nie zatrzymują się" -> those stations closed (no boarding,
+//       no alighting), riding through allowed;
+```
+
+Zwei Details: Sätze über Busse und Straßenbahnen werden ignoriert – das ist genau die Falle mit „auf Bemowo“. Aus dem Plan `docs/plans/2026-10-22-metro-closures.md` und `DECISIONS` 15.65 geht hervor, dass Tests sicherstellen, dass solche Sätze keine Station schließen (ich schreibe aus dem Plan, nicht aus einem selbst gelesenen Test, also glaub mir nur das, was sinnvoll ist). Und Sätze mit „ponownie“ bzw. „całej linii“ landen ebenfalls im Müll, weil das Muster zu mehrdeutig ist, um ihm zu vertrauen.
+
+Eine geschlossene Station in meinem Modell bedeutet: Du steigst nicht ein und steigst nicht aus, aber der Zug darf durchfahren. Das ist ein winziger Unterschied, den man leicht mit „Metro fährt nicht“ verwechseln kann.
+
+## Fixture aus echten Artikeln
+
+Der Test basiert nicht auf erfundenen Sätzen. Die Fixture besteht aus echten Metro‑Artikeln von 2017 bis 2026, darunter die neuesten 20 vom 22. Oktober. Einer davon berichtet, dass Bemowo und Ulrychów vom 17. bis 25. Oktober geschlossen sind (diese Daten kenne ich aus dem Commit‑Hinweis, ich habe sie nicht separat geprüft).
+
+Und hier muss ich sagen, damit du nicht denkst, ich hätte eine riesige Validierung durchgeführt: **Ich habe keine Erfolgsquote für diesen Parser.** Ich habe nicht gemessen, wie viele Archiv‑Artikel korrekt gelesen werden und wie viele ignoriert werden. Ich habe auch keinen Screenshot oder Log aus der Produktion, das zeigt, dass die App tatsächlich auf die Schließung von Bemowo reagiert hat. Die Fixture besteht in den Tests. Das ist alles, was ich weiß.
+
+## Erster Deploy und zwei Dinge, die schiefgingen
+
+Ich habe deployed. Die Produktion hat mir zwei Geschenke gemacht.
+
+### Die Abfrage, die Minuten dauerte
+
+Der Parser braucht die Liste der Metro‑Stationen aus GTFS, um die Namen aus den Artikeln den IDs zuzuordnen. Ich habe das über einen Join auf `gtfs_trips` gemacht. In den Testdaten ging das schnell. Auf dem SQLite‑Dump für ganz Warschau dauerte das Minuten. Commit `648d614`:
+
+```text
+perf(collector): metro stations by primary-key lookups
+(a join over gtfs_trips took minutes on prod)
+Measured on the Warsaw SQLite: 211 ms, 39 stations, once per GTFS version.
+```
+
+Nach dem Umstieg auf Lookups per Primary‑Key: 211 ms, 39 Stationen, einmal pro GTFS‑Version. Minuten wurden zu einem Viertel Sekunde. Ich zeige hier nicht die eigentliche SQL‑Abfrage, weil im Commit nur die Beschreibung steht und ich mir keinen erfundenen SQL‑Code ausdenke.
+
+Die Lektion ist langweilig, aber wahr: Ein Join über die Trip‑Tabelle wirkt harmlos, bis die Tabelle die Größe einer ganzen Stadt hat.
+
+### Der Server, der kein Zwischenzertifikat sendet
+
+Das zweite Problem kam kurz danach. Nach `648d614` meldete der Collector bei jedem Poll `alerts_fetch_failed` mit der Meldung `unable to verify the first certificate`. Jeder Poll, ohne Ausnahme.
+
+Grund: Der Server metro.waw.pl sendet sein Zwischenzertifikat nicht. Browser holen das fehlende Zertifikat oft selbst nach, der Collector jedoch nicht. Commit `5d0f098` fügt Vertrauen zu dem Zwischen‑CA (Certum OV TLS G2 R39 CA) **nur für diesen Host** hinzu, mit dem Hinweis, dass abgelaufene oder fremde Zertifikate weiterhin abgelehnt werden.
+
+Ich habe die TLS‑Verifizierung nicht komplett abgeschaltet. Das ist die Grenze, die ich nicht überschreite, nur um „irgendwie zu funktionieren“. Ich habe ein konkretes Zertifikat als vertrauenswürdig für einen konkreten Server hinzugefügt.
+
+## Wann dieser Ansatz keinen Sinn macht
+
+Ehrlich, weil man das leicht als Lob für Regel‑basierte Systeme missverstehen könnte:
+
+- **Wenn die Quelle ihr Meldungsformat ändert**, passen die Regeln nicht mehr und der Parser gibt still „keine Schließung“ zurück. Das ist das Fail‑Safe‑Problem: Stille sieht aus wie keine Schließungen. In den drei Commits sehe ich keinen Alarm, der sagt „seit einer Woche nichts erkannt“.
+- **Wenn Artikel sehr frei formuliert sind**, würde ein LLM wahrscheinlich mehr Fälle abdecken als meine Muster. Ich zahle dafür, dass ich genau weiß, was der Parser kann, auf Kosten seiner Reichweite.
+- **Der Code wurde mit Claude geschrieben**: Die Commits tragen den Trailer `Co‑Authored‑By`, und der Plan wurde für Agenten geschrieben. Die Regeln sind meine, weil ich sie freigegeben und verstanden habe, aber ich habe nicht jede Zeile von Hand geschrieben.
+- **Die App ist privat**, also gibt es keine Nutzer, die bestätigen könnten, dass das etwas ändert.
+
+## Was dabei herauskam
+
+Dojazd weiß jetzt, dass eine Metro‑Station geschlossen sein kann, und liest das aus Meldungen mit einfachen Regeln, die im Zweifel nichts tun. Der erste Deploy scheiterte an der Datenbank‑Abfrage und am Zertifikat – beides Dinge, die kein Fixture‑Test hätte aufdecken können, weil weder ein echter Datenbestand noch ein echter Server hinter der Gegenstelle standen.
+
+Die Ironie ist, dass mein ganzer Aufwand darauf abzielte, dass der Parser keine falschen Schließungen erfindet, und die Produktion dann daran scheiterte, dass ich mich nicht mit dem Server verbinden und 39 Stationen in akzeptabler Zeit zählen konnte. Die Regel „unsicher = keine Schließung“ ist großartig. Schade nur, dass ich sie nicht auf meine eigenen Infrastruktur‑Annahmen anwenden kann.
+
+## FAQ
+
+**Warum ohne LLM, wenn die Artikel nur einfacher Text sind?**  
+Weil ich einen deterministischen, testbaren Parser in der Collector‑Schleife wollte, ohne externes API und ohne Kosten pro Artikel.
+
+**Wie hoch ist die Erfolgsquote des Parsers?**  
+Weiß ich nicht. Ich habe sie nicht gemessen. Ich habe Fixtures aus echten Artikeln von 2017‑2026 und Tests, die durchlaufen, aber das ist nicht dasselbe wie eine Prozentzahl.
+
+**Hat die App wirklich auf die Schließung von Bemowo reagiert?**  
+Ich habe keinen Beweis. Diese Woche habe ich weder Log‑Dateien noch Screenshots von einem solchen Ereignis gesammelt, also behaupte ich nicht, dass es live funktioniert hat.
+
+**Warum hast du die TLS‑Verifizierung nicht einfach komplett abgeschaltet?**  
+Weil das das gesamte Netzwerk für einen einzelnen fehlerhaften Server unsicher machen würde. Ich habe nur ein bestimmtes Zwischen‑CA‑Zertifikat vertraut, andere abgelaufene oder fremde Zertifikate werden weiterhin abgelehnt.
+
+**Ist Dojazd für andere verfügbar?**  
+Nein, es ist eine private iOS‑App. Ich schreibe darüber, weil die Design‑Entscheidungen interessanter sind als die eigentliche App.
+
+## Links
+
+- [Commit 8e02f75: geschlossene Metro‑Stationen aus Meldungen](https://github.com/bartosz-skejcik/dojazd/commit/8e02f75b9c132977fe464a294ccd8edc93311ed7)
+- [Commit 648d614: Metro‑Stationen per Primary‑Key‑Lookup](https://github.com/bartosz-skejcik/dojazd/commit/648d614313c7450da7f86ddfcb30699320752ec0)
+- [Commit 5d0f098: Vertrauen für Zwischen‑CA von metro.waw.pl](https://github.com/bartosz-skejcik/dojazd/commit/5d0f098ac8c1c6bc29956ce0731f8f07d1373d67)
+- [GTFS‑Spezifikation](https://gtfs.org/)
+- [Stundenplan aus USOS in Google Calendar, aber keine Teams‑Links in USOS](/blog/de/usos-to-google-calendar-no-teams-links)
+- [Ich habe meinen eigenen Passkey‑Manager gebaut und verstehe jetzt, warum das niemand auf die Schnelle macht](/blog/de/why-i-built-my-own-passkey-manager)
