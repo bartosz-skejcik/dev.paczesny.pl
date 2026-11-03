@@ -9,7 +9,7 @@ tags: dojazd, swiftui, bun, gtfs, gtfs-rt, sqlite, motis, kolej, pdf, ai, ios
 
 Hey there! There’s one question I keep asking myself at the door with my shoe in hand: when should I leave and will I make it? The timetable says the train is at the top of the hour. The timetable doesn’t say that the last three times that train was a few minutes late on this segment, and the tram to the station runs exactly when it feels like it. Damn, does the whole app really have to handle that?
 
-Turns out it does, so on October 8 I made the first commit in a repo called **Dojazd**. It’s an iPhone app for Warsaw (as of October 28 also for the Tricity) that answers that single question. Until now the blog hasn’t mentioned it at all, so this post is a broad introduction, and at the end you’ll get a concrete snippet I’m most proud of.
+Turns out it does, so on October 8 I made the first commit in a repo called **Dojazd**. It’s an iPhone app for Warsaw (as of October 28 also for the Tricity) that answers that single question. I wrote about it once before, about [parsing metro closure notices](/blog/en/dojazd-metro-closures-no-llm), but that was one narrow slice. This post is the broader introduction, and at the end you’ll get a concrete snippet I’m most proud of.
 
 You’ll get three things:
 
@@ -114,5 +114,6 @@ No. The commits have `Claude-Session` trailers, so it’s largely AI‑assisted.
 - [Commit f096c297: backup after DST change](https://github.com/bartosz-skejcik/dojazd/commit/f096c297) (private repo)
 - [MOTIS, routing engine](https://github.com/motis-project/motis)
 - [GTFS Realtime Specification](https://gtfs.org/documentation/realtime/reference/)
+- [Metro closed at Bemowo and the app says go: reading closure notices without an LLM](/blog/en/dojazd-metro-closures-no-llm)
 - [Class schedule from USOS to Google Calendar, and why there are no Teams links in USOS](/blog/en/usos-to-google-calendar-no-teams-links)
 - [I built my own passkey manager and now I understand why nobody does it on a whim](/blog/en/why-i-built-my-own-passkey-manager)
