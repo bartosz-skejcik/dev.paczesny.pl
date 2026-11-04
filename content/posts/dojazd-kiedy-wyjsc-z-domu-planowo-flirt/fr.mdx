@@ -1,0 +1,119 @@
+---
+title: J'ai créé une application qui indique quand sortir de la maison pour attraper le train (et comment elle sait que c'est un FLIRT)
+description: Dojazd est une appli iPhone pour Varsovie et la Tricité. J'extrais la composition des trains KM des PDF du transporteur et je la signale honnêtement comme prévue.
+date: 2026-11-03T12:00:00.000Z
+tags: dojazd, swiftui, bun, gtfs, gtfs-rt, sqlite, motis, kolej, pdf, ai, ios
+---
+
+## Introduction
+
+Salut ! Il y a une question que je me pose à la porte, la chaussure à la main : quand partir, et est-ce que j'arriverai à temps. L'horaire indique que le train part à l'heure pile. L'horaire ne dit pas que les trois dernières fois ce train a eu quelques minutes de retard sur ce tronçon, ni que le tram vers la gare passe exactement quand il en a envie. Putain, faut vraiment qu'une appli entière se charge de ça ?
+
+Apparemment oui, alors le 8 octobre j'ai fait le premier commit dans un repo nommé Dojazd. C'est une appli iPhone pour Varsovie (et depuis le 28 octobre aussi pour la Tricité) qui répond à cette unique question. J'en ai déjà parlé une fois sur le blog, à propos du [parsing des avis de stations de métro fermées](/blog/fr/dojazd-metro-closures-no-llm), mais ce n'était qu'un petit bout. Cet article est l'introduction plus large, et à la fin tu as droit au morceau dont je suis le plus content.
+
+Tu obtiens trois choses :
+
+1. **comment Dojazd calcule quand partir**: la médiane des retards sur 28 jours, et quand le véhicule est visible en direct, sa position GPS,
+2. **comment l'appli sait que ton train de la Koleje Mazowieckie est un FLIRT**, alors qu'il n'existe aucune source ouverte pour ça,
+3. **pourquoi le mot « planowo » (prévu) est toujours à côté de ce FLIRT** et pourquoi c'est le mot le plus important de toute la fonction.
+
+Le repo est privé. Les liens vers les commits en bas, seul moi les verrai, toi tu n'as que les hashes et des citations. Il y a environ 600 commits en moins d'un mois, soit une quarantaine par jour, et les commits portent des trailers `Claude-Session`. Je n'ai pas écrit ça seul en une nuit. Je l'ai écrit avec Claude, et il faut que ce soit dit.
+
+## Ce que c'est, au juste
+
+Deux parties. Un backend sur Bun : API en Hono, un collecteur qui récupère GTFS et GTFS-RT et écrit dans SQLite, et le routage via MOTIS. Plus un client en SwiftUI avec widgets et Live Activities, parce que la réponse à « quand partir » doit être sur l'écran verrouillé, pas après trois taps.
+
+Le calcul lui-même est simple à raconter. La prévision repose sur la médiane des retards sur 28 jours, par tronçon. Pas la moyenne, parce qu'une journée où tout est à l'arrêt n'a pas le droit de fausser l'image de tout le mois. Quand le véhicule est visible en direct, cette médiane est écrasée par sa position GPS. Donc : de la statistique tant que je ne vois pas le train, puis la réalité.
+
+Une petite anecdote sur le fait que « les données des flux » ne sont pas une affaire propre. Le fichier `wkd.pb` de la WKD n'a ni `start_date` ni `stop_sequence`. Extrait du commit `a824c21f` :
+
+> wkd.pb has no start_date or stop_sequence, so stops match by id in route order and the service day is the candidate whose timetable is closest to the live times.
+
+Autrement dit : je rapproche les arrêts par id, dans l'ordre le long de la ligne, et je devine le jour de service comme le candidat dont l'horaire est le plus proche des heures en direct. Ça marche. Je n'en suis pas fier, j'en suis pragmatique.
+
+## L'accroche de la semaine : comment savoir avec quel matériel roule un train
+
+Tout ce qui précède mérite des articles à part. Celui qui m'a vraiment pris a commencé par une question bête : mon train est-il un FLIRT neuf ou quelque chose de plus vieux ? Ça change l'envie que j'ai d'attendre sur le quai. J'ai cherché une source ouverte avec le matériel roulant de la Koleje Mazowieckie. Il n'y en a pas. GTFS n'en dit rien, GTFS-RT encore moins.
+
+Il y a en revanche quelque chose de plus moche. La KM publie des PDF hebdomadaires intitulés « Zestawienie pociągów KM ». Le 31 octobre, toute la couche qui les exploite est arrivée dans le collecteur. Extrait du commit `c15f0e54` :
+
+```text
+Collector downloads the "Zestawienie pociągów KM" PDFs (links found on the KM
+timetable pages), parses them with pdftotext, matches them to KM trips by
+plk_train_number (new gtfs_trips.train_number) and service date, and writes
+planned_rolling_stock.
+```
+
+En clair, étape par étape :
+
+1. le collecteur trouve les liens des PDF sur les pages d'horaires de la KM,
+2. les télécharge et les passe dans `pdftotext`,
+3. en extrait le numéro de train et la composition,
+4. relie cela aux courses GTFS par le numéro de train (nouvelle colonne `gtfs_trips.train_number`) et la date de la course,
+5. et écrit le résultat dans la table `planned_rolling_stock`.
+
+Taille du changement dans ce commit : `backend/collector/src/rollingStock/job.ts` +462, `backend/collector/src/rollingStock/kmPlan.ts` +279 et `openapi.yaml` +40. Le mappage des séries de matériel n'est pas dans le code, mais dans des données, `shared/rolling-stock/km.json`, pour que je puisse corriger un nom sans toucher au parseur.
+
+Puis il y a un deuxième commit, `7e757e45`, côté iOS : `PlannedRollingStock` sur `Leg` et `Departure`, textes de `RollingStockDisplay` en polonais et en anglais. Dans l'appli, ça donne : **« planowo FLIRT · nowy »**.
+
+## Pourquoi toujours « planowo »
+
+C'est le cœur du sujet. La table s'appelle `planned_rolling_stock`, pas `rolling_stock`. Dans la description du commit iOS, il y a une phrase que je me répète comme un mantra :
+
+> Always the plan, never "jedzie FLIRT".
+
+Et dans le journal des décisions (`docs/DECISIONS.md`, numéro 15.74) il y a une phrase : *Plan du transporteur, pas la composition réelle.*
+
+Pourquoi autant de paranoïa ? Parce que le PDF est un plan. Le transporteur peut sortir une autre rame, parce que quelque chose est en panne, parce qu'il en manque une, parce que c'est comme ça. L'appli n'a aucun moyen de le savoir. Si j'avais écrit « jedzie FLIRT » et qu'une vieille rame arrivait, ce ne serait pas une petite imprécision, ce serait une appli qui ment à quelqu'un sur la base de laquelle il décide. « Planowo » me coûte un mot dans l'UI et m'enlève tout le mensonge.
+
+La deuxième honnêteté concerne la couverture. Tous les PDF ne se parsent pas. C'est pourquoi il y a une alerte sur la couverture des PDF : je sais combien de trains ont reçu une composition et combien non, et je ne prétends pas que ça doive marcher à cent pour cent. Ce que je ne sais pas parser, je ne l'invente pas.
+
+## Quand toute cette idée n'a PAS de sens
+
+- **Si tu prends toujours le même train et que tu le connais par cœur**, cette fonction n'est qu'une curiosité pour toi. Tu partiras à la même heure que d'habitude.
+- **Parser les PDF d'un transporteur est une dette dès le premier jour.** Le format peut changer chaque semaine et personne ne me prévient. L'alerte de couverture existe justement parce que je m'attends à ce qu'elle s'allume un jour.
+- **Je n'ai aucun chiffre sur la justesse des prévisions.** Je n'ai pas mesuré la fréquence à laquelle la médiane tombe juste, et je n'ai aucune donnée qui le confirme. Le repo a quelques semaines, tout ce que j'ai écrit ici dit comment c'est construit, pas à quel point ça marche.
+- **Plus de 600 commits en un mois ne font pas 600 décisions réfléchies.** Une partie, ce sont des corrections de corrections, et le rythme vient surtout du fait que je travaille avec l'IA.
+
+## Bonus : la sauvegarde qui a failli se rater elle-même
+
+Une histoire de l'autre côté du projet, trop bonne pour la passer. Après le changement d'heure, il s'est avéré que l'agrégation pour Varsovie, lancée à 03:30 heure de Varsovie, soit 02:30 UTC, dure environ 48 minutes. La sauvegarde de 03:00 UTC vérifiait son résultat alors qu'elle écrivait encore son snapshot via `VACUUM INTO`. Extrait du commit `f096c297` :
+
+> the Warsaw aggregation (03:30 Europe/Warsaw = 02:30 UTC, ~48 min) was still writing its VACUUM INTO snapshot when the 03:00 UTC run checked it
+
+Deux tâches, deux fuseaux horaires, un changement d'heure. Un classique.
+
+## Ce qui en est sorti
+
+Dojazd répond sur l'iPhone, à Varsovie et dans la Tricité, à la question « quand partir ». Pour les trains KM, il y ajoute un « planowo » et le nom de la rame, tirés de PDF que le transporteur publie une fois par semaine. Je ne sais pas si quelqu'un d'autre l'appréciera. Moi, oui.
+
+L'ironie : toute cette appli existe pour que je ne rate plus de trains, et ce qui m'a pris le plus de temps, c'est de veiller à ne pas promettre plus que ce que je sais. La moitié du projet, ce sont des données, et l'autre moitié, ce mot « planowo ».
+
+## FAQ
+
+**Dojazd est-elle sur l'App Store ?**
+Je n'écris rien là-dessus ici, parce que je n'ai rien à en dire. Pour l'instant, c'est un repo et une appli que je fais évoluer.
+
+**Comment l'appli sait-elle avec quelle rame roule un train KM ?**
+Grâce aux PDF hebdomadaires « Zestawienie pociągów KM ». Le collecteur les parse avec `pdftotext` et les relie aux courses GTFS par le numéro de train et la date de la course. C'est le plan du transporteur, pas la composition réelle, c'est pourquoi l'appli affiche toujours « planowo ».
+
+**Chaque train reçoit-il une composition ?**
+Non. Tous les PDF ne se parsent pas, d'où l'alerte sur la couverture. Ce qui ne peut pas être rapproché, je ne le devine pas.
+
+**Comment calcules-tu quand partir ?**
+À partir de la médiane des retards sur 28 jours, par tronçon. Quand le véhicule est visible en direct, j'écrase la prévision avec sa position GPS.
+
+**Tu as écrit ça seul ?**
+Non. Les commits portent des trailers `Claude-Session`, c'est donc en grande partie un travail assisté par l'IA. Les décisions comme « plan, pas composition réelle » sont les miennes.
+
+## Linki
+
+- [Commit c15f0e54 : plan des compositions KM à partir des PDF](https://github.com/bartosz-skejcik/dojazd/commit/c15f0e54) (repo privé)
+- [Commit 7e757e45 : composition prévue sur les tableaux et trajets dans iOS](https://github.com/bartosz-skejcik/dojazd/commit/7e757e45) (repo privé)
+- [Commit a824c21f : retards WKD depuis wkd.pb](https://github.com/bartosz-skejcik/dojazd/commit/a824c21f) (repo privé)
+- [Commit f096c297 : sauvegarde après le changement d'heure](https://github.com/bartosz-skejcik/dojazd/commit/f096c297) (repo privé)
+- [MOTIS, moteur de routage](https://github.com/motis-project/motis)
+- [Spécification GTFS Realtime](https://gtfs.org/documentation/realtime/reference/)
+- [Métro fermé à Bemowo et l'appli dit « vas-y » : lire les avis de fermeture sans LLM](/blog/fr/dojazd-metro-closures-no-llm)
+- [Le planning USOS dans Google Calendar, et les liens Teams ne sont de toute façon pas dans USOS](/blog/fr/usos-to-google-calendar-no-teams-links)
+- [J'ai construit mon propre gestionnaire de passkeys et je comprends maintenant pourquoi personne ne le fait à la légère](/blog/fr/why-i-built-my-own-passkey-manager)
