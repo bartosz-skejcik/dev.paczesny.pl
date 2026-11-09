@@ -1,0 +1,138 @@
+---
+title: "Zrobiłem sobie prywatny panel do czterech appek i dzień, w którym liczby stanęły, a nikt nie dostał błędu"
+description: "Panel do czterech moich aplikacji: raporty, decyzje, liczby na żywo. I lekcja: kolektor bez błędu nie znaczy, że dane są świeże. Dojazd stał 20 godzin."
+date: 2026-11-09T12:00:00.000Z
+tags: panel, nextjs, sqlite, kolektory, monitoring, dojazd, ai, decyzje
+---
+
+## Wprowadzenie
+
+Siemanko! 5 listopada okazało się, że w moim własnym panelu kafel Dojazdu mógł wyglądać normalnie, kiedy liczby pod nim były stare. Żadnego czerwonego. Żadnego błędu. Kolektor melduje, że cykl się skończył, wszystko gra. Tylko że czas odczytu przy liczbie był z 13:58 dnia poprzedniego. Kurwa.
+
+Przez około 20 godzin kolektor Dojazdu robił swoją robotę, kończył każdy cykl bez błędu i bez żadnego zająknięcia oddawał mi **ten sam stary odczyt**, który eksporter po drugiej stronie wystawił poprzedniego dnia. Nikt nie dostał błędu, bo błędu nie było. Były tylko liczby, które przestały się ruszać.
+
+Ten wpis jest dwuczęściowy. Najpierw szeroko: czym w ogóle jest ten mój panel, bo na blogu nigdy o nim nie pisałem. Potem wąsko: ta jedna reguła, którą dopisałem po tej wpadce.
+
+Dostaniesz trzy rzeczy:
+
+1. **po co mi prywatny panel do czterech aplikacji** i z czego jest zbudowany,
+2. **jak dokładnie wyglądała luka**: dlaczego reguła, która pilnowała kolektorów, milczała,
+3. **jak wygląda poprawka** (z prawdziwym kodem), i dlaczego to jest tylko plaster, a nie rozwiązanie.
+
+Repo jest prywatne, więc linki do commitów na dole zobaczę tylko ja. Dostajesz za to hasze, nazwy plików i cytaty z kodu. Commity mają w stopce `Co-Authored-By: Claude`, bo większość tego powstała w parze z AI. Decyzje, co ma być w panelu i na co ma świecić, są moje.
+
+## Czym jest ten panel
+
+Mam cztery appki: Teoria+, Dojazd, Porę i BlockSmasha. Do każdej z nich pracują sesje AI, które piszą kod, zbierają wnioski i na koniec dnia produkują raport. Zanim powstał panel, te raporty lądowały w kawałkach tekstu, a ja ręcznie składałem w głowie, co się dzieje i na co czekam.
+
+Panel to jeden mobilny dashboard w Next.js. Dane siedzą w SQLite, a całość stoi na Coolify. README ma jedno zdanie opisu, które wystarczy: *Codzienne raporty i następne działania dla Teoria+, Dojazdu, Pory i Blocksmasha.* Pod spodem:
+
+- **raporty od sesji**: każda aplikacja dostaje własny token i wysyła raport przez `panel-report`, który robi `POST /api/ingest/report`,
+- **kolektory**: małe zadania, które same ciągną liczby na żywo (App Store Connect, Prometheus i Grafana, Appwrite, sprzedaż z Apple),
+- **decyzje**: pytania, które sesje agentów zadają mnie, wracają do panelu jako karty "Czeka na Ciebie", a ja odpowiadam jednym tapnięciem na telefonie,
+- **widoki**: Dziś, Decyzje, Działania, Finanse i strona każdej aplikacji.
+
+W ostatnim tygodniu, od 2 do 9 listopada, w repo wpadło około 60 commitów. Panel przeszedł od raportów dziennych do ekranów roboczych. 3 listopada w jeden dzień zrobiły się Działania, Finanse i nowy układ Dziś (kilka makiet A, B, C, D, między którymi musiałem wybrać, bo wolę wybrać z gotowca niż opisywać słowami, czego chcę). 4 listopada doszła sekcja "Najważniejsze" na Dziś, o której za chwilę.
+
+Do tego powstały drobiazgi, które w sumie zjadają najwięcej czasu. Na przykład commit `d8a1caf`, który tłumaczy w opisie, czemu strona rozjeżdżała się szerzej niż okno telefonu:
+
+> Przyczyna: siatki bez szablonu kolumn (kolumna auto rośnie do min-content przycisków z truncate) i main jako element flex bez min-w-0.
+
+Zgadnij, ile razy w życiu to już przerabiałem i ile razy znowu zapomniałem o `min-w-0`.
+
+## Najważniejsze, czyli reguła, która miała mnie pilnować
+
+Panel ma na Dziś sekcję "Najważniejsze" (decyzja `b119` z 4 listopada, commit `2fe7bd9`). To lista rzeczy, które mam zobaczyć, zanim cokolwiek innego. Najpierw sprawy dla mnie (bez wieści ponad 24 h, czekające na mnie ponad 2 dni). Potem odchylenia liczone przez sam panel: aktywni użytkownicy i instalacje względem ostatnich 7 dni, ujemny wynik miesiąca i **kolektor w błędzie ponad 30 minut**. Na końcu wnioski z sesji, do 2 na aplikację, razem 6.
+
+Ta ostatnia reguła o kolektorze wygląda sensownie. Kolektor się wywala, panel nie ma świeżych liczb, więc krzyczy. Problem w tym, że napisałem ją pod jedno założenie: że zepsuty kolektor to kolektor, który zwraca błąd.
+
+W `highlights.ts` karta "Kolektor w błędzie" powstawała dla kolektora, który zwracał błąd. Dojazd miał `ok: true`. Cykl kończył się o czasie. Reguła dostawała od niego uprzejme "wszystko dobrze" i milczała.
+
+## Jak to się stało, że kolektor był zdrowy, a liczby martwe
+
+Kolektor Dojazdu pyta eksportera o metryki. Eksporter zwraca liczby i **swój znacznik czasu odczytu**. Kolektor zapisuje to wszystko do bazy i kończy cykl. Jeśli eksporter przestaje odświeżać dane, ale dalej odpowiada kodem 200 ze swoim ostatnim stanem, kolektor nie ma powodu się zdenerwować. Dostał odpowiedź, zapisał ją, cykl się udał.
+
+Taki jest opis z commitu `f084dc3`, jedno zdanie:
+
+> Reguła b119 widziała tylko kolektor w błędzie, a Dojazd przez 20 h kończył cykl bez błędu ze starym czasem z eksportera.
+
+W teście, który to odtwarza, jest dokładnie ten przypadek, z prawdziwym znacznikiem czasu z incydentu: `2026-11-05T12:58:42.000Z`, czyli w Polsce 13:58. Zegar "teraz" w teście stoi na 6 listopada, 09:00 UTC.
+
+To, co mnie zabolało, to nie sama awaria. Eksporter ma prawo mieć zły dzień. Zabolało, że **mój własny system nadzoru patrzył na złą rzecz**. Pytał "czy kolektor się wykrzaczył?", a powinien pytać "czy liczba, którą widzę, jest z ostatnich kilku minut?".
+
+## Poprawka: patrzymy na czas odczytu, nie na `ok`
+
+Commit `f084dc3` dotyka 14 plików, +162 i -16 linii. Sedno to nowy plik `src/lib/live/freshness.ts`, 32 linie, i do niego 68 linii testów. Komentarz na górze tego pliku mówi wszystko:
+
+```text
+// Nieświeżość źródeł: kolektor może kończyć cykl bez błędu, a liczby stoją, bo źródło nie podaje
+// nowego odczytu (Dojazd 5.11: 20 h ze starym znacznikiem czasu z eksportera). Dlatego patrzymy na czas odczytu, nie na `ok`.
+```
+
+Próg jest prosty:
+
+```ts
+export const STALE_FLOOR_MS = 10 * 60_000;
+export const staleAfterMs = (period: number) => Math.max(2 * period * 1000, STALE_FLOOR_MS);
+```
+
+Źródło jest stare, jeśli nie podało nowego odczytu dłużej niż **dwa swoje okresy**, ale nigdy krócej niż 10 minut. Ta dolna granica jest po to, żeby krótka przerwa przy wdrożeniu nie budziła mnie o trzeciej nad ranem. Dla Dojazdu wychodzi w teście 20 minut.
+
+Druga ważna decyzja: dla kolektora przypisanego do aplikacji biorę **najnowszy `as_of` liczb tej aplikacji**, czyli czas ze źródła, a nie czas ostatniego udanego cyklu. Dopiero gdy aplikacja nie ma żadnych liczb, schodzę do ostatniego udanego cyklu. To jest dokładnie ta zmiana, która domyka dziurę: cykl może być świeży, ale liczba w nim stara.
+
+W teście wygląda to tak:
+
+```ts
+it("luka Dojazdu z 5.11: kolektor ok, świeży cykl, ale odczyt ze źródła sprzed 20 h", () => {
+  const s = staleSources([clock({ name: "dojazd", period: 600 })], [read("public-transport", "2026-11-05T12:58:42.000Z")], NOW);
+  expect(staleLabel(s[0], NOW)).toBe("stare dane z 5.11 13:58");
+  ...
+  text: "Ostatni odczyt 5 lis, 13:58. Kolektor działa, ale źródło nie podaje nowych danych."
+```
+
+W "Najważniejszych" pojawia się nowa karta z tagiem **Stare dane**: "Dojazd: brak nowych liczb". Do tego przy kaflu aplikacji i przy każdej liczbie z kolektora, zamiast "na żywo, HH:MM", pokazuje się pogrubiony ostrzegawczy podpis "stare dane z 5.11 13:58". I jeszcze jedna drobnostka: znacznik znika dopiero wtedy, gdy przyjdzie odczyt **nowszy** niż ten, od którego liczba stoi. Inaczej kafel potrafił na chwilę "odświeżyć się" tym samym martwym odczytem i wyglądać na zdrowy.
+
+Zrobiłem jeszcze jeden zabieg: jeśli kolektor jest w błędzie, nie dublujemy kart. W teście "kolektor w błędzie ponad 30 min" jest jedna pozycja, "Kolektor w błędzie". Przy krótszym błędzie ze starymi danymi pokazuje się "Stare dane" z dopiskiem o błędzie.
+
+## Co z tego wynika, i co mogło pójść inaczej
+
+Po tej poprawce kartę "Stare dane" użyłem jeszcze w dwóch innych miejscach, bo okazała się wygodną szufladą na wszystko, co "powinno być świeże, a nie jest". Commit `a4322a9` dodał do niej kolektor, który w ogóle nie wystartował (oczekiwane z rejestru aplikacji, 10 minut po starcie serwera). Commit `5d2fc66` dodał nocną kopię bazy panelu: gdy kopii brakuje ponad 36 godzin, pojawia się ta sama pozycja. To są dwie nowe reguły, które wynikają z tej samej myśli. Nie twierdzę, że któraś z nich już coś złapała. Są świeże, a jedyny przypadek, który to wykryło w prawdziwym życiu, to wciąż luka Dojazdu.
+
+## Kiedy ten cały panel i ta reguła NIE mają sensu
+
+- **Jeśli masz jedną appkę**, wystarczy Ci zwykły alert w Grafanie na brak nowych punktów. Cztery aplikacje i sesje AI, które piszą do nich raporty, to dopiero powód, żeby mieć jedno miejsce, gdzie to wszystko się zbiega.
+- **Reguła świeżości jest łatana pod znane przypadki.** Próg "dwa okresy, minimum 10 minut" wymyśliłem na oko. Nie mam danych, czy to jest dobry próg. Wiem tylko, że dla Dojazdu 20 minut to rozsądna wartość, bo tak ustawiono "Wiek metryk" w tym samym miejscu. Wolniejsze źródło może krzyczeć za często, szybsze za rzadko.
+- **Nie pilnuje liczb, które są świeże, ale bez sensu.** Eksporter może podawać aktualny znacznik i zerową liczbę aktywnych, bo coś mu się rozjechało. Na to odpowiada reguła odchyleń względem 7 dni, a nie ta.
+- **Prywatny panel buduje się dla siebie, nie dla Ciebie.** Połowa decyzji tutaj (układ D z paskiem pięciu liczb, kolor ostrzeżenia) jest podyktowana tym, że ja to oglądam na telefonie w tramwaju. To nie jest produkt.
+
+## Co z tego wyszło
+
+Mam panel, który pokazuje mi, na co czekam, co się zmieniło i jak wyglądają liczby czterech aplikacji. Mam też regułę, która zamiast pytać "czy kolektor padł", pyta "kiedy ostatni raz dostałem coś nowego".
+
+Ironia jest taka, że zbudowałem system do pilnowania liczb i przez 20 godzin nie miał czego pilnować, bo błędu nie było. Kolektor był grzeczny, cykle kończyły się na czas, a ja miałem przed oczami wczorajszy wynik udający dzisiejszy. Najbardziej niebezpieczny alarm to ten, który milczy, bo wszystko jest w porządku.
+
+## FAQ
+
+**Czy panel jest publiczny albo do kupienia?**
+Nie. To prywatne narzędzie, stoi u mnie, a repo jest prywatne. Opisuję je, bo lekcja o kolektorach jest uniwersalna.
+
+**Co to znaczy, że kolektor "kończy cykl bez błędu"?**
+Że zapytał źródło, dostał odpowiedź, zapisał ją i zamknął pętlę. To, że odpowiedź zawierała stary czas odczytu, nie jest dla niego błędem, bo wcześniej nikt mu nie kazał tego sprawdzać.
+
+**Jaki jest próg, po którym dane są "stare"?**
+Dwa okresy odświeżania źródła, ale nie mniej niż 10 minut. Dla Dojazdu w testach wychodzi 20 minut.
+
+**Czy ta reguła już coś złapała poza Dojazdem?**
+Nie mogę tego powiedzieć. Opisana luka z 5 listopada to jedyny przypadek, dla którego ją napisałem i który mam na papierze.
+
+**Napisałeś to sam?**
+Nie. Commity mają `Co-Authored-By: Claude`. Napisanie kodu to jedno, a decyzja, że alarm ma patrzeć na czas odczytu, a nie na flagę `ok`, to była moja, po tej wpadce.
+
+## Linki
+
+- [Commit f084dc3: stare dane ze źródła w Najważniejszych i przy kaflach](https://github.com/bartosz-skejcik/panel/commit/f084dc3cfeef22bdd7470d87b6de063aa1013e31) (repo prywatne)
+- [Commit 2fe7bd9: Najważniejsze na Dziś](https://github.com/bartosz-skejcik/panel/commit/2fe7bd96b11f935fa7de4a73f695acde18b92d91) (repo prywatne)
+- [Commit d8a1caf: strona nie szersza od okna](https://github.com/bartosz-skejcik/panel/commit/d8a1cafce1715ab9cb08cfce890302340684cc1c) (repo prywatne)
+- [Next.js](https://nextjs.org/docs)
+- [Zrobiłem aplikację, która mówi, kiedy wyjść z domu, żeby zdążyć na pociąg (i skąd wie, że to FLIRT)](/blog/pl/dojazd-kiedy-wyjsc-z-domu-planowo-flirt)
+- [Metro zamknięte na Bemowie, a aplikacja mówi "jedź": jak bez LLM czytam komunikaty o zamkniętych stacjach](/blog/pl/dojazd-metro-closures-no-llm)
