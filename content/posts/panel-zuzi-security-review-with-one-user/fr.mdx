@@ -1,0 +1,102 @@
+---
+title: J'ai construit une appli d'apprentissage pour une seule personne, sécurisée comme pour des milliers d'utilisateurs
+description: Une appli d'apprentissage pour une personne, construite en 36 heures, qui a détecté une vraie fuite de données lors d'un audit de sécurité numéroté.
+date: 2026-09-08T12:00:00.000Z
+tags: appwrite, security, auth, side-project, ai, groq, indie-hacking, decyzje
+---
+
+## Introduction
+
+Mercredi soir, je code un nouveau module de mon appli d’apprentissage pour littéralement une seule utilisatrice régulière. Dans un deuxième terminal, je lance mon propre audit de sécurité numéroté, comme j’ai l’habitude de le faire à chaque gros module. Je me demande pourquoi je le fais, vu qu’il n’y a qu’une personne qui se connecte, pas mille. Quelques minutes plus tard, le même audit crache une fuite de données réelle entre des comptes sur le même navigateur. Putain. Et là, je comprends enfin le pourquoi.
+
+Ce billet raconte comment, en moins de 36 heures, une appli qui devait être un export ponctuel pour un examen est devenue une plateforme complète avec comptes, base de données et assistant IA, et comment l’audit numéroté a capturé trois bugs de niveau production, même si « production » ici ne signifie qu’une seule personne.
+
+Vous allez retenir trois choses :
+
+1. **Ce qui s’est passé pendant ces 36 heures**, quand un export statique s’est transformé en appli avec comptes grâce à Appwrite, un panneau admin et une IA pour poser des questions sur le cours,
+2. **Ce que l’audit numéroté a réellement détecté (I1, I2, I3)**, avec les commits précis, pas avec un vague « j’ai corrigé le login »,
+3. **Quand ce niveau de paranoïa a du sens pour une appli d’une seule personne, et quand c’est juste une perte de temps**, parce que ce texte peut facilement être lu comme une incitation à copier le même processus partout.
+
+## D’où vient cette appli
+
+Tout a commencé avec ce que le repo appelle simplement « Session » : un export ponctuel, statique, du matériel d’une université pour un examen précis. Ça devait durer une semaine, peut deux. Dans la fenêtre que je décris dans ce billet, j’ai reconstruit ça à partir de zéro en quelque chose qui doit durer plus longtemps. Le fichier `docs/PROJEKT.md` le dit sans détour, en une phrase que je me suis laissée là pour ne pas oublier pourquoi je fais ça :
+
+> Outil personnel d’apprentissage pour toute la durée des études, pas seulement pour une révision.
+
+L’appli découpe le contenu des cours en un arbre de matières et de modules, chaque module étant rendu sous forme de note, flashcard, quiz, appariement de paires ou checklist, avec une petite couche de gamification : points, streaks, dix‑sept badges. Ça sonne comme une appli assez conséquente. Et c’est bien le cas. La différence avec la « Session » n’est pas que j’ai ajouté plus de fonctionnalités, mais que j’ai cessé de la considérer comme un one‑shot.
+
+## 36 heures qui ont transformé l’export en appli avec comptes
+
+Le premier commit du repo `sesja` date du 2026‑09‑05T11:58Z. Un peu moins de 36 heures plus tard, le 2026‑09‑06T23:46Z, le projet possède déjà des comptes utilisateurs via Appwrite OAuth, des tables per‑user dans la base, un historique de chat, un panneau admin et un assistant IA basé sur Groq pour poser des questions sur le cours. Plus de 150 commits en un week‑end.
+
+Pour être honnête : ces timestamps sont les horodatages des commits dans un seul repo, pas le compteur de mes heures devant le clavier. Une bonne partie de ces commits est co‑authored avec la session « Claude Fable 5.1 », c’est‑à‑dire des sessions d’agents qui ont travaillé sur le code en parallèle ou pendant mon absence. Je ne sais pas, et je ne prétends pas, combien de ces 36 heures j’ai passé devant le laptop et combien l’agent a fait en arrière‑plan. Je sais seulement ce qui apparaît dans l’historique des commits, et c’est déjà largement suffisant.
+
+Un détail de cette cadence qui m’a particulièrement plu, parce qu’il montre que je ne volais pas à l’aveugle : le `README.md` explique que les identifiants des lignes de faits dans la base sont déterministes.
+
+> Fact-row ids are deterministic (hash32(...natural keys)), so every write from lib/state/write.ts is an upsert-or-delete-by-id and a retried event can never double an effect.
+
+En d’autres termes, même si une opération se répète (par exemple à cause d’un retry après une coupure), l’appli ne dupliquera pas les points pour la même flashcard deux fois. C’est un choix conscient dès le départ, pas le résultat d’un audit ultérieur. Le reste de ce billet porte sur ce que je **n’ai PAS** conçu dès le départ.
+
+## Audit de sécurité numéroté d’une appli à un seul utilisateur
+
+Petite mise en garde avant que quelqu’un ne pense que j’ai payé une boîte pour un pentest de mon appli de flashcards : ce n’était pas un audit externe ni un scanner automatisé. C’était mon propre audit numéroté, que je me suis organisé pendant le même week‑end de développement, avec les labels I1, I2, I3 directement dans les commits. Juste de la discipline, pas de certification.
+
+**I1 : le navigateur partagé pouvait injecter des données entre les comptes.** La file d’attente d’événements d’état d’un utilisateur déconnecté pouvait être « rejouée » sur le compte de la personne suivante qui se connecte sur le même appareil. C’est exactement le scénario « deux personnes, un laptop », le cas que le modèle mental mono‑utilisateur rate le plus souvent, parce qu’on suppose que l’appareil et le compte sont la même chose.
+
+> A shared browser could replay one logged-out user's queued state events into whoever logs in next
+
+([40c9c1fc](https://github.com/bartosz-skejcik/sesja/commit/40c9c1fc))
+
+**I2 : une panne transitoire était traitée comme une session invalide.** La fonction `userOf()` attrapait chaque erreur et renvoyait `null`. Conséquence : un petit bug réseau ou un redémarrage d’Appwrite était perçu comme une session invalide, donc l’appli nettoyait les cookies et déconnectait tous les utilisateurs actifs en même temps, même si rien n’était réellement cassé.
+
+> userOf() previously caught every error and answered null, which made a network blip or an Appwrite restart look identical to an invalid session: every active user got logged out and cookie-cleared.
+
+([8efc769c](https://github.com/bartosz-skejcik/sesja/commit/8efc769c))
+
+**I3 : la correction d’I1 introduisait elle‑même une faille.** Après la fix d’I1, la fonction `box()` levait une erreur quand `currentUserId` était vide. Le problème, c’est que `dispatch()` appliquait déjà l’état optimiste et mettait l’événement en file sans condition, donc l’erreur levée n’arrêtait rien ([d34d4cdb](https://github.com/bartosz-skejcik/sesja/commit/d34d4cdb)). J’ai colmaté le trou et, en même temps, j’ai compris que « lever une erreur » et « arrêter l’opération » sont deux choses différentes si personne ne gère l’erreur par la suite.
+
+## Pourquoi une appli pour une seule personne a reçu le même traitement qu’une appli pour des milliers
+
+Parce que le risque ne dépend pas du nombre de comptes, mais de ce que l’appli stocke et où elle vit. L’appli possède des comptes, des données per‑user, et elle tourne sur un appareil qui, dans une famille, est souvent partagé. C’est une raison suffisante pour traiter une fuite cross‑account comme un vrai problème, pas comme une curiosité théorique tirée d’un article de sécurité.
+
+Je ne sais pas exactement combien de comptes existent aujourd’hui, si ce n’est qu’il y a une utilisatrice régulière et la possibilité qu’un membre de la famille lance l’appli sur le même appareil. Ce n’est pas du SaaS et je ne fais pas semblant que ça le soit. Mais I1 montre clairement pourquoi le nombre de comptes est une mauvaise métrique de risque : deux personnes sur le même appareil suffisent à rendre une fuite de données réelle, pas hypothétique.
+
+## Quand cette paranoïa devient une perte de temps
+
+À l’inverse, il est facile de lire ce texte comme « faites toujours un audit numéroté, même pour une appli à deux personnes ». Ce n’est pas toujours pertinent. Avant de copier ce processus dans votre projet, vérifiez que le problème existe réellement. Omettez l’audit numéroté si :
+
+- l’appli n’a pas de comptes et ne stocke rien de per‑user, donc rien ne peut « fuir » entre utilisateurs,
+- l’appli tourne localement, sur un seul appareil qui n’est jamais partagé,
+- les données de l’appli sont publiques ou sans valeur, donc même une fuite réelle ne coûte rien à personne.
+
+L’appli coche les trois cases à la fois : comptes via Appwrite, appareil partagé, données privées (notes, progrès de quiz, historique de chat IA). Si c’était une appli sans login, un générateur de flashcards offline sans persistance, cet audit serait du formalisme excessif. Ce n’est pas le cas ici.
+
+## Qu’est‑ce que cela implique
+
+L’appli possède maintenant trois bugs confirmés et corrigés grâce à cet audit. Je ne prétends pas que c’est tout ce qui existe, car l’audit ne vérifie que ce que je décide de tester, pas l’intégralité du système. L’ironie de la situation, c’est que l’appli n’a qu’une seule utilisatrice régulière, mais ce ne sont pas elle qui a signalé les trois bugs. C’est mon audit numéroté qui les a découverts, trois fois de suite, avant que je décide de faire une pause. Ça en dit plus sur moi que sur l’appli elle‑même.
+
+## FAQ
+
+**L’appli est‑elle disponible publiquement, en production ?**  
+Ce billet n’en parle pas, ce n’est pas le sujet. On discute ici du processus de sécurité et de ce qu’il a détecté, pas de l’endroit où l’appli vit aujourd’hui.
+
+**Combien de personnes utilisent réellement l’appli ?**  
+Je ne sais pas exactement. Réellement une utilisatrice régulière, plus la possibilité qu’un membre de la famille la lance sur le même appareil. Ce n’est clairement pas une appli à des milliers de comptes, malgré le titre.
+
+**Qui a réalisé cet audit, une société externe ?**  
+Non. C’est mon propre audit numéroté (I1, I2, I3), réalisé le même week‑end que le reste du développement. Pas d’audit formel, pas de pentest, pas de scanner automatique. Discipline, pas certification.
+
+**Après ces trois correctifs, l’appli est‑elle totalement sécurisée ?**  
+Je ne le prétends pas. J’ai identifié trois bugs concrets et corrigés. Il peut y en avoir d’autres que je n’ai pas encore vus, car l’audit ne couvre que ce que je décide de tester, pas la totalité du système.
+
+**Pourquoi l’appli de flashcards a‑t‑elle un assistant IA de Groq ?**  
+Pour poser des questions sur le cours directement depuis le module, sans devoir basculer entre l’appli et un chat séparé. C’est l’une des choses qui a émergé pendant ces 36 heures, en même temps que les comptes et le panneau admin.
+
+## Liens
+
+- [J’ai construit mon propre gestionnaire de passkeys et je comprends maintenant pourquoi personne ne le fait à la va‑vite](/blog/fr/why-i-built-my-own-passkey-manager)
+- [Comment LLaMA a mélangé mes liens dans les traductions](/blog/fr/llm-translated-my-blog-and-broke-the-links)
+- [Repository “sesja” sur GitHub](https://github.com/bartosz-skejcik/sesja)
+- [Commit I1 : fix cross‑account replay sur navigateur partagé](https://github.com/bartosz-skejcik/sesja/commit/40c9c1fc)
+- [Commit I2 : fix des erreurs transitoires traitées comme session invalide](https://github.com/bartosz-skejcik/sesja/commit/8efc769c)
+- [Commit I3 : fix d’une faille résiduelle après I1](https://github.com/bartosz-skejcik/sesja/commit/d34d4cdb)

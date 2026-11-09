@@ -1,0 +1,119 @@
+---
+title: I built an app that tells you when to leave the house to catch the train (and how it knows it's a FLIRT)
+description: Dojazd is an iPhone app for Warsaw and the Tricity. I extract the KM train composition from the carrier's PDFs and honestly label it: scheduled.
+date: 2026-11-03T12:00:00.000Z
+tags: dojazd, swiftui, bun, gtfs, gtfs-rt, sqlite, motis, kolej, pdf, ai, ios
+---
+
+## Introduction
+
+Hey there! There’s one question I keep asking myself at the door with my shoe in hand: when should I leave and will I make it? The timetable says the train is at the top of the hour. The timetable doesn’t say that the last three times that train was a few minutes late on this segment, and the tram to the station runs exactly when it feels like it. Damn, does the whole app really have to handle that?
+
+Turns out it does, so on October 8 I made the first commit in a repo called **Dojazd**. It’s an iPhone app for Warsaw (as of October 28 also for the Tricity) that answers that single question. I wrote about it once before, about [parsing metro closure notices](/blog/en/dojazd-metro-closures-no-llm), but that was one narrow slice. This post is the broader introduction, and at the end you’ll get a concrete snippet I’m most proud of.
+
+You’ll get three things:
+
+1. **how Dojazd actually calculates when to leave**: median delays over 28 days, and when a vehicle is visible live, its GPS position,
+2. **how the app knows that your Koleje Mazowieckie train is a FLIRT**, even though there’s no open source for that,
+3. **why the word “scheduled” is always stuck to a FLIRT** and why that’s the most important word in the whole feature.
+
+The repo is private. I’ll only see the commit links at the bottom, and you get just the hashes and quotes. There are about 600 commits in less than a month – roughly 40 a day – and the commits have `Claude-Session` trailers. I didn’t write this alone in one night. I wrote it with Claude, and that’s how it should read.
+
+## What it actually is
+
+Two parts. A backend on Bun: an API in Hono, a collector that pulls GTFS and GTFS‑RT and writes to SQLite, plus routing via MOTIS. Then a SwiftUI client, with widgets and Live Activities, because the answer to “when to leave” should appear on the lock screen, not after three taps.
+
+The calculation itself is easy to explain. The forecast is based on a 28‑day median of delays on each segment. Not an average, because a single day where everything stalls shouldn’t ruin the picture of the whole month. When a vehicle is visible live, that median is overwritten by its GPS position. In other words: statistics until I see the train, then reality.
+
+A small anecdote about how “data from feeds” isn’t a clean affair. The `wkd.pb` file from WKD has neither `start_date` nor `stop_sequence`. From commit `a824c21f`:
+
+> wkd.pb has no start_date or stop_sequence, so stops match by id in route order and the service day is the candidate whose timetable is closest to the live times.
+
+So I match stops by ID, in route order, and guess the service day as the candidate whose timetable is closest to the live times. It works. I’m not proud of it, I’m pragmatic about it.
+
+## Weekly hook: how to know which rolling stock a train will use
+
+All of the above could each be a separate post. The part that really pulled me in started with a stupid question: is my train a new FLIRT or something older, because that changes whether I even want to stand on the platform. I looked for an open source of Koleje Mazowieckie rolling stock. There isn’t one. GTFS doesn’t say, GTFS‑RT even less.
+
+There is something uglier. KM publishes weekly PDFs called “Zestawienie pociągów KM”. On October 31 the whole layer that consumes them hit the collector. From commit `c15f0e54`:
+
+```text
+Collector downloads the "Zestawienie pociągów KM" PDFs (links found on the KM
+timetable pages), parses them with pdftotext, matches them to KM trips by
+plk_train_number (new gtfs_trips.train_number) and service date, and writes
+planned_rolling_stock.
+```
+
+Human‑readable, step‑by‑step:
+
+1. the collector finds links to the PDFs on the KM timetable pages,
+2. downloads them and runs them through `pdftotext`,
+3. extracts the train number and composition,
+4. joins that with GTFS trips by train number (new column `gtfs_trips.train_number`) and service date,
+5. writes the result into the `planned_rolling_stock` table.
+
+Size of the change in that commit: `backend/collector/src/rollingStock/job.ts` +462, `backend/collector/src/rollingStock/kmPlan.ts` +279 and `openapi.yaml` +40. The mapping of rolling‑stock series isn’t hard‑coded; it lives in `shared/rolling-stock/km.json` so we can rename a series without touching the parser.
+
+There’s another commit, `7e757e45`, on the iOS side: `PlannedRollingStock` on `Leg` and `Departure`, texts in `RollingStockDisplay` in Polish and English. In the app it shows up as **“scheduled FLIRT · new”**.
+
+## Why “scheduled” is always there
+
+That’s the crux. The table is called `planned_rolling_stock`, not `rolling_stock`. In the iOS commit message there’s a sentence I repeat to myself like a mantra:
+
+> Always the plan, never “jedzie FLIRT”.
+
+And in the decision log (`docs/DECISIONS.md`, entry 15.74) there’s a single line: *Carrier plan, not actual composition.*
+
+Why the paranoia? Because the PDF is the plan. The carrier can deploy a different composition if something breaks, if a carriage is missing, etc. The app has no way to know that. If I wrote “runs FLIRT” and an old carriage showed up, it wouldn’t be a tiny inaccuracy – it would be the app lying to a human who bases a decision on it. “Scheduled” costs me one word in the UI and removes the whole lie.
+
+The second honesty concerns coverage. Not every PDF parses cleanly. That’s why there’s an alert on PDF coverage: I know how many trains got a composition and how many didn’t, and I don’t pretend it’s 100 % complete. What I can’t parse, I don’t invent.
+
+## When this whole idea doesn’t make sense
+
+- **If you ride the same train every day and know it by heart**, this feature is just a curiosity. You’ll leave at the same time you always do.
+- **Parsing the carrier’s PDFs is a long‑term commitment from day one.** The format can change every week and nobody will warn me. The coverage alert exists precisely because I expect it to break eventually.
+- **I have no numbers on forecast accuracy.** I never measured how often the median hits, and I have no data to back it up. The repo is only a few weeks old, so everything I write here is about how it’s built, not how well it works.
+- **Over 600 commits in a month doesn’t mean 600 thoughtful decisions.** Some are fix‑ups, and the pace is mainly because I’m working with AI.
+
+## Bonus: a backup that almost out‑smarted itself
+
+A side‑story worth mentioning because it’s too good to skip. After the DST change it turned out the Warsaw aggregation, triggered at 03:30 Europe/Warsaw (02:30 UTC), runs for about 48 minutes. The backup at 03:00 UTC checked its result while it was still writing its snapshot via `VACUUM INTO`. From commit `f096c297`:
+
+> the Warsaw aggregation (03:30 Europe/Warsaw = 02:30 UTC, ~48 min) was still writing its VACUUM INTO snapshot when the 03:00 UTC run checked it
+
+Two jobs, two time zones, one clock shift. Classic.
+
+## What came out of it
+
+Dojazd answers the “when to leave” question on iPhone, for Warsaw and the Tricity. For KM trains it appends “scheduled” and the composition name, extracted from the weekly PDFs the carrier uploads. I don’t know if anyone else will appreciate it. I do.
+
+The irony is that the whole app exists to avoid being late for trains, and the biggest chunk of time was spent making sure I don’t promise more than I know. Half the project is data, the other half is a single word: “scheduled”.
+
+## FAQ
+
+**Is Dojazd in the App Store?**  
+I’m not writing about a release here because there’s nothing to say. For now it’s a repo and an app I’m actively developing.
+
+**How does the app know which rolling stock a KM train will use?**  
+From the weekly “Zestawienie pociągów KM” PDFs. The collector parses them with `pdftotext` and joins them to GTFS trips by train number and service date. It’s the carrier’s plan, not the actual composition, which is why the app always shows “scheduled”.
+
+**Does every train get a composition?**  
+No. Not every PDF parses, so there’s an alert on coverage. What I can’t match, I don’t guess.
+
+**How do you calculate when to leave?**  
+From a 28‑day median of segment delays. When a vehicle is visible live, I overwrite that forecast with its GPS position.
+
+**Did you write this yourself?**  
+No. The commits have `Claude-Session` trailers, so it’s largely AI‑assisted. Decisions like “plan, not actual composition” are mine.
+
+## Links
+
+- [Commit c15f0e54: plan KM rolling stock from PDFs](https://github.com/bartosz-skejcik/dojazd/commit/c15f0e54) (private repo)
+- [Commit 7e757e45: scheduled rolling stock on iOS UI](https://github.com/bartosz-skejcik/dojazd/commit/7e757e45) (private repo)
+- [Commit a824c21f: WKD delays from wkd.pb](https://github.com/bartosz-skejcik/dojazd/commit/a824c21f) (private repo)
+- [Commit f096c297: backup after DST change](https://github.com/bartosz-skejcik/dojazd/commit/f096c297) (private repo)
+- [MOTIS, routing engine](https://github.com/motis-project/motis)
+- [GTFS Realtime Specification](https://gtfs.org/documentation/realtime/reference/)
+- [Metro closed at Bemowo and the app says go: reading closure notices without an LLM](/blog/en/dojazd-metro-closures-no-llm)
+- [Class schedule from USOS to Google Calendar, and why there are no Teams links in USOS](/blog/en/usos-to-google-calendar-no-teams-links)
+- [I built my own passkey manager and now I understand why nobody does it on a whim](/blog/en/why-i-built-my-own-passkey-manager)

@@ -1,0 +1,142 @@
+---
+title: "Je me suis fait un panneau privé pour quatre applis et le jour où les chiffres se sont figés sans que personne reçoive d'erreur"
+description: "Panneau privé pour mes quatre applis : rapports, décisions, chiffres en direct. Leçon : un collecteur sans erreur ne garantit pas des données fraîches."
+date: 2026-11-09T12:00:00.000Z
+tags: panel, nextjs, sqlite, kolektory, monitoring, dojazd, ai, decyzje
+---
+
+## Introduction
+
+Salut ! Le 5 novembre, il s'est avéré que dans mon propre panneau, la tuile de Dojazd pouvait avoir l'air normale alors que les chiffres dessous étaient vieux. Rien de rouge. Aucune erreur. Le collecteur annonce que le cycle est terminé, tout va bien. Sauf que l'heure de lecture à côté du chiffre datait de la veille, 13h58. Putain.
+
+Pendant environ 20 heures, le collecteur de Dojazd a fait son boulot, terminé chaque cycle sans erreur et m'a rendu sans broncher **toujours la même vieille lecture**, celle que l'exporteur, de l'autre côté, avait publiée la veille. Personne n'a reçu d'erreur, parce qu'il n'y avait pas d'erreur. Il y avait seulement des chiffres qui avaient cessé de bouger.
+
+Cet article a deux parties. D'abord large : qu'est-ce que mon panneau, puisque je n'en ai jamais parlé sur le blog. Ensuite étroit : la règle que j'ai ajoutée après cette bourde.
+
+Tu vas recevoir trois choses :
+
+1. **pourquoi j'ai besoin d'un panneau privé pour quatre applis** et de quoi il est fait,
+2. **à quoi ressemblait exactement la faille** : pourquoi la règle censée surveiller les collecteurs est restée muette,
+3. **à quoi ressemble le correctif** (avec du vrai code), et pourquoi ce n'est qu'un pansement et pas une solution.
+
+Le dépôt est privé, donc les liens vers les commits en bas, seul moi je peux les voir. Toi, tu reçois les hashs, les noms de fichiers et des citations du code. Les commits portent `Co-Authored-By: Claude` en pied de message, parce que la plus grande partie est née en duo avec une IA. Les décisions sur ce qui doit figurer dans le panneau et sur ce qui doit s'allumer, ce sont les miennes.
+
+## Ce qu'est ce panneau
+
+J'ai quatre applis : Teoria+, Dojazd, Pora et BlockSmash. Sur chacune travaillent des sessions d'IA qui écrivent du code, collectent des conclusions et produisent un rapport en fin de journée. Avant le panneau, ces rapports atterrissaient en morceaux de texte, et je reconstituais dans ma tête ce qui se passait et ce que j'attendais.
+
+Le panneau est un tableau de bord mobile en Next.js. Les données vivent dans SQLite, le tout tourne sur Coolify. Le README a une phrase qui suffit : *Rapports quotidiens et prochaines actions pour Teoria+, Dojazd, Pora et Blocksmash.* En dessous :
+
+- **rapports des sessions** : chaque appli a son propre jeton et envoie son rapport via `panel-report`, qui fait un `POST /api/ingest/report`,
+- **collecteurs** : de petites tâches qui récupèrent seules les chiffres en direct (App Store Connect, Prometheus et Grafana, Appwrite, ventes Apple),
+- **décisions** : les questions que les sessions d'IA me posent reviennent dans le panneau sous forme de cartes « Attend ta réponse », et je réponds d'un tap sur le téléphone,
+- **vues** : Aujourd'hui, Décisions, Actions, Finances et la page de chaque appli.
+
+La semaine dernière, du 2 au 9 novembre, environ 60 commits sont arrivés dans le dépôt. Le panneau est passé de rapports quotidiens à des écrans de travail. Le 3 novembre, en une journée, sont nés Actions, Finances et une nouvelle disposition d'Aujourd'hui (plusieurs maquettes A, B, C, D entre lesquelles j'ai dû choisir, parce que je préfère choisir parmi du concret plutôt que décrire en mots ce que je veux). Le 4 novembre est arrivée la section « Le plus important » sur Aujourd'hui, dont je reparle dans un instant.
+
+S'y ajoutent des broutilles qui, au total, bouffent le plus de temps. Par exemple le commit `d8a1caf`, qui explique dans sa description pourquoi la page débordait plus large que la fenêtre du téléphone :
+
+> Przyczyna: siatki bez szablonu kolumn (kolumna auto rośnie do min-content przycisków z truncate) i main jako element flex bez min-w-0.
+
+(Cause : des grilles sans modèle de colonnes, la colonne auto grandit jusqu'au min-content des boutons avec truncate, et main comme élément flex sans min-w-0.)
+
+Devine combien de fois j'ai déjà vécu ça et combien de fois j'ai encore oublié `min-w-0`.
+
+## Le plus important, ou la règle censée veiller sur moi
+
+Le panneau a sur Aujourd'hui une section « Le plus important » (décision `b119` du 4 novembre, commit `2fe7bd9`). C'est une liste de choses que je dois voir avant tout le reste. D'abord les affaires pour moi (sans nouvelles depuis plus de 24 h, en attente de moi depuis plus de 2 jours). Ensuite les écarts calculés par le panneau lui-même : utilisateurs actifs et installations par rapport aux 7 derniers jours, résultat du mois négatif et **collecteur en erreur depuis plus de 30 minutes**. À la fin, les conclusions des sessions, jusqu'à 2 par appli, 6 au total.
+
+Cette dernière règle sur le collecteur a l'air sensée. Le collecteur plante, le panneau n'a pas de chiffres frais, donc il crie. Le problème, c'est que je l'ai écrite sous une hypothèse : qu'un collecteur cassé est un collecteur qui renvoie une erreur.
+
+Dans `highlights.ts`, la carte « Collecteur en erreur » naissait pour un collecteur qui renvoyait une erreur. Dojazd avait `ok: true`. Le cycle se terminait à l'heure. La règle recevait de lui un poli « tout va bien » et se taisait.
+
+## Comment le collecteur pouvait être en bonne santé alors que les chiffres étaient morts
+
+Le collecteur de Dojazd interroge l'exporteur sur les métriques. L'exporteur renvoie des chiffres et **son propre horodatage de lecture**. Le collecteur écrit tout en base et termine le cycle. Si l'exporteur cesse de rafraîchir les données mais continue de répondre 200 avec son dernier état, le collecteur n'a aucune raison de s'énerver. Il a reçu une réponse, l'a enregistrée, le cycle a réussi.
+
+Voici la description du commit `f084dc3`, une phrase :
+
+> Reguła b119 widziała tylko kolektor w błędzie, a Dojazd przez 20 h kończył cykl bez błędu ze starym czasem z eksportera.
+
+(La règle b119 ne voyait qu'un collecteur en erreur, et Dojazd a terminé ses cycles sans erreur pendant 20 h avec l'ancienne heure de l'exporteur.)
+
+Dans le test qui reproduit ça se trouve exactement ce cas, avec le vrai horodatage de l'incident : `2026-11-05T12:58:42.000Z`, soit 13h58 en Pologne. L'horloge « maintenant » du test est fixée au 6 novembre, 09:00 UTC.
+
+Ce qui m'a fait mal, ce n'est pas la panne elle-même. Un exporteur a le droit d'avoir une mauvaise journée. Ce qui m'a fait mal, c'est que **mon propre système de surveillance regardait la mauvaise chose**. Il demandait « le collecteur a-t-il planté ? » alors qu'il aurait dû demander « le chiffre que je vois date-t-il des dernières minutes ? ».
+
+## Le correctif : on regarde l'heure de lecture, pas `ok`
+
+Le commit `f084dc3` touche 14 fichiers, +162 et -16 lignes. Le cœur est un nouveau fichier `src/lib/live/freshness.ts`, 32 lignes, avec 68 lignes de tests. Le commentaire en haut du fichier dit tout :
+
+```text
+// Nieświeżość źródeł: kolektor może kończyć cykl bez błędu, a liczby stoją, bo źródło nie podaje
+// nowego odczytu (Dojazd 5.11: 20 h ze starym znacznikiem czasu z eksportera). Dlatego patrzymy na czas odczytu, nie na `ok`.
+```
+
+Le seuil est simple :
+
+```ts
+export const STALE_FLOOR_MS = 10 * 60_000;
+export const staleAfterMs = (period: number) => Math.max(2 * period * 1000, STALE_FLOOR_MS);
+```
+
+Une source est périmée si elle n'a pas donné de nouvelle lecture depuis plus de **deux de ses périodes**, mais jamais moins de 10 minutes. Ce plancher évite qu'une courte pause au déploiement me réveille à trois heures du matin. Pour Dojazd, ça donne 20 minutes dans le test.
+
+La deuxième décision importante : pour un collecteur rattaché à une appli, je prends le **`as_of` le plus récent des chiffres de cette appli**, c'est-à-dire l'heure venant de la source, et non l'heure du dernier cycle réussi. Ce n'est que si l'appli n'a aucun chiffre que je retombe sur le dernier cycle réussi. C'est précisément ce changement qui ferme la faille : le cycle peut être frais, le chiffre dedans vieux.
+
+Dans le test, ça donne :
+
+```ts
+it("luka Dojazdu z 5.11: kolektor ok, świeży cykl, ale odczyt ze źródła sprzed 20 h", () => {
+  const s = staleSources([clock({ name: "dojazd", period: 600 })], [read("public-transport", "2026-11-05T12:58:42.000Z")], NOW);
+  expect(staleLabel(s[0], NOW)).toBe("stare dane z 5.11 13:58");
+  ...
+  text: "Ostatni odczyt 5 lis, 13:58. Kolektor działa, ale źródło nie podaje nowych danych."
+```
+
+Dans « Le plus important » apparaît une nouvelle carte avec l'étiquette **Stare dane** (données périmées) : « Dojazd: brak nowych liczb ». Sur la tuile de l'appli et près de chaque chiffre issu d'un collecteur, au lieu de « en direct, HH:MM », s'affiche en gras un avertissement « stare dane z 5.11 13:58 ». Encore un détail : le marqueur ne disparaît que lorsqu'arrive une lecture **plus récente** que celle à partir de laquelle le chiffre est figé. Sinon la tuile pouvait se « rafraîchir » un instant avec la même lecture morte et avoir l'air saine.
+
+Un dernier réglage : si le collecteur est en erreur, on ne duplique pas les cartes. Dans le test « collecteur en erreur plus de 30 min », il y a une seule entrée, « Kolektor w błędzie ». Pour une erreur plus courte avec des données périmées, « Stare dane » s'affiche avec une mention de l'erreur.
+
+## Ce qui en découle, et ce qui aurait pu mal tourner
+
+Après ce correctif, j'ai réutilisé la carte « Stare dane » à deux autres endroits, parce qu'elle s'est révélée un tiroir pratique pour tout ce qui « devrait être frais et ne l'est pas ». Le commit `a4322a9` y a ajouté un collecteur qui n'a pas démarré du tout (attendu d'après le registre des applis, 10 minutes après le démarrage du serveur). Le commit `5d2fc66` a ajouté la sauvegarde nocturne de la base du panneau : quand elle manque depuis plus de 36 heures, la même entrée apparaît. Ce sont deux nouvelles règles qui découlent de la même idée. Je ne prétends pas que l'une d'elles ait déjà attrapé quelque chose. Elles sont toutes neuves, et le seul cas que ça a détecté dans la vraie vie reste la faille de Dojazd.
+
+## Quand tout ce panneau et cette règle N'ont PAS de sens
+
+- **Si tu as une seule appli**, une alerte Grafana classique sur l'absence de nouveaux points suffit. Quatre applis et des sessions d'IA qui y écrivent des rapports, voilà seulement la raison d'avoir un endroit où tout converge.
+- **La règle de fraîcheur est bricolée pour des cas connus.** Le seuil « deux périodes, minimum 10 minutes » je l'ai choisi à l'œil. Je n'ai aucune donnée pour dire s'il est bon. Je sais seulement que 20 minutes pour Dojazd est raisonnable, parce que « Wiek metryk » est réglé ainsi au même endroit. Une source plus lente peut crier trop souvent, une plus rapide trop rarement.
+- **Elle ne surveille pas les chiffres frais mais absurdes.** Un exporteur peut fournir un horodatage actuel et zéro utilisateur actif parce que quelque chose a dérapé chez lui. C'est la règle des écarts par rapport à 7 jours qui s'en occupe, pas celle-ci.
+- **Un tableau de bord privé se construit pour soi, pas pour toi.** La moitié des décisions ici (la disposition D avec une barre de cinq chiffres, la couleur d'avertissement) est dictée par le fait que je le regarde dans le tram sur mon téléphone. Ce n'est pas un produit.
+
+## Ce que ça a donné
+
+J'ai un panneau qui me montre ce que j'attends, ce qui a changé et à quoi ressemblent les chiffres de quatre applis. Et j'ai une règle qui, au lieu de demander « le collecteur a-t-il planté », demande « quand ai-je reçu du neuf pour la dernière fois ».
+
+L'ironie : j'ai construit un système pour surveiller des chiffres, et pendant 20 heures il n'avait rien à surveiller, parce qu'il n'y avait pas d'erreur. Le collecteur était sage, les cycles se terminaient à l'heure, et j'avais sous les yeux le résultat d'hier qui se faisait passer pour celui d'aujourd'hui. L'alarme la plus dangereuse, c'est celle qui se tait parce que tout va bien.
+
+## FAQ
+
+**Le panneau est-il public ou à vendre ?**
+Non. C'est un outil privé, il tourne chez moi, et le dépôt est privé. Je le décris parce que la leçon sur les collecteurs est universelle.
+
+**Que veut dire qu'un collecteur « termine son cycle sans erreur » ?**
+Qu'il a interrogé la source, reçu une réponse, l'a enregistrée et a bouclé la boucle. Que la réponse contienne une vieille heure de lecture n'est pas une erreur pour lui, car personne ne lui avait demandé de le vérifier.
+
+**Quel est le seuil au-delà duquel les données sont « périmées » ?**
+Deux périodes de rafraîchissement de la source, mais pas moins de 10 minutes. Pour Dojazd, les tests donnent 20 minutes.
+
+**Cette règle a-t-elle déjà attrapé autre chose que Dojazd ?**
+Je ne peux pas le dire. La faille décrite du 5 novembre est le seul cas pour lequel je l'ai écrite et que j'ai noir sur blanc.
+
+**Tu as écrit ça tout seul ?**
+Non. Les commits portent `Co-Authored-By: Claude`. Écrire le code, c'est une chose, mais la décision que l'alarme doit regarder l'heure de lecture et pas le drapeau `ok`, c'était la mienne, après cette bourde.
+
+## Linki
+
+- [Commit f084dc3 : données périmées de la source dans Le plus important et sur les tuiles](https://github.com/bartosz-skejcik/panel/commit/f084dc3cfeef22bdd7470d87b6de063aa1013e31) (dépôt privé)
+- [Commit 2fe7bd9 : Le plus important sur Aujourd'hui](https://github.com/bartosz-skejcik/panel/commit/2fe7bd96b11f935fa7de4a73f695acde18b92d91) (dépôt privé)
+- [Commit d8a1caf : page pas plus large que la fenêtre](https://github.com/bartosz-skejcik/panel/commit/d8a1cafce1715ab9cb08cfce890302340684cc1c) (dépôt privé)
+- [Next.js](https://nextjs.org/docs)
+- [J'ai fait une appli qui dit quand partir de chez soi pour attraper le train (et comment elle sait que c'est un FLIRT)](/blog/fr/dojazd-kiedy-wyjsc-z-domu-planowo-flirt)
+- [Métro fermé à Bemowo, et l'appli dit « vas-y » : comment je lis les avis de fermeture sans LLM](/blog/fr/dojazd-metro-closures-no-llm)
