@@ -1,0 +1,142 @@
+---
+title: "Ich habe mir ein privates Dashboard für vier Apps gebaut und der Tag, an dem die Zahlen stehen blieben, ohne dass jemand einen Fehler bekam"
+description: "Privates Dashboard für meine vier Apps: Berichte, Entscheidungen, Live-Zahlen. Lektion: Ein Collector ohne Fehler heißt nicht, dass die Daten frisch sind."
+date: 2026-11-09T12:00:00.000Z
+tags: panel, nextjs, sqlite, kolektory, monitoring, dojazd, ai, decyzje
+---
+
+## Einleitung
+
+Na! Am 5. November stellte sich heraus, dass die Kachel von Dojazd in meinem eigenen Dashboard normal aussehen konnte, während die Zahlen darunter alt waren. Nichts Rotes. Kein Fehler. Der Collector meldet, der Zyklus ist durch, alles läuft. Nur die Lesezeit neben der Zahl war vom Vortag, 13:58 Uhr. Verdammte Scheiße.
+
+Etwa 20 Stunden lang hat der Collector von Dojazd seinen Job gemacht, jeden Zyklus ohne Fehler beendet und mir ohne Murren **immer denselben alten Messwert** geliefert, den der Exporter auf der anderen Seite am Vortag veröffentlicht hatte. Niemand bekam einen Fehler, weil es keinen Fehler gab. Es gab nur Zahlen, die sich nicht mehr bewegten.
+
+Dieser Beitrag hat zwei Teile. Erst breit: Was ist mein Panel überhaupt, denn im Blog habe ich nie darüber geschrieben. Dann eng: die eine Regel, die ich nach dieser Panne ergänzt habe.
+
+Du bekommst drei Dinge:
+
+1. **wozu ich ein privates Dashboard für vier Apps brauche** und woraus es gebaut ist,
+2. **wie die Lücke genau aussah**: warum die Regel, die die Collector überwachen sollte, schwieg,
+3. **wie die Korrektur aussieht** (mit echtem Code) und warum sie nur ein Pflaster und keine Lösung ist.
+
+Das Repo ist privat, die Links zu den Commits am Ende sehe also nur ich. Du bekommst dafür Hashes, Dateinamen und Codezitate. Die Commits haben `Co-Authored-By: Claude` im Footer, denn das meiste entstand im Duo mit KI. Die Entscheidungen, was im Panel stehen soll und worauf es leuchten soll, sind meine.
+
+## Was das Panel ist
+
+Ich habe vier Apps: Teoria+, Dojazd, Pora und BlockSmash. An jeder arbeiten KI-Sessions, die Code schreiben, Erkenntnisse sammeln und am Ende des Tages einen Bericht erzeugen. Vor dem Panel landeten diese Berichte als Textfetzen, und ich habe mir im Kopf zusammengebaut, was los ist und worauf ich warte.
+
+Das Panel ist ein mobiles Dashboard in Next.js. Die Daten liegen in SQLite, das Ganze läuft auf Coolify. Die README hat einen Satz, der reicht: *Tägliche Berichte und nächste Aktionen für Teoria+, Dojazd, Pora und Blocksmash.* Darunter:
+
+- **Berichte der Sessions**: Jede App bekommt ein eigenes Token und schickt ihren Bericht über `panel-report`, das `POST /api/ingest/report` aufruft,
+- **Collector**: kleine Jobs, die Live-Zahlen selbst holen (App Store Connect, Prometheus und Grafana, Appwrite, Verkäufe von Apple),
+- **Entscheidungen**: Fragen, die die KI-Sessions mir stellen, kommen als Karten „Wartet auf dich“ zurück ins Panel, und ich antworte mit einem Tipp auf dem Handy,
+- **Ansichten**: Heute, Entscheidungen, Aktionen, Finanzen und die Seite jeder App.
+
+In der letzten Woche, vom 2. bis 9. November, kamen etwa 60 Commits ins Repo. Das Panel wandelte sich von Tagesberichten zu Arbeitsbildschirmen. Am 3. November entstanden an einem Tag Aktionen, Finanzen und ein neues Layout für Heute (mehrere Mockups A, B, C, D, zwischen denen ich wählen musste, weil ich lieber aus Fertigem wähle, als in Worten zu beschreiben, was ich will). Am 4. November kam der Abschnitt „Das Wichtigste“ auf Heute, zu dem gleich mehr.
+
+Dazu kommen Kleinigkeiten, die insgesamt am meisten Zeit fressen. Zum Beispiel Commit `d8a1caf`, der in der Beschreibung erklärt, warum die Seite breiter wurde als das Handyfenster:
+
+> Przyczyna: siatki bez szablonu kolumn (kolumna auto rośnie do min-content przycisków z truncate) i main jako element flex bez min-w-0.
+
+(Ursache: Grids ohne Spaltenvorlage, die Auto-Spalte wächst auf min-content der Buttons mit truncate, und main als Flex-Element ohne min-w-0.)
+
+Rate mal, wie oft ich das schon durchgemacht habe und wie oft ich `min-w-0` wieder vergessen habe.
+
+## Das Wichtigste, also die Regel, die auf mich aufpassen sollte
+
+Das Panel hat auf Heute einen Abschnitt „Das Wichtigste“ (Entscheidung `b119` vom 4. November, Commit `2fe7bd9`). Es ist eine Liste von Dingen, die ich sehen soll, bevor irgendetwas anderes. Zuerst Angelegenheiten für mich (ohne Neuigkeiten seit über 24 h, über 2 Tage auf mich wartend). Dann Abweichungen, die das Panel selbst berechnet: aktive Nutzer und Installationen im Vergleich zu den letzten 7 Tagen, negatives Monatsergebnis und **Collector im Fehler seit über 30 Minuten**. Zum Schluss Erkenntnisse aus den Sessions, bis zu 2 pro App, insgesamt 6.
+
+Die letzte Regel über den Collector sieht vernünftig aus. Der Collector stürzt ab, das Panel hat keine frischen Zahlen, also schlägt es Alarm. Das Problem: Ich habe sie unter einer Annahme geschrieben, nämlich dass ein kaputter Collector ein Collector ist, der einen Fehler zurückgibt.
+
+In `highlights.ts` entstand die Karte „Collector im Fehler“ für einen Collector, der einen Fehler lieferte. Dojazd hatte `ok: true`. Der Zyklus endete pünktlich. Die Regel bekam von ihm ein höfliches „alles gut“ und schwieg.
+
+## Wie der Collector gesund sein konnte, während die Zahlen tot waren
+
+Der Collector von Dojazd fragt den Exporter nach Metriken. Der Exporter liefert Zahlen und **seinen eigenen Zeitstempel der Messung**. Der Collector schreibt alles in die Datenbank und beendet den Zyklus. Wenn der Exporter aufhört, Daten zu aktualisieren, aber weiter mit Code 200 und seinem letzten Stand antwortet, hat der Collector keinen Grund, nervös zu werden. Er bekam eine Antwort, hat sie gespeichert, der Zyklus war erfolgreich.
+
+So steht es in der Commit-Beschreibung von `f084dc3`, ein Satz:
+
+> Reguła b119 widziała tylko kolektor w błędzie, a Dojazd przez 20 h kończył cykl bez błędu ze starym czasem z eksportera.
+
+(Die Regel b119 sah nur einen Collector im Fehler, und Dojazd beendete 20 h lang den Zyklus ohne Fehler mit der alten Zeit des Exporters.)
+
+Im Test, der das nachstellt, steckt genau dieser Fall, mit dem echten Zeitstempel des Vorfalls: `2026-11-05T12:58:42.000Z`, in Polen also 13:58. Die „Jetzt“-Uhr im Test steht auf dem 6. November, 09:00 UTC.
+
+Was mich geärgert hat, war nicht der Ausfall selbst. Ein Exporter darf einen schlechten Tag haben. Geärgert hat mich, dass **mein eigenes Überwachungssystem auf das Falsche schaute**. Es fragte „ist der Collector abgestürzt?“, und hätte fragen müssen „stammt die Zahl, die ich sehe, aus den letzten paar Minuten?“.
+
+## Die Korrektur: Wir schauen auf die Lesezeit, nicht auf `ok`
+
+Commit `f084dc3` berührt 14 Dateien, +162 und -16 Zeilen. Kern ist die neue Datei `src/lib/live/freshness.ts`, 32 Zeilen, und dazu 68 Zeilen Tests. Der Kommentar oben in der Datei sagt alles:
+
+```text
+// Nieświeżość źródeł: kolektor może kończyć cykl bez błędu, a liczby stoją, bo źródło nie podaje
+// nowego odczytu (Dojazd 5.11: 20 h ze starym znacznikiem czasu z eksportera). Dlatego patrzymy na czas odczytu, nie na `ok`.
+```
+
+Die Schwelle ist einfach:
+
+```ts
+export const STALE_FLOOR_MS = 10 * 60_000;
+export const staleAfterMs = (period: number) => Math.max(2 * period * 1000, STALE_FLOOR_MS);
+```
+
+Eine Quelle ist alt, wenn sie länger als **zwei ihrer Perioden** keinen neuen Messwert geliefert hat, aber nie kürzer als 10 Minuten. Die Untergrenze verhindert, dass mich eine kurze Pause beim Deployment um drei Uhr nachts weckt. Für Dojazd ergibt das im Test 20 Minuten.
+
+Die zweite wichtige Entscheidung: Für einen Collector, der einer App zugeordnet ist, nehme ich das **neueste `as_of` der Zahlen dieser App**, also die Zeit aus der Quelle und nicht die Zeit des letzten erfolgreichen Zyklus. Erst wenn die App gar keine Zahlen hat, falle ich auf den letzten erfolgreichen Zyklus zurück. Genau diese Änderung schließt die Lücke: Der Zyklus kann frisch sein, die Zahl darin alt.
+
+Im Test sieht das so aus:
+
+```ts
+it("luka Dojazdu z 5.11: kolektor ok, świeży cykl, ale odczyt ze źródła sprzed 20 h", () => {
+  const s = staleSources([clock({ name: "dojazd", period: 600 })], [read("public-transport", "2026-11-05T12:58:42.000Z")], NOW);
+  expect(staleLabel(s[0], NOW)).toBe("stare dane z 5.11 13:58");
+  ...
+  text: "Ostatni odczyt 5 lis, 13:58. Kolektor działa, ale źródło nie podaje nowych danych."
+```
+
+Im „Wichtigsten“ erscheint eine neue Karte mit dem Tag **Stare dane** (alte Daten): „Dojazd: brak nowych liczb“. Dazu erscheint an der App-Kachel und an jeder Collector-Zahl statt „live, HH:MM“ eine fett gesetzte Warnung „stare dane z 5.11 13:58“. Noch eine Kleinigkeit: Die Markierung verschwindet erst, wenn ein **neuerer** Messwert eintrifft als der, bei dem die Zahl steht. Sonst konnte sich die Kachel kurz mit demselben toten Messwert „auffrischen“ und gesund aussehen.
+
+Noch ein Kniff: Ist der Collector im Fehler, duplizieren wir keine Karten. Im Test „Collector im Fehler über 30 Min.“ gibt es genau einen Eintrag, „Kolektor w błędzie“. Bei einem kürzeren Fehler mit alten Daten erscheint „Stare dane“ mit einem Hinweis auf den Fehler.
+
+## Was daraus folgt und was anders hätte laufen können
+
+Nach dieser Korrektur habe ich die Karte „Stare dane“ noch an zwei anderen Stellen benutzt, denn sie erwies sich als praktische Schublade für alles, was „frisch sein sollte, es aber nicht ist“. Commit `a4322a9` fügte einen Collector hinzu, der gar nicht gestartet ist (laut App-Register erwartet, 10 Minuten nach Serverstart). Commit `5d2fc66` fügte das nächtliche Backup der Panel-Datenbank hinzu: Fehlt das Backup länger als 36 Stunden, erscheint derselbe Eintrag. Das sind zwei neue Regeln, die aus demselben Gedanken folgen. Ich behaupte nicht, dass eine davon schon etwas gefunden hätte. Sie sind frisch, und der einzige Fall, den das im echten Leben erkannt hat, bleibt die Dojazd-Lücke.
+
+## Wann dieses ganze Panel und diese Regel KEINEN Sinn ergeben
+
+- **Wenn du nur eine App hast**, reicht dir ein normaler Alarm in Grafana auf fehlende neue Datenpunkte. Vier Apps und KI-Sessions, die Berichte hineinschreiben, sind erst der Grund, einen Ort zu haben, an dem alles zusammenläuft.
+- **Die Frischeregel ist auf bekannte Fälle zugeschnitten.** Die Schwelle „zwei Perioden, mindestens 10 Minuten“ habe ich nach Gefühl gewählt. Ich habe keine Daten, ob sie gut ist. Ich weiß nur, dass 20 Minuten für Dojazd vernünftig sind, weil „Wiek metryk“ an derselben Stelle so eingestellt ist. Eine langsamere Quelle kann zu oft schreien, eine schnellere zu selten.
+- **Sie überwacht keine Zahlen, die frisch, aber unsinnig sind.** Ein Exporter kann einen aktuellen Zeitstempel und null aktive Nutzer liefern, weil ihm etwas verrutscht ist. Dafür ist die Abweichungsregel gegenüber 7 Tagen zuständig, nicht diese.
+- **Ein privates Dashboard baut man für sich, nicht für dich.** Die Hälfte der Entscheidungen hier (Layout D mit einer Leiste aus fünf Zahlen, die Warnfarbe) ist dadurch bestimmt, dass ich es in der Straßenbahn auf dem Handy ansehe. Das ist kein Produkt.
+
+## Was dabei herauskam
+
+Ich habe ein Panel, das mir zeigt, worauf ich warte, was sich geändert hat und wie die Zahlen von vier Apps aussehen. Und ich habe eine Regel, die nicht fragt „ist der Collector abgestürzt“, sondern „wann habe ich zuletzt etwas Neues bekommen“.
+
+Die Ironie: Ich habe ein System zur Überwachung von Zahlen gebaut, und 20 Stunden lang hatte es nichts zu überwachen, weil es keinen Fehler gab. Der Collector war brav, die Zyklen endeten pünktlich, und ich hatte das gestrige Ergebnis vor Augen, das sich als heutiges ausgab. Der gefährlichste Alarm ist der, der schweigt, weil alles in Ordnung ist.
+
+## FAQ
+
+**Ist das Panel öffentlich oder kaufbar?**
+Nein. Es ist ein privates Werkzeug, es läuft bei mir, und das Repo ist privat. Ich beschreibe es, weil die Lektion über Collector allgemeingültig ist.
+
+**Was heißt, ein Collector „beendet den Zyklus ohne Fehler“?**
+Dass er die Quelle abgefragt, eine Antwort bekommen, sie gespeichert und die Schleife geschlossen hat. Dass die Antwort eine alte Lesezeit enthielt, ist für ihn kein Fehler, denn vorher hat ihm niemand gesagt, dass er das prüfen soll.
+
+**Wie lautet die Schwelle, ab der Daten „alt“ sind?**
+Zwei Aktualisierungsperioden der Quelle, aber nicht weniger als 10 Minuten. Für Dojazd ergeben die Tests 20 Minuten.
+
+**Hat diese Regel außer bei Dojazd schon etwas gefunden?**
+Das kann ich nicht sagen. Die beschriebene Lücke vom 5. November ist der einzige Fall, für den ich sie geschrieben habe und den ich schwarz auf weiß habe.
+
+**Hast du das allein geschrieben?**
+Nein. Die Commits haben `Co-Authored-By: Claude`. Den Code zu schreiben ist eine Sache, aber die Entscheidung, dass der Alarm auf die Lesezeit und nicht auf das Flag `ok` schauen soll, war meine, nach dieser Panne.
+
+## Linki
+
+- [Commit f084dc3: alte Daten aus der Quelle im Wichtigsten und an den Kacheln](https://github.com/bartosz-skejcik/panel/commit/f084dc3cfeef22bdd7470d87b6de063aa1013e31) (privates Repo)
+- [Commit 2fe7bd9: Das Wichtigste auf Heute](https://github.com/bartosz-skejcik/panel/commit/2fe7bd96b11f935fa7de4a73f695acde18b92d91) (privates Repo)
+- [Commit d8a1caf: Seite nicht breiter als das Fenster](https://github.com/bartosz-skejcik/panel/commit/d8a1cafce1715ab9cb08cfce890302340684cc1c) (privates Repo)
+- [Next.js](https://nextjs.org/docs)
+- [Ich habe eine App gebaut, die sagt, wann man das Haus verlassen muss, um den Zug zu erwischen (und woher sie weiß, dass es ein FLIRT ist)](/blog/de/dojazd-kiedy-wyjsc-z-domu-planowo-flirt)
+- [Metro gesperrt in Bemowo, und die App sagt „fahr“: wie ich Sperrmeldungen ohne LLM lese](/blog/de/dojazd-metro-closures-no-llm)

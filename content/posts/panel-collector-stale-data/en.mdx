@@ -1,0 +1,138 @@
+---
+title: I built a private dashboard for four apps and the day the numbers stopped, and nobody got an error
+description: "Private dashboard for my four apps: reports, decisions, live numbers. Lesson: a collector with no errors does not mean fresh data. Dojazd was stale for 20 h."
+date: 2026-11-09T12:00:00.000Z
+tags: panel, nextjs, sqlite, kolektory, monitoring, dojazd, ai, decyzje
+---
+
+## Introduction
+
+Hey there! On November 5 it turned out that in my own dashboard the **Dojazd** tile could look perfectly normal while the numbers underneath were stale. No red. No error. The collector reported that the cycle finished, everything’s fine. Except the read‑time on the number was from 13:58 the previous day. Fuck.
+
+For about 20 hours the Dojazd collector did its job, finished every cycle without error and, without any hiccup, kept giving me **the same old reading** that the exporter on the other side had emitted the day before. Nobody got an error because there was no error. There were only numbers that stopped moving.
+
+This post is two‑part. First, broadly: what this dashboard actually is, because I’ve never written about it on the blog. Then, narrowly: the one rule I added after this mishap.
+
+You’ll get three things:
+
+1. **why I need a private dashboard for four applications** and what it’s built from,
+2. **exactly how the bug looked**: why the rule that was supposed to watch the collectors stayed silent,
+3. **what the fix looks like** (with real code), and why it’s a band‑aid, not a full solution.
+
+The repo is private, so I’ll only see the commit links at the bottom. I’m giving you the hashes, file names, and code snippets. Commits have a `Co‑Authored‑By: Claude` footer because most of this was written together with an AI. The decisions about what belongs in the dashboard and what should light up are mine.
+
+## What this dashboard is
+
+I have four apps: **Teoria+**, **Dojazd**, **Pora**, and **BlockSmash**. Each runs AI sessions that write code, draw conclusions, and at the end of the day produce a report. Before the dashboard existed those reports landed as chunks of text, and I manually assembled in my head what was happening and what I was waiting for.
+
+The dashboard is a single mobile dashboard built with Next.js. Data lives in SQLite, and the whole thing runs on Coolify. The README has a one‑sentence description that’s enough: *Daily reports and next actions for Teoria+, Dojazd, Pora, and BlockSmash.* Under the hood:
+
+- **reports from sessions**: each app gets its own token and sends a report via `panel-report`, which does `POST /api/ingest/report`,
+- **collectors**: tiny jobs that pull live numbers (App Store Connect, Prometheus & Grafana, Appwrite, Apple sales),
+- **decisions**: questions that agent sessions ask me, come back to the panel as “Waiting for You” cards, and I answer with a single tap on my phone,
+- **views**: Today, Decisions, Actions, Finance, and a page for each app.
+
+In the last week, from Nov 2‑9, about 60 commits landed in the repo. The dashboard went from daily reports to work‑screen mode. On Nov 3 a single day gave us Actions, Finance, and a new Today layout (several mockups A‑D, I had to pick one because I prefer a ready‑made UI over describing it in words). On Nov 4 the “Highlights” section was added to Today, which I’ll talk about in a moment.
+
+We also added a bunch of tiny things that end up eating most of the time. For example commit `d8a1caf`, whose description explains why the page was breaking wider than a phone window:
+
+> Cause: grids without a column‑template (auto column grows to min‑content with truncate buttons) and `main` as a flex element without `min-w-0`.
+
+Guess how many times in my life I’ve fixed that and how many times I’ve forgotten about `min-w-0` again.
+
+## Highlights – the rule that was supposed to watch me
+
+The dashboard has a “Highlights” section on Today (decision `b119` from Nov 4, commit `2fe7bd9`). It’s a list of things I need to see before anything else. First, items for me (no news for > 24 h, waiting > 2 days). Then deviations calculated by the dashboard itself: active users and installs compared to the last 7 days, negative monthly result, and **collector in error for > 30 minutes**. Finally, session insights, up to 2 per app, six total.
+
+That last rule about the collector looks sensible. If a collector crashes, the dashboard has no fresh numbers, so it shouts. The problem is I wrote it under one assumption: a broken collector is a collector that returns an error.
+
+In `highlights.ts` the “Collector in error” card was generated for a collector that returned an error. Dojazd had `ok: true`. The cycle finished on time. The rule got a polite “all good” from it and stayed silent.
+
+## How the collector was healthy but the numbers were dead
+
+The Dojazd collector asks the exporter for metrics. The exporter returns numbers **and its own read‑timestamp**. The collector writes everything to the DB and finishes the cycle. If the exporter stops refreshing data but still answers with a 200 and its last state, the collector has no reason to get upset. It got a response, stored it, and the cycle succeeded.
+
+That’s the description from commit `f084dc3`, one sentence:
+
+> Rule b119 only saw a collector in error, while Dojazd for 20 h finished cycles without error using an old timestamp from the exporter.
+
+In the test that reproduces this, the exact incident timestamp is used: `2026-11-05T12:58:42.000Z` (13:58 in Poland). The “now” clock in the test is set to Nov 6, 09:00 UTC.
+
+What hurt me wasn’t the outage itself. Exporters have bad days. What hurt me was **my own monitoring system looking at the wrong thing**. It asked “did the collector crash?” when it should have asked “is the number I’m seeing from the last few minutes?”.
+
+## Fix: look at the read‑time, not at `ok`
+
+Commit `f084dc3` touches 14 files, +162 – 16 lines. The core is a new file `src/lib/live/freshness.ts`, 32 lines, plus 68 lines of tests. The comment at the top says it all:
+
+```text
+// Nieświeżość źródeł: kolektor może kończyć cykl bez błędu, a liczby stoją, bo źródło nie podaje
+// nowego odczytu (Dojazd 5.11: 20 h ze starym znacznikiem czasu z eksportera). Dlatego patrzymy na czas odczytu, nie na `ok`.
+```
+
+The threshold is simple:
+
+```ts
+export const STALE_FLOOR_MS = 10 * 60_000;
+export const staleAfterMs = (period: number) => Math.max(2 * period * 1000, STALE_FLOOR_MS);
+```
+
+A source is stale if it hasn’t provided a new read‑time for longer than **twice its own period**, but never less than 10 minutes. The lower bound prevents a short deployment pause from waking me up at three in the morning. For Dojazd the test yields 20 minutes.
+
+Second important decision: for a collector assigned to an app I take the **latest `as_of` timestamp of that app’s numbers**, i.e., the source time, not the time of the last successful cycle. Only when an app has no numbers at all do I fall back to the last successful cycle. That’s the exact change that closes the hole: a cycle can be fresh, but the number inside it can be old.
+
+In the test it looks like this:
+
+```ts
+it("Dojazd gap from 5.11: collector ok, fresh cycle, but source read older than 20 h", () => {
+  const s = staleSources([clock({ name: "dojazd", period: 600 })], [read("public-transport", "2026-11-05T12:58:42.000Z")], NOW);
+  expect(staleLabel(s[0], NOW)).toBe("stare dane z 5.11 13:58");
+  ...
+  text: "Ostatni odczyt 5 lis, 13:58. Kolektor działa, ale źródło nie podaje nowych danych."
+```
+
+In “Highlights” a new card appears with the tag **Stale data**: “Dojazd: no new numbers”. Also, on the app tile and next to every collector number, instead of “live, HH:MM” you now see a bold warning label “stale data from 5.11 13:58”. One more tiny detail: the timestamp disappears only when a newer read arrives. Otherwise the tile could briefly “refresh” with the same stale read and look healthy.
+
+I added another tweak: if a collector is in error we don’t duplicate cards. In the “collector in error > 30 min” test there is a single entry, “Collector in error”. For a shorter error with stale data we show “Stale data” with an error note.
+
+## What this means, and what could have gone differently
+
+After this fix I reused the “Stale data” card in two other places because it turned out to be a handy bucket for anything that *should be fresh but isn’t*. Commit `a4322a9` added a collector that never started (expected from the app registry, 10 minutes after server start). Commit `5d2fc66` added a nightly backup copy of the panel DB: when a copy is missing for > 36 hours the same card appears. Those are two new rules that stem from the same idea. I’m not claiming either has caught anything yet. They’re fresh, and the only real‑world case they’ve caught is still the Dojazd gap.
+
+## When this whole dashboard and rule don’t make sense
+
+- **If you have a single app**, a plain Grafana alert for missing points is enough. Four apps and AI sessions that write reports is the only reason to have a single place where everything converges.
+- **The freshness rule is tuned for known cases.** The “two periods, minimum 10 minutes” threshold was eyeballed. I have no data whether it’s optimal. I only know that for Dojazd 20 minutes is reasonable because the same place sets the “Metric age” value. A slower source might scream too often, a faster one not often enough.
+- **It doesn’t guard numbers that are fresh but nonsensical.** An exporter could return a current timestamp and a zero active‑user count because something broke. That’s handled by the deviation‑from‑7‑days rule, not this one.
+- **A private dashboard is built for yourself, not for anyone else.** Half the decisions here (layout D with a bar of five numbers, warning colour) are driven by the fact that I look at it on my phone on the tram. It’s not a product.
+
+## What came out of it
+
+I now have a dashboard that tells me what I’m waiting for, what changed, and how the numbers of the four apps look. I also have a rule that, instead of asking “did the collector crash?”, asks “when was the last time I got something new”.
+
+The irony is that I built a system to watch numbers and for 20 hours it had nothing to watch because there was no error. The collector behaved, cycles finished on time, and I was staring at yesterday’s result masquerading as today’s. The most dangerous alarm is the one that stays silent because everything *looks* okay.
+
+## FAQ
+
+**Is the dashboard public or for sale?**  
+No. It’s a private tool running on my machine, and the repo is private. I’m writing about it because the collector lesson is universal.
+
+**What does “collector finishes cycle without error” mean?**  
+It queried the source, got a response, stored it, and closed the loop. The fact that the response contained an old read‑time isn’t an error for the collector, because nobody told it to check that.
+
+**What threshold defines “stale” data?**  
+Two refresh periods of the source, but never less than 10 minutes. In the Dojazd tests that works out to 20 minutes.
+
+**Has this rule caught anything besides the Dojazd incident?**  
+I can’t say. The described gap from Nov 5 is the only case I wrote it for and have on record.
+
+**Did you write this yourself?**  
+No. Commits have `Co‑Authored‑By: Claude`. Writing the code is one thing; deciding that the alarm should look at read‑time instead of the `ok` flag was mine, after the mishap.
+
+## Linki
+
+- [Commit f084dc3: stale source data in Highlights and on tiles](https://github.com/bartosz-skejcik/panel/commit/f084dc3cfeef22bdd7470d87b6de063aa1013e31) (repo private)
+- [Commit 2fe7bd9: Highlights on Today](https://github.com/bartosz-skejcik/panel/commit/2fe7bd96b11f935fa7de4a73f695acde18b92d91) (repo private)
+- [Commit d8a1caf: page not wider than window](https://github.com/bartosz-skejcik/panel/commit/d8a1cafce1715ab9cb08cfce890302340684cc1c) (repo private)
+- [Next.js](https://nextjs.org/docs)
+- [I built an app that tells you when to leave home to catch the train (and how it knows it’s a FLIRT)](/blog/en/dojazd-kiedy-wyjsc-z-domu-planowo-flirt)
+- [Metro closed at Bemowo, and the app says “take it”: how I read closure notices without an LLM](/blog/en/dojazd-metro-closures-no-llm)
