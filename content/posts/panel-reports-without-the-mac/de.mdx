@@ -1,0 +1,184 @@
+---
+title: "Panel ohne Mac: die Woche, in der die Berichte nicht mehr von einem schlafenden Laptop abhingen"
+description: "Der Mac schlief drei Tage, die Berichte waren weg. In einer Woche lernte der Server fast alles, was der Mac tat, nur eins nie: den letzten Bericht spielen."
+date: 2026-11-17T12:00:00.000Z
+tags: panel, nextjs, sqlite, kolektory, automatyzacja, testy-ab, reklamy, decyzje
+---
+
+## Einleitung
+
+Servus! Montag, 9. November, morgens. Ich öffne das Panel auf dem Handy und gehe in die Historie. Donnerstag ist da. Und dann drei Tage, Freitag der 6., Samstag der 7. und Sonntag der 8. November, an denen nichts ist. Kein Bericht, kein Firmenüberblick, keine Änderung an den Aufgaben. Als hätten meine vier Apps sich ein langes Wochenende genommen.
+
+Haben sie nicht. Der Mac hat es sich genommen. Er hat geschlafen, und mit ihm alle Claude-Sessions, die mir jeden Morgen und jeden Abend Berichte geschrieben haben.
+
+Das Lustigste: Die Zahlen haben überlebt. Die Kollektoren laufen auf dem Server, also sind in der Tabelle `kpi_daily` die Tage 6.-8.11 für alle Apps drin, brav, bis auf die letzte Installation. Das Panel hatte die Daten. Es hatte nur niemanden, der ihm sagt, was sie bedeuten.
+
+Falls du den letzten Beitrag nicht gelesen hast: Das Panel ist mein privates Dashboard für vier Apps (Teoria+, Dojazd, Pora, BlockSmash). Next.js, SQLite über Drizzle, läuft auf Coolify. Morgens und abends schaue ich vom Handy rein. Mehr dazu, was es ist und wie es mir einmal 20 Stunden lang alte Zahlen als frische verkauft hat, steht im [vorherigen Beitrag über das Panel](/blog/de/panel-collector-stale-data).
+
+Du bekommst drei Dinge:
+
+1. **warum das Panel überhaupt von einem Laptop abhing**, der einfach einschlafen kann,
+2. **die vier Etappen des Plans "Berichte und Slots ohne Mac"**, die zwei Wochen dauern sollten und in einer auf main gelandet sind,
+3. **eine Regel, wegen der der Server fast alles darf**, nur keinen Bericht schreiben. Und warum das die wichtigste Zeile im ganzen Plan ist.
+
+Das Repo ist privat, die Commit-Links sehe also nur ich. Du bekommst Hashes, Dateinamen und Zitate aus dem Code, wie beim letzten Mal.
+
+## Wofür das Panel überhaupt den Mac brauchte
+
+Nach diesem Wochenende habe ich mich hingesetzt und `docs/plan-serwer.md` geschrieben. Darin steht ein Absatz, der sich wie ein Schuldeingeständnis liest:
+
+> Die Zahlen aus den Kollektoren sind nicht verloren gegangen (`kpi_daily` hat die Tage 6.-8.11 für alle Apps). Verloren gingen: Session-Berichte (Erkenntnisse, Aufgabenstände), Firmenüberblicke und Posts. Der Mac wird heute aus drei Gründen gebraucht: Die Crons leben in Claude-Sessions, X, Reddit und Google Ads laufen über einen eingeloggten Browser, und die Analyse nutzt Sessions aus dem Repo.
+
+Also drei Dinge. Der Zeitplan wohnte in Sessions auf dem Laptop. Werbung habe ich über einen Browser gelesen, in dem ich eingeloggt war. Und die Analyse, also das "was heißt das jetzt", brauchte das Repo auf der Platte. Klappe zu, und alle drei verschwinden auf einmal.
+
+Am 9. November kam der Commit "Plan: Berichte und Slots ohne Mac" mit vier Etappen. Etappen 1 und 2 sofort, 3 und 4 eine Woche später. Spoiler: Alle vier waren innerhalb einer Woche auf main. Nicht, weil ich so schnell bin, sondern weil man schlecht schläft, wenn man einmal drei leere Tage in der Historie gesehen hat.
+
+## Die Regel, an der der ganze Plan hängt
+
+Vor den Etappen eine Sache, ohne die hier nichts Sinn ergibt.
+
+Das Panel hat "Aufgaben", also die nächsten Schritte für jede App. Ihr Stand ändert sich auf zwei Wegen: Entweder kommt ein Session-Bericht mit der vollständigen Aufgabenliste, oder es kommt eine einzelne Statusänderung einer Aufgabe, vom Mac gepusht. Und jetzt die Frage: Was, wenn diese beiden Dinge in der falschen Reihenfolge ankommen?
+
+Die Antwort steckt in `applyActionChange` in `src/lib/action-state.ts`. Die Funktion nimmt den letzten Bericht der App und verwirft jede Statusänderung, die älter ist als er:
+
+```ts
+const latest = tx.select().from(report).where(eq(report.app, app)).orderBy(desc(report.date), desc(report.revision)).limit(1).get();
+if (!latest) return "no-report";
+if (Date.parse(latest.receivedAt) > t) return "older";
+```
+
+Vernünftig. Der Bericht ist neuer, also weiß er es besser. Nur heißt das auch: Die Zeile in der Tabelle `report` ist **die Autorität für den Aufgabenstand**. Wer den Bericht schreibt, regiert die Liste.
+
+Und hier kommt die Versuchung, die sich von selbst aufdrängt: Der Server hat doch die Zahlen, soll er nachts halt selbst einen Bericht bauen, Problem gelöst. Der Plan sagt klar, dass das Panel keine Zeile in `report` anlegen soll. Denn stell dir vor: Um 3:00 schiebt der Server einen automatischen Bericht rein. Morgens wecke ich den Mac, die Session pusht die Aufgabenänderungen, die sie gestern Abend vor dem Einschlafen gemacht hat. Jede davon ist älter als der nächtliche Bericht. `"older"`. Alle in die Tonne. Scheiße. Und wenn der automatische Bericht keine Aufgaben hat, woher sollte der Server sie auch nehmen, ist die Aufgabenliste plötzlich leer.
+
+Die einfachste Lösung ist also genau die, die alles kaputt macht. Klassiker.
+
+## Etappe 1: ein Tag aus den Kollektoren, aber nur zum Lesen
+
+Commit `e103c218`. Die Historie soll jetzt einen abgeschlossenen Tag auch dann zeigen, wenn es keinen Session-Bericht gibt. Sie nimmt die Zahlen aus `kpi_daily` und baut daraus einen Eintrag mit dem Label "aus den Kollektoren, ohne Session-Bericht" und dem Flag `DayEntry.auto`.
+
+Das Wichtigste ist der Kommentar über der Funktion, nicht die Funktion selbst:
+
+```ts
+ * Zamknięte dni aplikacji z liczbami z kolektorów, od pierwszego raportu aplikacji (wcześniejsza historia kolektorów nie rozsypuje listy).
+ * Celowo tylko odczyt: wiersz w `report` działałby jak „ostatni raport” i unieważniałby zmiany spraw wypchnięte później z Maca.
+function collectedDays(db: DB, app: AppKey, now: Date): string[] {
+  const first = db.select({ d: min(report.date) }).from(report).where(eq(report.app, app)).get()?.d;
+  if (!first) return [];
+  ...
+}
+```
+
+Auf Deutsch: "Absichtlich nur lesend: Eine Zeile in `report` würde wie der 'letzte Bericht' wirken und später vom Mac gepushte Aufgabenänderungen ungültig machen." Der Tag wird beim Anzeigen on the fly zusammengebaut und landet nirgends. Er hat dieselben Felder wie ein Bericht, aber Aufgaben und Notizen sind leer, weil der Server sie sich nicht ausdenken darf.
+
+Zweites Detail: Tage werden erst ab dem ersten Bericht der jeweiligen App genommen. Die Kollektoren haben schon Zahlen gesammelt, bevor das Panel den ersten Bericht bekam, und ohne diese Bedingung würde die Historie bei irgendeinem Tag vor Monaten anfangen, an dem außer Zahlen nichts passiert ist. Eine Liste von Tagen, von denen die Hälfte nur Zahlen ohne Kontext sind, ist keine Historie, sondern ein Müllhaufen.
+
+## Etappe 2: Die A/B-Tests von Teoria+ rechnet der Server
+
+Commits `0617e42e` und `c26da35d`. Teoria+ hat zwei Tests: `paywall_v1` und `start_cta_v1`. Früher hat die Session auf dem Mac ihre Ergebnisse gelesen. Jetzt rechnet der Kollektor sie selbst, und die App-Seite hat eine Tabelle mit den Varianten und dem p-Wert aus dem exakten Test nach Fisher.
+
+Eine Notiz zum Test erscheint erst bei einem Unterschied über dem Rauschen. Bei `start_cta_v1` ist die Schwelle konkret: ab 167 pro Variante. Darunter hält das Panel die Klappe.
+
+Bevor du fragst: Nein, keiner dieser Tests hat schon ein Ergebnis, das ich dir hier zeigen könnte. Die Commits setzen Schwellen, sie küren keinen Sieger. Und das passt mir ganz gut, weil man nach zwei Tagen am leichtesten einen "Gewinner" in etwas sieht, das einfach Rauschen ist. Jetzt muss die Zahl erst durch Fisher, bevor das Panel überhaupt etwas dazu sagt.
+
+## Etappe 3: Die Cloud darf denken, aber nicht entscheiden
+
+Das ist die Etappe, die eigentlich eine Woche warten sollte. Commit `fa8d2317`.
+
+Die Idee: Statt der Sessions auf dem Mac sollen geplante Claude-Aufgaben in der Cloud die Analyse machen. Der Plan hat Kosten verglichen, und das sind **Schätzungen aus dem Plan, keine Rechnungen**: Cloud-Aufgaben 0 zł im Rahmen des Abos, `claude -p` auf einem VPS rund 528 zł im Monat mit Opus. Die Wahl ging schnell.
+
+Nur muss eine Cloud-Aufgabe die Zahlen irgendwoher bekommen und ihre Erkenntnisse irgendwo abgeben. Entstanden ist der Endpoint `/api/cloud` mit eigenem Token. Er liefert 8 Tage Zeitreihe, Live-Zahlen und die p-Werte der A/B-Tests. Ohne Aufgaben und ohne Texte aus dem Entscheidungs-Feed. Und annehmen tut er so viel:
+
+```ts
+// Etap 3 planu „bez Maca”: zaplanowane zadania Claude w chmurze czytają liczby aplikacji i zapisują same wnioski.
+// Odczyt bez spraw i tekstów z feedu. Zapis tylko do kv: nie tworzy wiersza w `report`, nie rusza spraw ani „ostatniego raportu”.
+    insights: z.array(InsightSchema).min(1).max(5),
+    /** Propozycje działań: zawsze „do decyzji Bartka”, nie tworzą spraw. */
+    proposals: z.array(z.object({ title: oneLine(120), detail: z.string().trim().min(1).max(280) }).strict()).max(3).default([]),
+```
+
+Höchstens 5 Erkenntnisse und höchstens 3 Vorschläge. Sie landen in `kv` unter dem Schlüssel `cloud:<app>:<date>` und erscheinen in der Karte "Erkenntnisse aus der Cloud". Ein Vorschlag wird nie von selbst zur Aufgabe. Immer "zur Entscheidung von Bartek", also meine.
+
+Und wieder derselbe Gedanke wie in Etappe 1: Schreiben nur in `kv`. Nicht in `report`. Das Modell in der Cloud kann gern schreiben, dass ihm an den Zahlen etwas nicht gefällt und man etwas tun sollte, aber es kann die Aufgabenliste nicht ändern und nicht so tun, als wäre es der letzte Bericht.
+
+Ehrlich gesagt: Stand heute habe ich den Endpoint, das Schema und den Schreibpfad. Eine geplante Aufgabe, die jeden Morgen echte Erkenntnisse reinschiebt, kann ich dir nicht zeigen, weil es dafür in den Commits keinen Beleg gibt.
+
+## Etappe 4: Werbung über die API statt über den eingeloggten Browser
+
+Commit `e4773dd1`. Ein Werbe-Kollektor über die Google Ads API v26 und die Apple Ads Platform API. Kosten, Impressionen, Klicks und Installationen pro App. Aus der Commit-Beschreibung:
+
+> Google: ein Konto, Teoria+ und Pora nach Kampagnen-ID getrennt; Dienstkonto oder Refresh-Token, ohne Entwickler-Token
+
+Ein Google-Ads-Konto für zwei Apps, also trenne ich nach Kampagnen-ID. Einen Entwickler-Token braucht es nicht. Das war wohl der befriedigendste Commit der Woche, weil er den eingeloggten Browser auf einem Laptop, der gerade schlafen könnte, aus der Kette wirft. Eine Abhängigkeit vom Mac weniger, und zwar eine, die völlig unsichtbar war, solange sie funktioniert hat.
+
+## Nebenbei: Dojazd hatte 24 Store-Aufrufe statt 8
+
+Das stand nicht im Plan, es kam beim abendlichen Firmenüberblick am 11.11 raus. Commit `f0f36195`.
+
+App Store Connect Analytics liefert Berichte in Instanzen. Eine DAILY-Instanz trägt ein Fenster von mehreren Tagen, bei Dojazd 3 Tage vor dem Verarbeitungsdatum. Mein Kollektor hat alle Instanzen aufsummiert, also landete derselbe Tag zwei- oder dreimal in der Summe. Dojazd am 7.11: 24 Aufrufe der Store-Seite. Echte Zahl: 8.
+
+```ts
+- * Dni z sum wszystkich instancji (każda instancja dokłada dane przetworzone danego dnia, także za dni wcześniejsze).
++ * Dzień z najnowszej instancji, która go zawiera (przegląd firmy 11.11). Instancja DAILY niesie pełne okno kilku dni
++ * (Dojazd: 3 dni przed datą przetworzenia), więc ten sam dzień jest w 2-3 instancjach i suma by go zawyżyła.
+```
+
+Jetzt kommt ein Tag aus der neuesten Instanz, die ihn enthält. Dreimal so viele Aufrufe klingt super, bis dir klar wird, dass es dein eigenes `SUM()` ist.
+
+## Und nochmal diese Regel, weil sich herausstellte, dass sie löchrig war
+
+In derselben Woche musste ich `applyActionChange` selbst anfassen. Commit `cf1b4575`. Es stellte sich heraus, dass die "Zeit des letzten Berichts" nicht immer die Zeit des Berichts war. Eine Aufgabenänderung (`action`) erzeugt eine neue Version des Berichts, und diese Version trägt die Zeit der Änderung, nicht die des Berichts. Der Vergleich damit hat verspätete Änderungen anderer Aufgaben ungültig gemacht:
+
+```ts
+-  if (Date.parse(latest.receivedAt) > t) return "older";
++  // Wersja z `action` ma czas tej zmiany, nie raportu: porównanie z nią unieważniałoby spóźnione zmiany innych spraw (T9).
++  const r = JSON.parse(latest.bodyJson) as Report & { report_received_at?: string };
++  const reportAt = r.report_received_at ?? latest.receivedAt;
++  if (Date.parse(reportAt) > t) return "older";
++      // Raport wygenerowany przed zmianą stanu, a przyjęty po niej (np. ponowienie po wybudzeniu): stan zostaje z tej zmiany.
+```
+
+Und schau dir den zweiten Kommentar an: "Wiederholung nach dem Aufwachen". Das ist genau das Szenario mit dem schlafenden Mac. Ein Bericht, den die Session vor dem Zuklappen erzeugt hat und der erst nach dem Aufklappen beim Server ankam. Ohne diesen Fix hätte so ein verspäteter Bericht den Stand einer Aufgabe zurückgesetzt, die ich in der Zwischenzeit geändert habe.
+
+Ich habe also die ganze Woche Dinge gebaut, die diese Regel nicht anfassen sollen, und am Ende musste ich trotzdem darin rumwühlen.
+
+## Wann dieser Ansatz KEINEN Sinn ergibt
+
+- **Wenn du keine zwei Wahrheitsquellen für den Zustand hast, brauchst du die ganze Vorsicht nicht.** Bei mir ändert sich der Aufgabenstand sowohl durch Berichte als auch durch einzelne Änderungen vom Mac. Liefe alles über einen Kanal, könnte der Server ganz entspannt selbst Berichte schreiben, und es gäbe nichts zu erzählen.
+- **Der Mac wird weiterhin gebraucht.** X und Reddit laufen immer noch über den eingeloggten Browser, und kein Commit dieser Woche ändert daran etwas. Der Titel "Panel ohne Mac" ist ein bisschen übertrieben. Berichte ohne Mac, ja. Posts noch nicht.
+- **Ein Tag aus den Kollektoren ist kein Bericht.** Er hat Zahlen, aber keine Erkenntnisse und keine Aufgaben. Wenn der Mac eine Woche schläft, bekomme ich eine Woche Zahlen ohne Kommentar und muss trotzdem selbst nachdenken. Das ist Absicht, aber tun wir nicht so, als wäre es ein vollwertiger Ersatz.
+- **Kostenschätzungen sind Schätzungen.** 0 zł für Cloud-Aufgaben und 528 zł für einen VPS mit Opus sind Zahlen aus dem Plan, nicht von einer Rechnung. Wenn die Cloud-Aufgaben wirklich täglich laufen, tauchen vielleicht Limits auf, von denen ich heute nichts weiß.
+
+## Was dabei rausgekommen ist
+
+Nach einer Woche kann der Server einen Tag aus den Kollektoren abschließen, A/B-Tests mit Fisher rechnen, Erkenntnisse von Claude aus der Cloud annehmen und Werbedaten über die API holen. Nebenbei hat er aufgehört, dieselben Store-Aufrufe dreimal zu zählen.
+
+Und die wichtigsten Zeilen im ganzen Plan sind die, die dem Server "nein" sagen. Leg keine Zeile in `report` an. Fass die Aufgaben nicht an. Tu nicht so, als wärst du der letzte Bericht. Eine ganze Woche habe ich einer Maschine beigebracht, Dinge für mich zu erledigen, und am Ende war der schwierigste Teil der Automatisierung, Code zu schreiben, der höflich ablehnt, genau das eine zu tun, wonach es am meisten schreit.
+
+## FAQ
+
+**Warum den Mac nicht einfach über Nacht anlassen?**
+Weil das immer noch ein Laptop ist, der zugeklappt werden, ein Update machen oder mit mir irgendwohin ohne Ladegerät fahren kann. Das Wochenende 6.-8.11 hat gezeigt, dass "ich lass ihn an" genau bis zu dem Mal funktioniert, an dem ich es nicht tue.
+
+**Warum darf der Server keinen Bericht schreiben, wenn er doch die Zahlen hat?**
+Weil die letzte Zeile in `report` entscheidet, welche Aufgabenänderungen aktuell sind. Ein automatischer Bericht aus der Nacht wäre neuer als die morgens vom Mac gepushten Änderungen, und `applyActionChange` würde sie als älter verwerfen. Und ein Bericht ohne Aufgaben würde die Liste leeren.
+
+**Haben die A/B-Tests von Teoria+ schon etwas gezeigt?**
+Ich habe kein Ergebnis, das ich hier ehrlich nennen könnte. Das Panel rechnet p nach Fisher und zeigt eine Notiz erst bei einem Unterschied über dem Rauschen, bei `start_cta_v1` ab 167 pro Variante.
+
+**Schreiben die Claude-Aufgaben in der Cloud schon täglich Erkenntnisse?**
+Stand heute gibt es den Endpoint `/api/cloud`, das Schema (bis zu 5 Erkenntnisse, bis zu 3 Vorschläge) und das Schreiben nach `kv`. Einen Beleg, dass eine geplante Aufgabe das schon regelmäßig füllt, kann ich dir nicht zeigen, also behaupte ich es nicht.
+
+**Ist das Panel jetzt komplett unabhängig vom Mac?**
+Berichte und Zahlen größtenteils ja. Posts auf X und Reddit laufen weiterhin über den eingeloggten Browser auf dem Mac, und daran hat diese Woche nichts geändert.
+
+## Links
+
+- [Commit e103c21: Tag aus den Kollektoren in der Historie ohne Zeile in report](https://github.com/bartosz-skejcik/panel/commit/e103c21812a4121c9c8ccb8c2875673401f3e1f2) (privates Repo)
+- [Commit fa8d231: Zahlen lesen und Erkenntnisse schreiben für Cloud-Aufgaben](https://github.com/bartosz-skejcik/panel/commit/fa8d231729f78355cce64323626caba0f902d890) (privates Repo)
+- [Commit e4773dd: Werbe-Kollektor für Google Ads und Apple Ads](https://github.com/bartosz-skejcik/panel/commit/e4773dd14cc0ba45dbaaa2a45fcbc0fe2ee997a7) (privates Repo)
+- [Commit f0f3619: ASC Analytics aus der neuesten Instanz](https://github.com/bartosz-skejcik/panel/commit/f0f361950309a36f92ad1c760a2becd09ebfcdd1) (privates Repo)
+- [Google Ads API](https://developers.google.com/google-ads/api/docs/start)
+- [Fisher's exact test](https://en.wikipedia.org/wiki/Fisher%27s_exact_test)
+- [Ich habe mir ein privates Dashboard für vier Apps gebaut und der Tag, an dem die Zahlen stehen blieben, ohne dass jemand einen Fehler bekam](/blog/de/panel-collector-stale-data)
+- [Ich habe eine App gebaut, die sagt, wann man das Haus verlassen muss, um den Zug zu erwischen (und woher sie weiß, dass es ein FLIRT ist)](/blog/de/dojazd-kiedy-wyjsc-z-domu-planowo-flirt)

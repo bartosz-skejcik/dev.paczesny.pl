@@ -1,0 +1,185 @@
+---
+title: "Panel without a Mac: the week reports stopped depending on a sleeping laptop"
+description: "The Mac slept three days and the reports vanished. In a week the server learned almost everything the Mac did, but it may never pretend to be the latest report."
+date: 2026-11-17T12:00:00.000Z
+tags: panel, nextjs, sqlite, kolektory, automatyzacja, testy-ab, reklamy, decyzje
+---
+
+## Introduction
+
+Hey there! Monday, November 9 morning, I open the panel on my phone and go to History. Thursday is there. Then three days, Friday the 6th, Saturday the 7th and Sunday the 8th of November, where there’s nothing. No reports, no company overview, no case updates. As if my four apps decided to take a long weekend.
+
+They didn’t. The Mac took it. It slept, and along with it all the Claude sessions that wrote me reports every morning and evening also slept.
+
+The funniest part was that the numbers survived. The collectors run on the server, so in the `kpi_daily` table the days 6-8 Nov are present in all apps, nicely, as far as installations go. The panel had the data. It just didn’t have anyone to tell it what they mean.
+
+If you haven’t read the previous post: the panel is my private dashboard for four apps (Teoria+, Dojazd, Pora, BlockSmash). It’s built with Next.js, SQLite via Drizzle, and runs on Coolify. I glance at it from my phone morning and night. More about what it is and how it once, for 20 hours, showed me old numbers as fresh can be found in [the previous post about the panel](/blog/en/panel-collector-stale-data).
+
+You’ll get three things:
+
+1. **why the panel depended on a laptop** that can simply fall asleep,
+2. **the four-stage “reports and slots without a Mac” plan**, which was supposed to take two weeks but landed on main in one,
+3. **one rule that lets the server do almost everything**, except write the report. And why that’s the most important line in the whole plan.
+
+The repo is private, so only I’ll see the commit links. You’ll get hashes, file names, and code snippets, just like last time.
+
+## Why the panel even needed a Mac
+
+After that weekend I sat down and wrote `docs/plan-serwer.md`. There’s a paragraph that reads like a confession:
+
+> Numbers from the collectors didn’t disappear (`kpi_daily` has days 6-8 Nov in all apps). What vanished: session reports (insights, case states), company overviews, and posts. The Mac is needed today for three reasons: crons live in Claude sessions, X, Reddit and Google Ads go through a logged-in browser, and analysis uses a repo-based session.
+
+So three things. The schedule lived in sessions on the laptop. I read ads through a logged-in browser. And analysis, the “what does this mean” part, needed the repo on disk. Close the lid and all three disappear at once.
+
+On November 9 a commit titled “Plan: reports and slots without a Mac” landed with four stages. Stages 1 and 2 right away, 3 and 4 a week later. Spoiler: all four made it to main within a week. Not because I’m that fast, but because once you see three empty days in History, sleeping gets a lot harder.
+
+## The rule the whole plan hinges on
+
+Before the stages, one thing without which nothing makes sense.
+
+The panel has “cases”, i.e., next actions for each app. Their state changes in two ways: a session report arrives with a full list of cases, or a single case-state change arrives, pushed from the Mac. The question: what if those two things arrive in the wrong order?
+
+`applyActionChange` in `src/lib/action-state.ts` handles it. It takes the latest app report and rejects any state change that is older than it:
+
+```ts
+const latest = tx.select().from(report).where(eq(report.app, app)).orderBy(desc(report.date), desc(report.revision)).limit(1).get();
+if (!latest) return "no-report";
+if (Date.parse(latest.receivedAt) > t) return "older";
+```
+
+Makes sense. The report is newer, so it knows best. The side effect is that a row in the `report` table becomes the **authority for case state**. Whoever writes the report, rules the list.
+
+And here the temptation appears: since the server has the numbers, let it generate a report at night and solve the problem. The plan explicitly says the panel must **not** create a row in `report`. Imagine this: at 3 AM the server drops an automatic report. In the morning I wake the Mac, the session pushes case changes it made the night before sleep. Each of those changes is older than the nightly report → `"older"`. All get tossed. Damn. And if the automatic report has no cases (because where would the server get them?), the case list becomes empty.
+
+So the simplest solution is exactly what breaks everything. Classic.
+
+## Stage 1: a collector day, read-only
+
+Commit `e103c218`. History now shows a closed day even when there’s no session report. It pulls numbers from `kpi_daily` and creates an entry labeled “from collectors, no session report” with the flag `DayEntry.auto`.
+
+The most important part is the comment above the function, not the function itself:
+
+```ts
+ * Closed app days with numbers from collectors, starting from the first app report (earlier collector history doesn’t scramble the list).
+ * Intentionally read-only: a row in `report` would act as “last report” and invalidate later case changes pushed from the Mac.
+function collectedDays(db: DB, app: AppKey, now: Date): string[] {
+  const first = db.select({ d: min(report.date) }).from(report).where(eq(report.app, app)).get()?.d;
+  if (!first) return [];
+  ...
+}
+```
+
+“Intentionally read-only.” The day is assembled on-the-fly when displayed and never persisted. It has the same fields as a report, but cases and notes are empty because the server isn’t allowed to invent them.
+
+Second detail: days are taken only from the first report of a given app. Collectors gathered numbers before the panel ever received a first report, and without this guard History would start months ago with a bunch of naked numbers. A list of days half of which are just numbers without context isn’t History; it’s trash.
+
+## Stage 2: Teoria+ A/B tests counted by the server
+
+Commits `0617e42e` and `c26da35d`. Teoria+ has two tests: `paywall_v1` and `start_cta_v1`. Previously their results were read by a session on the Mac. Now the collector counts them itself; the app side has a table with variants and the Fisher p-value.
+
+A note about a test appears only when the difference exceeds noise. For `start_cta_v1` the threshold is concrete: from 167 per variant. Below that the panel keeps quiet.
+
+Before you ask: no, none of these tests have a winner I can show you yet. The commits set thresholds, not winners. That actually works for me, because the easiest way to see a “winner” is after two days of pure noise. Now a number must first pass Fisher’s test before the panel even mentions it.
+
+## Stage 3: the cloud can think, but it can’t decide
+
+This is the stage that was supposed to wait a week. Commit `fa8d2317`.
+
+Idea: instead of sessions on the Mac, let scheduled Claude jobs in the cloud do the analysis. The plan compared costs and these are **estimates from the plan, not invoices**: cloud tasks are 0 PLN under the subscription, `claude -p` on a VPS is about 528 PLN per month on Opus. The choice was quick.
+
+The catch is that a cloud task still needs numbers and must output conclusions somewhere. An endpoint `/api/cloud` was created with its own token. It returns an 8-day series, live numbers, and A/B test p-values. No cases and no feed-text decisions. It accepts:
+
+```ts
+// Stage 3 of the “no-Mac” plan: scheduled Claude jobs in the cloud read app numbers and write their own insights.
+// Read-only, no cases or feed text. Write only to kv: does not create a row in `report`, does not touch cases or “last report”.
+    insights: z.array(InsightSchema).min(1).max(5),
+    /** Action proposals: always “for Bartek’s decision”, never create cases. */
+    proposals: z.array(z.object({ title: oneLine(120), detail: z.string().trim().min(1).max(280) }).strict()).max(3).default([]),
+```
+
+At most five insights and three proposals. They land in `kv` under the key `cloud:<app>:<date>` and appear on the “Cloud Insights” tab. A proposal never becomes a case on its own; it’s always “for Bartek’s decision”, i.e., mine.
+
+And again the same thought as in stage 1: write only to `kv`. Not to `report`. The cloud model may decide that something looks off in the numbers and suggest an action, but it can’t alter the case list nor pretend to be the latest report.
+
+Honestly, today I have the endpoint, the schema, and the write path. I won’t show you the scheduled job that pushes real insights each morning because the commits don’t contain such proof.
+
+## Stage 4: ads via API, not a logged-in browser
+
+Commit `e4773dd1`. Ads collector using Google Ads API v26 and Apple Ads Platform API. Cost, impressions, clicks, and installs per app. Commit description:
+
+> Google: one account, Teoria+ and Pora split by campaign ID; service account or refresh token, no developer token needed
+
+One Google Ads account for two apps, split by campaign ID. No developer token required. This was probably the most satisfying commit of the week because it removes the logged-in browser on the laptop from the chain, on a laptop that could be sleeping. One less Mac dependency, and it was completely invisible until it stopped working.
+
+## By the way: Dojazd showed 24 store views instead of 8
+
+That wasn’t in the plan; it showed up during the evening company review on 11 Nov. Commit `f0f36195`.
+
+App Store Connect Analytics emits reports in instances. A DAILY instance covers a window of several days; for Dojazd it’s three days before the processing date. My collector summed all instances, so the same day got added two or three times. Dojazd 7 Nov: 24 store views. Real number: 8.
+
+```ts
+- * Days summed from all instances (each instance adds data processed on that day, also for earlier days).
++ * Day taken from the newest instance that contains it (company review 11 Nov). DAILY instance carries a full window of several days
++ * (Dojazd: 3 days before processing date), so the same day appears in 2-3 instances and the sum would inflate it.
+```
+
+Now the day is taken from the newest instance that contains it. Triple the views sounds great until you realize it’s your own `SUM()`.
+
+## And that rule again, because it turned out to be leaky
+
+The same week I had to fix `applyActionChange` itself. Commit `cf1b4575`. It turned out that “last report time” wasn’t always the report’s time. An `action` change creates a new report version, and that version’s timestamp is the change time, not the report time. Comparing against it invalidated late changes of other cases:
+
+```ts
+-  if (Date.parse(latest.receivedAt) > t) return "older";
++  // A version created by `action` has the time of that change, not the report: comparing against it would invalidate
++  // late changes of other cases (T9).
++  const r = JSON.parse(latest.bodyJson) as Report & { report_received_at?: string };
++  const reportAt = r.report_received_at ?? latest.receivedAt;
++  if (Date.parse(reportAt) > t) return "older";
++      // Report generated before the state change, but received after it (e.g., retry after wake-up): state stays from that change.
+```
+
+And see the second comment: “retry after wake-up”. That’s exactly the sleeping-Mac scenario. A report generated before the lid closed but only reaching the server after it opened would, without this fix, roll back a case state I’d already changed in the meantime.
+
+So I spent a whole week building things that shouldn’t touch that rule, and in the end I still had to dig into it.
+
+## When this approach DOESN’T make sense
+
+- **If you don’t have two sources of truth for state, you don’t need all this caution.** In my setup case state changes both from reports and from single Mac pushes. If everything flowed through a single channel, the server could safely write its own reports and there’d be nothing to argue about.
+- **The Mac is still needed.** X, Reddit, and the rest still go through a logged-in browser, and none of this week’s commits touch that. The title “panel without a Mac” is a bit of a stretch. Reports without a Mac, yes. Posts, not yet.
+- **A collector day isn’t a report.** It has numbers but no insights or cases. If the Mac sleeps for a week, I get a week of numbers with no commentary and still have to interpret them myself. That’s intentional, but let’s not pretend it’s a full replacement.
+- **Cost estimates are just estimates.** 0 PLN for cloud tasks and 528 PLN for the Opus VPS are plan numbers, not invoices. If cloud tasks start running daily, limits may appear that I’m not aware of today.
+
+## What came out of it
+
+After a week the server can close a collector day, compute A/B tests with Fisher, ingest insights from Claude in the cloud, and pull ads via API. Along the way it stopped triple-counting store views.
+
+And the most important lines of the whole plan are the ones that tell the server “no”. Do **not** create a row in `report`. Do **not** touch cases. Do **not** pretend to be the latest report. All week I taught the machine to do things for me, and the hardest part of automation turned out to be writing code that politely refuses to do that one thing everyone asks it to do the most.
+
+## FAQ
+
+**Why not just leave the Mac on overnight?**  
+Because it’s still just a laptop that can close, update, or get taken somewhere without a charger. The weekend of 6-8 Nov showed that “I’ll leave it on” works until the first time it doesn’t.
+
+**Why can’t the server write its own report if it has the numbers?**  
+Because the last row in `report` decides which case changes are current. An automatic night-time report would be newer than the morning-pushed changes from the Mac, and `applyActionChange` would reject them as “older”. A report without cases would also wipe the case list.
+
+**Have Teoria+ A/B tests shown anything yet?**  
+I don’t have a result I can honestly share. The panel calculates Fisher’s p-value and only shows a note when the difference exceeds noise, with `start_cta_v1` needing 167 on the variant.
+
+**Do Claude cloud jobs already write insights daily?**  
+Today there’s an endpoint `/api/cloud`, a schema (up to 5 insights, up to 3 proposals), and a write to `kv`. I won’t show proof that a scheduled job is already filling it regularly, so I can’t claim that.
+
+**Is the panel now completely independent of the Mac?**  
+Reports and numbers largely are. Posts on X and Reddit still go through a logged-in browser on the Mac, and this week didn’t change that.
+
+## Links
+
+- [Commit e103c21: collector day in History without a `report` row](https://github.com/bartosz-skejcik/panel/commit/e103c21812a4121c9c8ccb8c2875673401f3e1f2) (private repo)
+- [Commit fa8d231: read numbers and write insights for cloud jobs](https://github.com/bartosz-skejcik/panel/commit/fa8d231729f78355cce64323626caba0f902d890) (private repo)
+- [Commit e4773dd: Google Ads and Apple Ads collector](https://github.com/bartosz-skejcik/panel/commit/e4773dd14cc0ba45dbaaa2a45fcbc0fe2ee997a7) (private repo)
+- [Commit f0f3619: ASC Analytics from the newest instance](https://github.com/bartosz-skejcik/panel/commit/f0f361950309a36f92ad1c760a2becd09ebfcdd1) (private repo)
+- [Google Ads API](https://developers.google.com/google-ads/api/docs/start)
+- [Fisher's exact test](https://en.wikipedia.org/wiki/Fisher%27s_exact_test)
+- [I built a private panel for four apps and the day the numbers stopped, but no error was thrown](/blog/en/panel-collector-stale-data)
+- [I built an app that tells you when to leave the house to catch the train (and why it knows it’s a FLIRT)](/blog/en/dojazd-kiedy-wyjsc-z-domu-planowo-flirt)

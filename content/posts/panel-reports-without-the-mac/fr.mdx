@@ -1,0 +1,184 @@
+---
+title: "Panel sans Mac : la semaine où les rapports ont cessé de dépendre d’un portable en veille"
+description: "Le Mac a dormi trois jours et les rapports ont disparu. En une semaine, le serveur a tout appris du Mac, sauf une chose : jouer le dernier rapport."
+date: 2026-11-17T12:00:00.000Z
+tags: panel, nextjs, sqlite, kolektory, automatyzacja, testy-ab, reklamy, decyzje
+---
+
+## Introduction
+
+Siemanko ! Lundi 9 novembre au matin, j’ouvre le tableau sur mon téléphone et je vais dans Historique. Je suis déjà jeudi. Puis trois jours, vendredi 6, samedi 7 et dimanche 8 novembre, où il n’y a rien. Aucun rapport, aucune revue d’entreprise, aucun changement de tickets. Comme si mes quatre appli prenaient un long week-end.
+
+Elles ne l’ont pas fait. C’est le Mac qui l’a fait. Il a dormi, et avec lui toutes les sessions Claude qui, chaque matin et chaque soir, me rédigeaient des rapports.
+
+Le plus drôle, c’est que les chiffres ont survécu. Les collecteurs restent sur le serveur, donc dans la table `kpi_daily` les jours 6-8.11 apparaissent dans toutes les applications, proprement, du point de vue de l’installation. Le tableau avait les données. Il ne manquait plus que quelqu’un pour lui dire ce qu’elles signifient.
+
+Si tu n’as pas lu l’article précédent : le tableau est mon tableau de bord privé pour quatre applis (Teoria+, Dojazd, Pora, BlockSmash). Next.js, SQLite via Drizzle, hébergé sur Coolify. Le matin et le soir, je le consulte depuis mon téléphone. Plus d’infos sur ce que c’est et comment il a, pendant 20 heures, affiché d’anciennes valeurs comme si elles étaient fraîches, dans [l’article précédent sur le tableau](/blog/fr/panel-collector-stale-data).
+
+Tu vas obtenir trois choses :
+
+1. **Pourquoi le tableau dépendait du laptop**, qui peut simplement s’endormir,
+2. **Les quatre étapes du plan « rapports et slots sans Mac »**, prévues sur deux semaines mais qui ont atterri sur la branche principale en une,
+3. **Une règle qui permet au serveur de tout faire**, sauf d’écrire le rapport final. Et pourquoi c’est la ligne la plus importante du plan entier.
+
+Le repo est privé, donc les liens vers les commits ne seront visibles que par moi. Tu obtiens les hashes, les noms de fichiers et des extraits de code, comme d’habitude.
+
+## Pourquoi le tableau avait-il besoin d’un Mac
+
+Après ce week-end, j’ai écrit `docs/plan-serwer.md`. Il y a un paragraphe qui ressemble à une confession :
+
+> Les chiffres des collecteurs n’ont pas disparu (`kpi_daily` possède les jours 6-8.11 dans toutes les applications). Ce qui a disparu : les rapports de session (conclusions, états des tickets), les revues d’entreprise et les posts. Le Mac est encore nécessaire aujourd’hui pour trois raisons : les crons vivent dans les sessions Claude, X, Reddit et Google Ads passent par le navigateur connecté, et l’analyse utilise les sessions du repo.
+
+En clair, trois choses. L’horaire était stocké dans les sessions du laptop. Je lisais les pubs via le navigateur où j’étais connecté. Et l’analyse, c’est-à-dire le « what’s the takeaway », avait besoin du repo sur le disque. Ferme le couvercle et les trois disparaissent d’un coup.
+
+Le 9 novembre, un commit « Plan : rapports et slots sans Mac » a introduit quatre étapes. Étapes 1 et 2 tout de suite, 3 et 4 une semaine plus tard. Spoiler : les quatre ont été mergées en une semaine. Pas parce que je suis ultra-rapide, mais parce que, une fois que tu vois trois jours vides dans Historique, il devient difficile de dormir.
+
+## La règle autour de laquelle tout le plan tourne
+
+Avant les étapes, une chose sans laquelle rien n’a de sens.
+
+Le tableau possède des « tickets », c’est-à-dire les actions suivantes pour chaque appli. Leur état change de deux façons : un rapport de session arrive avec la liste complète des tickets, ou une modification unique d’un ticket arrive, poussée depuis le Mac. La question : que se passe-t-il si ces deux flux arrivent dans le mauvais ordre ?
+
+C’est géré par `applyActionChange` dans `src/lib/action-state.ts`. Il prend le dernier rapport de l’application et rejette tout changement d’état plus ancien que celui-ci :
+
+```ts
+const latest = tx.select().from(report).where(eq(report.app, app)).orderBy(desc(report.date), desc(report.revision)).limit(1).get();
+if (!latest) return "no-report";
+if (Date.parse(latest.receivedAt) > t) return "older";
+```
+
+Logique. Le rapport est plus récent, il a donc raison. Cela signifie que la ligne dans la table `report` est **l’autorité pour l’état des tickets**. Qui écrit le rapport, décide de la liste.
+
+Et là surgit la tentation : si le serveur possède déjà les chiffres, pourquoi ne pas le laisser générer le rapport nocturne et se débarrasser du problème ? Le plan dit clairement que le tableau ne doit **pas** créer de ligne dans `report`. Imagine : à 3 h du matin, le serveur pousse un rapport automatique. Le matin, je réveille le Mac, la session pousse les changements de tickets faits la veille au soir avant la mise en veille. Chaque changement est plus ancien que le rapport nocturne → `"older"`. Tout est jeté. Merde. Et si le rapport automatique n’a aucun ticket, la liste devient vide.
+
+Donc la solution la plus simple est exactement celle qui casse tout. Classique.
+
+## Étape 1 : jour des collecteurs, mais en lecture seule
+
+Commit `e103c218`. L’historique doit maintenant afficher un jour fermé même s’il n’y a pas de rapport de session. On prend les chiffres de `kpi_daily` et on crée une entrée avec le label « du collecteur, sans rapport de session » et le drapeau `DayEntry.auto`.
+
+Le commentaire au-dessus de la fonction est le plus important, pas la fonction elle-même :
+
+```ts
+ * Fermeture des jours d’application avec les chiffres du collecteur, depuis le premier rapport d’application (l’historique antérieur du collecteur ne désordonne pas la liste).
+ * Lecture uniquement : une ligne dans `report` agirait comme « dernier rapport » et invaliderait les changements de tickets poussés plus tard depuis le Mac.
+function collectedDays(db: DB, app: AppKey, now: Date): string[] {
+  const first = db.select({ d: min(report.date) }).from(report).where(eq(report.app, app)).get()?.d;
+  if (!first) return [];
+  ...
+}
+```
+
+« Lecture uniquement ». Le jour est construit à la volée lors de l’affichage et n’est jamais persistant. Il possède les mêmes champs qu’un rapport, mais les tickets et notes sont vides, car le serveur n’a pas le droit d’inventer ces données.
+
+Deuxième détail : on ne prend les jours qu’à partir du premier rapport de chaque appli. Les collecteurs avaient déjà des chiffres avant que le tableau ne reçoive son premier rapport, et sans cette condition l’Historique commencerait à une date il y a plusieurs mois où il ne se passait rien sauf des chiffres. Une liste de jours dont la moitié ne sont que des nombres sans contexte, ce n’est pas de l’Historique, c’est une poubelle.
+
+## Étape 2 : les tests A/B de Teoria+ calculés par le serveur
+
+Commits `0617e42e` et `c26da35d`. Teoria+ possède deux tests : `paywall_v1` et `start_cta_v1`. Avant, leurs résultats étaient lus par la session sur le Mac. Maintenant le collecteur les calcule lui-même ; l’application expose une table avec les variantes et la p-value du test de Fisher.
+
+La note de test n’apparaît que lorsqu’il y a une différence au-delà du bruit. Pour `start_cta_v1` le seuil est précis : à partir de 167 par variante. En dessous, le tableau garde le silence.
+
+Avant que tu demandes : non, aucun de ces tests n’a encore de résultat que je puisse te montrer. Les commits fixent les seuils, mais ne déclarent pas de gagnant. Et ça me convient, parce que le plus simple est de voir, après deux jours, quel test « gagne » parmi le bruit. Désormais le nombre doit d’abord passer le test de Fisher avant que le tableau n’en parle.
+
+## Étape 3 : le cloud peut réfléchir, mais ne peut pas décider
+
+C’est l’étape qui devait attendre une semaine. Commit `fa8d2317`.
+
+Idée : au lieu que les sessions sur le Mac fassent l’analyse, des tâches planifiées Claude s’exécutent dans le cloud. Le plan a comparé les coûts ; ce sont **des estimations du plan, pas des factures** : les tâches cloud sont à 0 zł dans le cadre de l’abonnement, `claude -p` sur un VPS coûte environ 528 zł par mois sur Opus. Le choix a été rapide.
+
+Le problème : la tâche cloud doit récupérer les chiffres quelque part et renvoyer les conclusions. Un endpoint `/api/cloud` a été créé avec un token dédié. Il fournit 8 jours de séries, les chiffres en temps réel et les p-values des tests A/B. Aucun ticket, aucun texte de feed de décision. Et il accepte :
+
+```ts
+// Étape 3 du plan « sans Mac »: les tâches planifiées Claude dans le cloud lisent les chiffres des applis et enregistrent leurs propres conclusions.
+// Lecture sans tickets ni textes du feed. Écriture uniquement dans kv : ne crée pas de ligne dans `report`, ne touche pas aux tickets ni au « dernier rapport ».
+    insights: z.array(InsightSchema).min(1).max(5),
+    /** Propositions d’actions : toujours « à la décision de Bartek », ne créent pas de tickets. */
+    proposals: z.array(z.object({ title: oneLine(120), detail: z.string().trim().min(1).max(280) }).strict()).max(3).default([]),
+```
+
+Maximum 5 insights et 3 propositions. Ils atterrissent dans `kv` sous la clé `cloud:<app>:<date>` et s’affichent dans l’onglet « Insights du cloud ». Une proposition ne devient jamais un ticket d’elle-même. Toujours « à la décision de Bartek », c’est-à-dire la mienne.
+
+Et encore la même idée que dans l’étape 1 : écriture uniquement dans `kv`. Pas dans `report`. Le modèle cloud peut se dire que quelque chose dans les chiffres ne lui plaît pas et suggérer une action, mais il ne peut pas modifier la liste des tickets ni se faire passer pour le dernier rapport.
+
+Franchement : aujourd’hui j’ai l’endpoint, le schéma et le chemin d’écriture. Je ne montrerai pas la tâche planifiée qui, chaque matin, pousse de vrais insights, car il n’y a aucune preuve de cela dans les commits.
+
+## Étape 4 : publicités via l’API, pas via le navigateur connecté
+
+Commit `e4773dd1`. Collecteur de publicités depuis Google Ads API v26 et Apple Ads Platform API. Coût, impressions, clics et installations par appli. Description du commit :
+
+> Google : un compte, Teoria+ et Pora séparés par ID de campagne ; compte de service ou token de rafraîchissement, sans token développeur
+
+Un seul compte Google Ads pour les deux applis, donc je segmente par ID de campagne. Aucun token développeur requis. C’est probablement le commit le plus satisfaisant de la semaine, car il élimine la dépendance au navigateur connecté sur le laptop, qui pourrait bien être en veille. Une dépendance de moins au Mac, et celle-ci était jusque-là totalement invisible tant qu’elle fonctionnait.
+
+## Au fait : Dojazd affichait 24 vues dans le store au lieu de 8
+
+Ce n’était pas prévu, c’est apparu lors de la revue du soir du 11.11. Commit `f0f36195`.
+
+App Store Connect Analytics publie des rapports par instance. L’instance DAILY couvre plusieurs jours ; pour Dojazd, 3 jours avant la date de traitement. Mon collecteur additionnait toutes les instances, donc le même jour était compté deux ou trois fois. Dojazd le 7.11 : 24 vues dans le store. Le vrai nombre : 8.
+
+```ts
+- * Dni z sum wszystkich instancji (każda instancja dokłada dane przetworzone danego dnia, także za dni wcześniejsze).
++ * Dzień z najnowszej instancji, która go zawiera (przegląd firmy 11.11). Instancja DAILY niesie pełne okno kilku dni
++ * (Dojazd: 3 dni przed datą przetworzenia), więc ten sam dzień jest w 2-3 instancjach i suma by go zawyżyła.
+```
+
+Maintenant, le jour est tiré de l’instance la plus récente qui le contient. Trois fois plus de vues, c’est super tant que tu ne réalises pas que c’est ton propre `SUM()` qui gonfle les chiffres.
+
+## Et encore une fois cette règle, car il s’est avéré qu’elle était lacunaire
+
+La même semaine, j’ai dû corriger `applyActionChange`. Commit `cf1b4575`. Il s’est avéré que le « temps du dernier rapport » n’était pas toujours le temps du rapport. Une modification de ticket (`action`) crée une nouvelle version du rapport, et cette version porte le temps de la modification, pas celui du rapport. La comparaison avec ce temps annulait les changements tardifs d’autres tickets :
+
+```ts
+-  if (Date.parse(latest.receivedAt) > t) return "older";
++  // La version issue de `action` a le temps de cette modification, pas du rapport : la comparer annulerait les changements tardifs d’autres tickets (T9).
++  const r = JSON.parse(latest.bodyJson) as Report & { report_received_at?: string };
++  const reportAt = r.report_received_at ?? latest.receivedAt;
++  if (Date.parse(reportAt) > t) return "older";
++      // Rapport généré avant le changement d’état, mais reçu après : l’état reste celui du changement.
+```
+
+Et regarde ce second commentaire : « re-exécution après réveil ». C’est exactement le scénario du Mac en veille. Le rapport que la session a généré avant la fermeture du couvercle n’arrive sur le serveur qu’après l’ouverture. Sans ce correctif, ce rapport tardif aurait écrasé l’état du ticket que j’avais modifié entre-temps.
+
+Donc, pendant toute la semaine, j’ai construit des choses qui ne devaient **pas** toucher cette règle, pour finir par devoir y toucher quand même.
+
+## Quand cette approche N’EST PAS pertinente
+
+- **Si tu n’as pas deux sources de vérité sur l’état, tu n’as pas besoin de toute cette prudence.** Chez moi, l’état des tickets change à la fois via les rapports et via les changements ponctuels depuis le Mac. Si tout passait par un seul canal, le serveur pourrait écrire les rapports tout seul et il n’y aurait plus de débat.
+- **Le Mac reste nécessaire.** X et Reddit passent toujours par le navigateur connecté, et aucun commit de la semaine ne les touche. Le titre « tableau sans Mac » est un peu exagéré. Les rapports sans Mac, oui. Les posts, pas encore.
+- **Un jour du collecteur n’est pas un rapport.** Il a des chiffres, mais pas d’insights ni de tickets. Si le Mac dort une semaine, je reçois une semaine de chiffres sans commentaire et je dois encore réfléchir moi-même. C’est intentionnel, mais ne prétendons pas que c’est un remplacement complet.
+- **Les estimations de coûts restent des estimations.** 0 zł pour les tâches cloud et 528 zł pour le VPS Opus sont des chiffres du plan, pas des factures. Si les tâches cloud commencent à tourner quotidiennement, des limites pourraient apparaître, dont je ne sais pas encore.
+
+## Ce qui en est ressorti
+
+Après une semaine, le serveur sait fermer un jour du collecteur, calculer les tests A/B avec Fisher, accepter les insights de Claude depuis le cloud et récupérer les publicités via l’API. En prime, il a arrêté de compter trois fois les mêmes vues dans le store.
+
+Et les lignes les plus importantes du plan sont celles qui disent au serveur « non ». Ne crée pas de ligne dans `report`. Ne touche pas aux tickets. Ne te fais pas passer pour le dernier rapport. Toute la semaine, j’ai entraîné la machine à faire les choses à ma place, et le plus dur a été d’écrire le code qui refuse poliment de faire *cette* chose précise que l’on demande le plus souvent.
+
+## FAQ
+
+**Pourquoi ne pas simplement laisser le Mac allumé toute la nuit ?**  
+Parce que c’est toujours un laptop qui peut se fermer, se mettre à jour ou partir avec moi sans chargeur. Le week-end du 6-8.11 a montré que « je le laisse allumé » fonctionne jusqu’au premier échec, quand il ne reste plus allumé.
+
+**Pourquoi le serveur ne peut-il pas écrire le rapport lui-même, puisqu’il a les chiffres ?**  
+Parce que la dernière ligne dans `report` décide quelles modifications de tickets sont actuelles. Un rapport automatique nocturne serait plus récent que les changements poussés le matin depuis le Mac, et `applyActionChange` les rejetterait comme « plus anciens ». Un rapport sans tickets viderait la liste.
+
+**Les tests A/B de Teoria+ ont-ils déjà montré quelque chose ?**  
+Je n’ai pas de résultat à partager honnêtement. Le tableau calcule la p-value de Fisher et n’affiche la note que lorsqu’il y a une différence au-delà du bruit, par exemple `start_cta_v1` à partir de 167 sur la variante.
+
+**Les tâches Claude dans le cloud écrivent déjà des insights chaque jour ?**  
+À ce jour, il y a l’endpoint `/api/cloud`, le schéma (max 5 insights, max 3 propositions) et l’écriture dans `kv`. Je ne montre pas de preuve que la tâche planifiée le remplisse régulièrement, donc je ne le prétends pas.
+
+**Le tableau est-il maintenant totalement indépendant du Mac ?**  
+Les rapports et les chiffres le sont largement. Les posts sur X et Reddit passent toujours par le navigateur connecté sur le Mac, et cela n’a pas changé cette semaine.
+
+## Liens
+
+- [Commit e103c21 : jour du collecteur dans l’Historique sans ligne dans report](https://github.com/bartosz-skejcik/panel/commit/e103c21812a4121c9c8ccb8c2875673401f3e1f2) (repo privé)
+- [Commit fa8d231 : lecture des chiffres et écriture des insights pour les tâches cloud](https://github.com/bartosz-skejcik/panel/commit/fa8d231729f78355cce64323626caba0f902d890) (repo privé)
+- [Commit e4773dd : collecteur de publicités Google Ads et Apple Ads](https://github.com/bartosz-skejcik/panel/commit/e4773dd14cc0ba45dbaaa2a45fcbc0fe2ee997a7) (repo privé)
+- [Commit f0f3619 : ASC Analytics depuis l’instance la plus récente](https://github.com/bartosz-skejcik/panel/commit/f0f361950309a36f92ad1c760a2becd09ebfcdd1) (repo privé)
+- [Google Ads API](https://developers.google.com/google-ads/api/docs/start)
+- [Fisher's exact test](https://en.wikipedia.org/wiki/Fisher%27s_exact_test)
+- [Je me suis fait un panneau privé pour quatre applis et le jour où les chiffres se sont figés sans que personne reçoive d'erreur](/blog/fr/panel-collector-stale-data)
+- [J'ai créé une application qui indique quand sortir de la maison pour attraper le train (et comment elle sait que c'est un FLIRT)](/blog/fr/dojazd-kiedy-wyjsc-z-domu-planowo-flirt)

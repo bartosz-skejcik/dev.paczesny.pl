@@ -1,0 +1,184 @@
+---
+title: "Panel bez Maca: tydzień, w którym raporty przestały zależeć od uśpionego laptopa"
+description: "Mac spał trzy dni i przepadły raporty. W tydzień serwer nauczył się prawie wszystkiego, co robił Mac, poza jednym: nie może udawać ostatniego raportu."
+date: 2026-11-17T12:00:00.000Z
+tags: panel, nextjs, sqlite, kolektory, automatyzacja, testy-ab, reklamy, decyzje
+---
+
+## Wprowadzenie
+
+Siemanko! Poniedziałek, 9 listopada rano, otwieram panel na telefonie i wchodzę w Historię. Czwartek jest. A potem trzy dni, piątek 6, sobota 7 i niedziela 8 listopada, w których nie ma nic. Żadnego raportu, żadnego przeglądu firmy, żadnej zmiany w sprawach. Jakby moje cztery appki wzięły sobie długi weekend.
+
+Nie wzięły. Wziął go Mac. Spał, a razem z nim spały wszystkie sesje Claude, które co rano i co wieczór pisały mi raporty.
+
+Najśmieszniejsze było to, że liczby przeżyły. Kolektory stoją na serwerze, więc w tabeli `kpi_daily` dni 6-8.11 są we wszystkich aplikacjach, grzecznie, co do instalacji. Panel miał dane. Nie miał tylko nikogo, kto by mu powiedział, co one znaczą.
+
+Jeśli nie czytałeś poprzedniego wpisu: panel to mój prywatny dashboard do czterech aplikacji (Teoria+, Dojazd, Pora, BlockSmash). Next.js, SQLite przez Drizzle, stoi na Coolify. Rano i wieczorem patrzę w niego z telefonu. Więcej o tym, czym jest i jak kiedyś przez 20 godzin pokazywał mi stare liczby jako świeże, jest w [poprzednim wpisie o panelu](/blog/pl/panel-collector-stale-data).
+
+Dostaniesz trzy rzeczy:
+
+1. **dlaczego panel w ogóle zależał od laptopa**, który może sobie po prostu zasnąć,
+2. **cztery etapy planu "raporty i sloty bez Maca"**, które miały zająć dwa tygodnie, a weszły na main w jeden,
+3. **jedną regułę, przez którą serwer może prawie wszystko**, tylko nie wolno mu napisać raportu. I dlaczego to jest najważniejsza linijka w całym planie.
+
+Repo jest prywatne, więc linki do commitów zobaczę tylko ja. Dostajesz hasze, nazwy plików i cytaty z kodu, tak jak ostatnio.
+
+## Po co panelowi w ogóle był Mac
+
+Po tym weekendzie usiadłem i napisałem `docs/plan-serwer.md`. Jest tam akapit, który brzmi jak przyznanie się do winy:
+
+> Liczby z kolektorów nie zginęły (`kpi_daily` ma dni 6-8.11 we wszystkich aplikacjach). Przepadły: raporty sesji (wnioski, stany spraw), przeglądy firmy i posty. Mac jest potrzebny dziś z trzech powodów: crony żyją w sesjach Claude, X, Reddit i Google Ads idą przez zalogowaną przeglądarkę, a analiza używa sesji z repo.
+
+Czyli trzy rzeczy. Harmonogram mieszkał w sesjach na laptopie. Reklamy czytałem przez przeglądarkę, w której byłem zalogowany. A analiza, czyli to "co z tego wynika", potrzebowała repo na dysku. Zamknij klapę i wszystkie trzy znikają naraz.
+
+9 listopada wpadł commit "Plan: raporty i sloty bez Maca" z czterema etapami. Etapy 1 i 2 na teraz, 3 i 4 za tydzień. Spoiler: wszystkie cztery weszły na main w ciągu tygodnia. Nie dlatego, że jestem taki szybki, tylko dlatego, że jak już raz zobaczysz trzy puste dni w Historii, to trochę ciężko spać.
+
+## Reguła, o którą rozbija się cały plan
+
+Zanim etapy, jedna rzecz, bez której nic tu nie ma sensu.
+
+Panel ma "sprawy", czyli następne działania dla każdej aplikacji. Ich stan zmienia się na dwa sposoby: przychodzi raport sesji z pełną listą spraw albo przychodzi pojedyncza zmiana stanu jednej sprawy, wypchnięta z Maca. I teraz pytanie: co jeśli te dwie rzeczy przyjdą w złej kolejności?
+
+Odpowiada na to `applyActionChange` w `src/lib/action-state.ts`. Bierze ostatni raport aplikacji i odrzuca zmianę stanu, która jest od niego starsza:
+
+```ts
+const latest = tx.select().from(report).where(eq(report.app, app)).orderBy(desc(report.date), desc(report.revision)).limit(1).get();
+if (!latest) return "no-report";
+if (Date.parse(latest.receivedAt) > t) return "older";
+```
+
+Sensowne. Raport jest nowszy, więc wie lepiej. Tylko że to oznacza, że wiersz w tabeli `report` jest **autorytetem dla stanu spraw**. Kto pisze raport, ten rządzi listą.
+
+I tu pojawia się pokusa, która nasuwa się sama: skoro serwer ma liczby, to niech w nocy sam złoży raport i problem z głowy. Plan mówi wprost, że panel nie powinien tworzyć wiersza w `report`. Bo wyobraź sobie: o 3:00 serwer wrzuca automatyczny raport. Rano budzę Maca, sesja wypycha zmiany spraw, które zrobiła wczoraj wieczorem przed uśpieniem. Każda z nich jest starsza niż ten nocny raport. `"older"`. Wszystkie do kosza. Kurwa. A jak automatyczny raport nie ma spraw, bo skąd serwer miałby je wziąć, to lista spraw robi się pusta.
+
+Czyli najprostsze rozwiązanie to dokładnie to, które rozwala wszystko. Klasyka.
+
+## Etap 1: dzień z kolektorów, ale tylko do czytania
+
+Commit `e103c218`. Historia ma teraz pokazywać zamknięty dzień nawet wtedy, gdy nie ma raportu sesji. Bierze liczby z `kpi_daily` i składa z nich wpis z etykietą "z kolektorów, bez raportu sesji" i flagą `DayEntry.auto`.
+
+Najważniejszy jest komentarz nad funkcją, nie sama funkcja:
+
+```ts
+ * Zamknięte dni aplikacji z liczbami z kolektorów, od pierwszego raportu aplikacji (wcześniejsza historia kolektorów nie rozsypuje listy).
+ * Celowo tylko odczyt: wiersz w `report` działałby jak „ostatni raport” i unieważniałby zmiany spraw wypchnięte później z Maca.
+function collectedDays(db: DB, app: AppKey, now: Date): string[] {
+  const first = db.select({ d: min(report.date) }).from(report).where(eq(report.app, app)).get()?.d;
+  if (!first) return [];
+  ...
+}
+```
+
+"Celowo tylko odczyt". Dzień jest składany w locie przy wyświetlaniu i nigdzie nie ląduje. Ma te same pola co raport, a sprawy i notatki ma puste, bo serwer nie ma prawa ich wymyślać.
+
+Drugi detal: dni bierze dopiero od pierwszego raportu danej aplikacji. Kolektory zbierały liczby wcześniej, niż panel dostał pierwszy raport, i bez tego warunku Historia zaczęłaby się od jakiegoś dnia sprzed miesięcy, w którym nic się nie działo poza liczbami. Lista dni, z których połowa to same liczby bez kontekstu, to nie jest Historia, tylko śmietnik.
+
+## Etap 2: testy A/B Teorii+ liczy serwer
+
+Commity `0617e42e` i `c26da35d`. Teoria+ ma dwa testy: `paywall_v1` i `start_cta_v1`. Wcześniej ich wyniki czytała sesja na Macu. Teraz kolektor liczy je sam, strona aplikacji ma tabelę z wariantami i wartość p z testu Fishera.
+
+Notatka o teście pojawia się dopiero przy różnicy ponad szum. Przy `start_cta_v1` próg jest konkretny: od 167 na wariant. Poniżej tego panel trzyma gębę na kłódkę.
+
+Zanim zapytasz: nie, żaden z tych testów nie ma jeszcze wyniku, który mógłbym Ci tu pokazać. Commity ustawiają progi, a nie ogłaszają zwycięzcy. I to akurat mi pasuje, bo najłatwiej jest po dwóch dniach zobaczyć "wygrywającego" w czymś, co jest zwykłym szumem. Teraz liczba musi najpierw przejść przez Fishera, zanim panel w ogóle cokolwiek o niej powie.
+
+## Etap 3: chmura może myśleć, ale nie może decydować
+
+To jest ten etap, który miał poczekać tydzień. Commit `fa8d2317`.
+
+Pomysł: zamiast sesji na Macu analizę mają robić zaplanowane zadania Claude w chmurze. Plan porównał koszty i to są **szacunki z planu, nie rachunki**: zadania w chmurze 0 zł w ramach subskrypcji, `claude -p` na VPS-ie około 528 zł miesięcznie na Opusie. Wybór był szybki.
+
+Tylko że zadanie w chmurze musi skądś wziąć liczby i gdzieś oddać wnioski. Powstał endpoint `/api/cloud` z osobnym tokenem. Daje 8 dni serii, liczby na żywo i p-wartości testów A/B. Bez spraw i bez tekstów z feedu decyzji. A przyjmuje tyle:
+
+```ts
+// Etap 3 planu „bez Maca”: zaplanowane zadania Claude w chmurze czytają liczby aplikacji i zapisują same wnioski.
+// Odczyt bez spraw i tekstów z feedu. Zapis tylko do kv: nie tworzy wiersza w `report`, nie rusza spraw ani „ostatniego raportu”.
+    insights: z.array(InsightSchema).min(1).max(5),
+    /** Propozycje działań: zawsze „do decyzji Bartka”, nie tworzą spraw. */
+    proposals: z.array(z.object({ title: oneLine(120), detail: z.string().trim().min(1).max(280) }).strict()).max(3).default([]),
+```
+
+Najwyżej 5 wniosków i najwyżej 3 propozycje. Lądują w `kv` pod kluczem `cloud:<app>:<date>` i pokazują się w karcie "Wnioski z chmury". Propozycja nigdy nie staje się sprawą sama z siebie. Zawsze "do decyzji Bartka", czyli moja.
+
+I znowu ta sama myśl co w etapie 1: zapis tylko do `kv`. Nie do `report`. Model w chmurze może sobie napisać, że coś w liczbach mu się nie podoba i warto by coś zrobić, ale nie może zmienić listy spraw ani udawać, że jest ostatnim raportem.
+
+Uczciwie: na dziś mam endpoint, schemat i ścieżkę zapisu. Nie pokażę Ci zaplanowanego zadania, które co rano wrzuca prawdziwe wnioski, bo w commitach takiego dowodu nie ma.
+
+## Etap 4: reklamy przez API, a nie przez zalogowaną przeglądarkę
+
+Commit `e4773dd1`. Kolektor reklam z Google Ads API v26 i Apple Ads Platform API. Koszt, wyświetlenia, kliknięcia i instalacje per aplikacja. Z opisu commitu:
+
+> Google: jedno konto, Teoria+ i Pora rozdzielone po ID kampanii; konto serwisowe albo token odświeżania, bez tokenu dewelopera
+
+Jedno konto Google Ads na dwie appki, więc rozdzielam po ID kampanii. Tokenu dewelopera nie trzeba. To był chyba najbardziej satysfakcjonujący commit tygodnia, bo wyrzuca z łańcucha zalogowaną przeglądarkę na laptopie, który akurat może spać. Jedna zależność od Maca mniej, i to taka, która do tej pory była zupełnie niewidoczna, dopóki działała.
+
+## Przy okazji: Dojazd miał 24 wyświetlenia w sklepie zamiast 8
+
+To nie było w planie, wyszło przy wieczornym przeglądzie firmy 11.11. Commit `f0f36195`.
+
+App Store Connect Analytics wystawia raporty w instancjach. Instancja DAILY niesie okno kilku dni, dla Dojazdu 3 dni przed datą przetworzenia. Mój kolektor sumował wszystkie instancje, więc ten sam dzień wpadał do sumy dwa albo trzy razy. Dojazd 7.11: 24 wyświetlenia strony w sklepie. Prawdziwa liczba: 8.
+
+```ts
+- * Dni z sum wszystkich instancji (każda instancja dokłada dane przetworzone danego dnia, także za dni wcześniejsze).
++ * Dzień z najnowszej instancji, która go zawiera (przegląd firmy 11.11). Instancja DAILY niesie pełne okno kilku dni
++ * (Dojazd: 3 dni przed datą przetworzenia), więc ten sam dzień jest w 2-3 instancjach i suma by go zawyżyła.
+```
+
+Teraz dzień bierze się z najnowszej instancji, która go zawiera. Trzy razy więcej wyświetleń brzmi super, dopóki nie zorientujesz się, że to Twój własny `SUM()`.
+
+## I jeszcze raz ta reguła, bo się okazało, że była dziurawa
+
+W tym samym tygodniu musiałem poprawić samo `applyActionChange`. Commit `cf1b4575`. Okazało się, że "czas ostatniego raportu" nie zawsze był czasem raportu. Zmiana sprawy (`action`) tworzy nową wersję raportu, a ta wersja ma czas tej zmiany, nie raportu. Porównanie z nią unieważniało spóźnione zmiany innych spraw:
+
+```ts
+-  if (Date.parse(latest.receivedAt) > t) return "older";
++  // Wersja z `action` ma czas tej zmiany, nie raportu: porównanie z nią unieważniałoby spóźnione zmiany innych spraw (T9).
++  const r = JSON.parse(latest.bodyJson) as Report & { report_received_at?: string };
++  const reportAt = r.report_received_at ?? latest.receivedAt;
++  if (Date.parse(reportAt) > t) return "older";
++      // Raport wygenerowany przed zmianą stanu, a przyjęty po niej (np. ponowienie po wybudzeniu): stan zostaje z tej zmiany.
+```
+
+I zobacz ten drugi komentarz: "ponowienie po wybudzeniu". To jest dokładnie scenariusz z uśpionym Makiem. Raport, który sesja wygenerowała przed zamknięciem klapy, a który doszedł do serwera dopiero po otwarciu. Bez tej poprawki taki spóźniony raport cofałby stan sprawy, którą zmieniłem w międzyczasie.
+
+Czyli cały tydzień budowałem rzeczy, które mają nie dotykać tej reguły, a na koniec i tak musiałem w niej grzebać.
+
+## Kiedy to podejście NIE ma sensu
+
+- **Jeśli nie masz dwóch źródeł prawdy o stanie, nie potrzebujesz tej całej ostrożności.** U mnie stan spraw zmienia się i z raportów, i z pojedynczych zmian z Maca. Gdyby wszystko szło jednym kanałem, serwer mógłby spokojnie sam pisać raporty i nie byłoby o czym gadać.
+- **Mac dalej jest potrzebny.** X i Reddit nadal idą przez zalogowaną przeglądarkę i żaden commit z tego tygodnia tego nie rusza. Tytuł "panel bez Maca" jest trochę na wyrost. Raporty bez Maca, owszem. Posty jeszcze nie.
+- **Dzień z kolektorów to nie raport.** Ma liczby, ale nie ma wniosków ani spraw. Jeśli Mac śpi tydzień, dostaję tydzień liczb bez komentarza i dalej muszę sam pomyśleć. To jest celowe, ale nie udawajmy, że to pełny zamiennik.
+- **Szacunki kosztów to szacunki.** 0 zł za zadania w chmurze i 528 zł za VPS z Opusem to liczby z planu, nie z faktury. Jak zadania w chmurze zaczną naprawdę chodzić codziennie, mogą wyjść limity, o których dziś nie wiem.
+
+## Co z tego wyszło
+
+Po tygodniu serwer umie domknąć dzień z kolektorów, policzyć testy A/B z Fisherem, przyjąć wnioski od Claude z chmury i ściągnąć reklamy przez API. Przy okazji przestał trzy razy liczyć te same wyświetlenia w sklepie.
+
+A najważniejsze linijki z całego planu to te, które mówią serwerowi "nie". Nie twórz wiersza w `report`. Nie ruszaj spraw. Nie udawaj ostatniego raportu. Cały tydzień uczyłem maszynę robić rzeczy za mnie i wyszło na to, że najtrudniejszą częścią automatyzacji było napisanie kodu, który grzecznie odmawia zrobienia tej jednej rzeczy, o którą najbardziej się prosi.
+
+## FAQ
+
+**Czemu po prostu nie zostawić Maca włączonego na noc?**
+Bo to dalej jeden laptop, który może się zamknąć, zaktualizować albo pojechać ze mną gdzieś bez ładowarki. Weekend 6-8.11 pokazał, że "zostawię włączony" działa do pierwszego razu, kiedy nie zostawię.
+
+**Czemu serwer nie może sam pisać raportu, skoro ma liczby?**
+Bo ostatni wiersz w `report` decyduje, które zmiany spraw są aktualne. Automatyczny raport z nocy byłby nowszy niż zmiany wypchnięte rano z Maca i `applyActionChange` odrzuciłoby je jako starsze. A raport bez spraw wyczyściłby listę.
+
+**Czy testy A/B Teorii+ coś już pokazały?**
+Nie mam wyniku, który mógłbym tu uczciwie podać. Panel liczy p z Fishera i pokazuje notatkę dopiero przy różnicy ponad szum, przy `start_cta_v1` od 167 na wariant.
+
+**Czy zadania Claude w chmurze już codziennie piszą wnioski?**
+Na dziś jest endpoint `/api/cloud`, schemat (do 5 wniosków, do 3 propozycji) i zapis do `kv`. Nie pokażę Ci dowodu, że zaplanowane zadanie już to regularnie wypełnia, więc tego nie twierdzę.
+
+**Czy panel jest teraz całkiem niezależny od Maca?**
+Raporty i liczby w dużej mierze tak. Posty na X i Reddit dalej idą przez zalogowaną przeglądarkę na Macu i tego ten tydzień nie zmienił.
+
+## Linki
+
+- [Commit e103c21: dzień z kolektorów w Historii bez wiersza w report](https://github.com/bartosz-skejcik/panel/commit/e103c21812a4121c9c8ccb8c2875673401f3e1f2) (repo prywatne)
+- [Commit fa8d231: odczyt liczb i zapis wniosków dla zadań w chmurze](https://github.com/bartosz-skejcik/panel/commit/fa8d231729f78355cce64323626caba0f902d890) (repo prywatne)
+- [Commit e4773dd: kolektor reklam Google Ads i Apple Ads](https://github.com/bartosz-skejcik/panel/commit/e4773dd14cc0ba45dbaaa2a45fcbc0fe2ee997a7) (repo prywatne)
+- [Commit f0f3619: ASC Analytics z najnowszej instancji](https://github.com/bartosz-skejcik/panel/commit/f0f361950309a36f92ad1c760a2becd09ebfcdd1) (repo prywatne)
+- [Google Ads API](https://developers.google.com/google-ads/api/docs/start)
+- [Fisher's exact test](https://en.wikipedia.org/wiki/Fisher%27s_exact_test)
+- [Zrobiłem sobie prywatny panel do czterech appek i dzień, w którym liczby stanęły, a nikt nie dostał błędu](/blog/pl/panel-collector-stale-data)
+- [Zrobiłem aplikację, która mówi, kiedy wyjść z domu, żeby zdążyć na pociąg (i skąd wie, że to FLIRT)](/blog/pl/dojazd-kiedy-wyjsc-z-domu-planowo-flirt)
